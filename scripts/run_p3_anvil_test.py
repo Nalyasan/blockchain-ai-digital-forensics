@@ -107,8 +107,7 @@ def main():
             "--contract", contract_addr,
             "--db", db_path,
             "--rpc-url", rpc_url,
-            "--from", "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-            "--allow-dirty"
+            "--from", "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
         ], env=env_anchor)
         log_print(anchor_res.stdout)
         assert anchor_res.returncode == 0, "Lệnh anchor thất bại"
