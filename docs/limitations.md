@@ -39,5 +39,5 @@ Hệ thống cung cấp ba cơ chế kiểm tra toàn vẹn ở tầng dữ li�
 
 ## 4. Yêu cầu về Node Lưu trữ Lịch sử (Archive Node)
 
-- **Full Node tiêu chuẩn:** Các Full Node thông thường chỉ lưu trữ trạng thái thế giới (world state) của các block gần nhất và thường xuyên cắt tỉa (prune) trạng thái lịch sử cũ để tiết kiệm dung lượng đĩa.
-- **Hạn chế khi Replay:** Khi thực hiện tái lập (replay) các sự cố bảo mật trong lịch sử hoặc chạy fork từ một block cũ cách xa hiện tại (`anvil --fork-url <RPC> --fork-block-number <N>`), nếu RPC nguồn không phải là Archive Node thì các lệnh truy vấn số dư, storage hoặc receipts của các block cũ sẽ bị node từ chối phục vụ. Do đó, quy trình tái lập sự cố thực nghiệm bắt buộc phải có quyền truy cập vào Archive RPC.
+- **Full Node tiêu chuẩn:** Các Full Node thông thường lưu trữ đầy đủ khối (blocks), giao dịch (transactions) và biên lai (receipts) trong lịch sử. Tuy nhiên, Full Node định kỳ cắt tỉa (prune) trạng thái thế giới (world state — số dư tài khoản, biến lưu trữ storage của smart contract) của các block cũ và không hỗ trợ Trace API cho các giao dịch lịch sử cách xa hiện tại.
+- **Hạn chế khi Replay:** Khi thực hiện tái lập (replay) các sự cố bảo mật trong lịch sử hoặc chạy fork từ một block cũ (`anvil --fork-url <RPC> --fork-block-number <N>`), nếu cần truy cập trạng thái tài khoản/storage lịch sử hoặc chạy công cụ phân tích trace (`debug_traceTransaction` / `trace_block`), Full Node sẽ từ chối do đã prune state. Khi đó, quy trình tái lập sự cố bắt buộc phải có quyền truy cập vào Archive RPC Node có kích hoạt tracer.

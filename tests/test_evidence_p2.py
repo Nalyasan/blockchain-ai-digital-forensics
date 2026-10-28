@@ -97,6 +97,14 @@ def populate_sample_db(db_path, num_blocks=5, synthetic=0):
 
         prev_hash = b_hash
 
+    # Ghi nhận 1 phiên collector_runs để kiểm tra rpc_label được trích xuất từ DB
+    conn.execute(
+        "INSERT INTO collector_runs(run_id, rpc_label, chain_id, synthetic, mode, start_block, end_block, "
+        "blocks_count, txs_count, blocks_per_sec, txs_per_sec, retries_count, gaps_count, status, started_at, ended_at, commit_hash) "
+        "VALUES('run-01', 'anvil-node-db', 31337, ?, 'backfill', 0, ?, ?, ?, 10.0, 10.0, 0, 0, 'completed', ?, ?, 'commit1')",
+        (synthetic, num_blocks - 1, num_blocks, num_blocks, utc_str, utc_str)
+    )
+
     conn.commit()
     conn.close()
 
@@ -413,3 +421,55 @@ def test_forensics_cli_end_to_end(tmp_path):
         capture_output=True, encoding="utf-8", errors="replace", env=sub_env, check=False
     )
     assert res.returncode == 0
+
+def test_manifest_source_consistency_and_contradiction(tmp_path, monkeypatch):
+    """Test 11: rpc_label và cờ synthetic được trích xuất từ dữ liệu trong DB;
+    mục software chứa working_tree_dirty; verify-manifest bắt mâu thuẫn giữa manifest và sanitized_config.
+    """
+    # Đặt biến môi trường khác hẳn với DB
+    monkeypatch.setenv("RPC_LABEL", "env-rpc-contradict")
+    monkeypatch.setenv("RPC_SYNTHETIC", "false")
+
+    db_file = str(tmp_path / "test_source.db")
+    # DB lưu synthetic=1 và collector_runs có rpc_label='anvil-node-db'
+    populate_sample_db(db_file, num_blocks=3, synthetic=1)
+
+    pkg_dir = str(tmp_path / "pkg_source")
+    manifest = export_evidence("case-src-01", 0, 2, out_dir=pkg_dir, db_path=db_file)
+
+    # 1. Xác nhận lấy từ DB, không lấy từ biến môi trường
+    assert manifest["rpc_label"] == "anvil-node-db"
+    assert manifest["synthetic"] is True
+    assert manifest["sanitized_config"]["RPC_LABEL"] == "anvil-node-db"
+    assert manifest["sanitized_config"]["RPC_SYNTHETIC"] is True
+
+    # 2. Xác nhận software có trường working_tree_dirty kiểu bool
+    assert "working_tree_dirty" in manifest["software"]
+    assert isinstance(manifest["software"]["working_tree_dirty"], bool)
+
+    # 3. Gói nguyên vẹn -> verify-manifest OK
+    ok, errors = verify_manifest(pkg_dir, db_path=db_file)
+    assert ok
+    assert len(errors) == 0
+
+    # 4. Cố tình tạo mâu thuẫn: sửa sanitized_config.RPC_SYNTHETIC thành False trong khi synthetic là True
+    manifest_path = os.path.join(pkg_dir, "manifest.json")
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        m_data = json.load(f)
+    m_data["sanitized_config"]["RPC_SYNTHETIC"] = False
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(m_data, f, indent=2)
+
+    ok, errors = verify_manifest(pkg_dir)
+    assert not ok
+    assert any("Mâu thuẫn cờ synthetic" in e for e in errors)
+
+    # 5. Cố tình tạo mâu thuẫn rpc_label
+    m_data["sanitized_config"]["RPC_SYNTHETIC"] = True
+    m_data["sanitized_config"]["RPC_LABEL"] = "tampered-label"
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(m_data, f, indent=2)
+
+    ok, errors = verify_manifest(pkg_dir)
+    assert not ok
+    assert any("Mâu thuẫn rpc_label" in e for e in errors)

@@ -7,6 +7,7 @@ import json
 import hashlib
 import sqlite3
 import logging
+import subprocess
 from datetime import datetime, timezone
 
 from forensics import __version__
@@ -67,6 +68,21 @@ def sanitize_config(extra_config: dict = None) -> dict:
                 base[k] = v
     # Lọc lại lần cuối để đảm bảo 100% chỉ có ALLOWLIST
     return {k: base[k] for k in sorted(base.keys()) if k in ALLOWED_CONFIG_KEYS}
+
+def is_working_tree_dirty() -> bool:
+    """Kiểm tra xem git working tree có thay đổi chưa commit hay không."""
+    git_paths = [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "git", "cmd", "git.exe"),
+        "git"
+    ]
+    for g in git_paths:
+        try:
+            res = subprocess.run([g, "status", "--porcelain"], capture_output=True, text=True, check=False)
+            if res.returncode == 0:
+                return bool(res.stdout.strip())
+        except Exception:
+            continue
+    return False
 
 def compute_file_sha256(filepath: str) -> str:
     """Tính SHA-256 của file trên đĩa."""
@@ -295,6 +311,19 @@ def export_evidence(
         derived_result = verify_derived_range(read_conn, start_block, end_block)
 
         chain_id = blk_rows[0][0]
+
+        # 6. Trích xuất rpc_label từ collector_runs đã thu thập (thay vì lấy từ biến môi trường lúc xuất)
+        run_row = read_conn.execute(
+            "SELECT rpc_label FROM collector_runs "
+            "WHERE (start_block <= ? AND end_block >= ?) OR (start_block >= ? AND end_block <= ?) "
+            "ORDER BY started_at DESC LIMIT 1",
+            (start_block, end_block, start_block, end_block)
+        ).fetchone()
+        if run_row and run_row[0]:
+            rpc_label = run_row[0]
+        else:
+            any_run = read_conn.execute("SELECT rpc_label FROM collector_runs ORDER BY started_at DESC LIMIT 1").fetchone()
+            rpc_label = any_run[0] if (any_run and any_run[0]) else os.environ.get("RPC_LABEL", "unknown")
     finally:
         read_conn.execute("ROLLBACK")
         read_conn.close()
@@ -392,7 +421,7 @@ def export_evidence(
         "exported_at": exported_at,
         "operator": op,
         "chain_id": chain_id,
-        "rpc_label": os.environ.get("RPC_LABEL", "unknown"),
+        "rpc_label": rpc_label,
         "synthetic": bool(package_synthetic),
         "block_range": {
             "start_block": start_block,
@@ -404,9 +433,13 @@ def export_evidence(
         },
         "software": {
             "version": __version__,
-            "commit_hash": get_commit_hash()
+            "commit_hash": get_commit_hash(),
+            "working_tree_dirty": is_working_tree_dirty()
         },
-        "sanitized_config": sanitize_config(),
+        "sanitized_config": sanitize_config({
+            "RPC_LABEL": rpc_label,
+            "RPC_SYNTHETIC": bool(package_synthetic)
+        }),
         "finalization": {
             "confirmations": confirmations,
             "is_finalized": is_finalized,
@@ -543,6 +576,22 @@ def verify_manifest(manifest_path_or_dir: str, db_path: str = None) -> tuple[boo
         calc_digest = hashlib.sha256(digest_payload.encode("utf-8")).hexdigest()
         if calc_digest.lower() != exp_digest.lower():
             errors.append(f"MISMATCH: Sai lệch package_digest: kỳ vọng {exp_digest}, tính toán {calc_digest}")
+
+    # Kiểm tra tính nhất quán giữa thông tin manifest và sanitized_config
+    if "sanitized_config" in manifest_data and isinstance(manifest_data["sanitized_config"], dict):
+        cfg = manifest_data["sanitized_config"]
+        if "RPC_SYNTHETIC" in cfg and "synthetic" in manifest_data:
+            if bool(cfg["RPC_SYNTHETIC"]) != bool(manifest_data["synthetic"]):
+                errors.append(
+                    f"MISMATCH: Mâu thuẫn cờ synthetic giữa manifest ({manifest_data['synthetic']}) "
+                    f"và sanitized_config.RPC_SYNTHETIC ({cfg['RPC_SYNTHETIC']})"
+                )
+        if "RPC_LABEL" in cfg and "rpc_label" in manifest_data:
+            if str(cfg["RPC_LABEL"]).lower() != str(manifest_data["rpc_label"]).lower():
+                errors.append(
+                    f"MISMATCH: Mâu thuẫn rpc_label giữa manifest ('{manifest_data['rpc_label']}') "
+                    f"và sanitized_config.RPC_LABEL ('{cfg['RPC_LABEL']}')"
+                )
 
     # Kiểm tra đối chiếu với SQLite evidence_exports nếu db_path được cung cấp
     if db_path and os.path.exists(db_path):
