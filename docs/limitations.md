@@ -1,6 +1,6 @@
 # Tài liệu Giới hạn Kỹ thuật Hệ thống (System Limitations)
 
-Tài liệu này ghi nhận trung thực và minh bạch toàn bộ các giới hạn kỹ thuật của hệ thống Blockchain Forensics tính đến giai đoạn P2, phục vụ công tác điều tra số và đánh giá bằng chứng pháp lý.
+Tài liệu này ghi nhận trung thực và minh bạch toàn bộ các giới hạn kỹ thuật của hệ thống Blockchain Forensics tính đến giai đoạn P3, phục vụ công tác điều tra số và đánh giá bằng chứng pháp lý.
 
 ---
 
@@ -41,3 +41,10 @@ Hệ thống cung cấp ba cơ chế kiểm tra toàn vẹn ở tầng dữ li�
 
 - **Full Node tiêu chuẩn:** Các Full Node thông thường lưu trữ đầy đủ khối (blocks), giao dịch (transactions) và biên lai (receipts) trong lịch sử. Tuy nhiên, Full Node định kỳ cắt tỉa (prune) trạng thái thế giới (world state — số dư tài khoản, biến lưu trữ storage của smart contract) của các block cũ và không hỗ trợ Trace API cho các giao dịch lịch sử cách xa hiện tại.
 - **Hạn chế khi Replay:** Khi thực hiện tái lập (replay) các sự cố bảo mật trong lịch sử hoặc chạy fork từ một block cũ (`anvil --fork-url <RPC> --fork-block-number <N>`), nếu cần truy cập trạng thái tài khoản/storage lịch sử hoặc chạy công cụ phân tích trace (`debug_traceTransaction` / `trace_block`), Full Node sẽ từ chối do đã prune state. Khi đó, quy trình tái lập sự cố bắt buộc phải có quyền truy cập vào Archive RPC Node có kích hoạt tracer.
+
+---
+
+## 5. Rủi ro Lộ Khóa & Thu hồi Quyền Investigator khi Chuyển quyền Quản trị (Ownership Transfer)
+
+- Trong mô hình phân quyền của `EvidenceRegistry.sol`, việc chuyển giao quyền sở hữu diễn ra khi thay đổi điều hành viên hoặc bàn giao hệ thống điều tra.
+- Khi chuyển quyền qua cơ chế 2 bước (`transferOwnership` và `acceptOwnership`), hợp đồng bắt buộc phải **tự động thu hồi quyền điều tra viên của owner cũ** (`authorizedInvestigators[oldOwner] = false`). Điều này nhằm triệt tiêu **rủi ro lộ khóa riêng tư (key compromise)**: nếu khóa riêng tư của owner cũ sau này bị lộ, bị lưu trữ thiếu an toàn hoặc bị chuyển giao cho bên thứ ba, kẻ tấn công không thể sử dụng khóa cũ này để đăng ký bằng chứng giả mạo hay ghi đè lịch sử hành trình (custody events). Nếu owner mới muốn cấp lại quyền cho địa chỉ đó làm điều tra viên, họ phải gọi `setInvestigator` một cách tường minh.

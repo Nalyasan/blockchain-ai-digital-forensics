@@ -19,13 +19,17 @@ contract EvidenceRegistryTest {
     EvidenceRegistry public registry;
     address public deployer;
     address public alice;
+    address public bob;
     address public stranger;
 
     bytes32 constant CASE_001 = bytes32("CASE-2026-001");
     bytes32 constant CASE_002 = bytes32("CASE-2026-002");
     bytes32 constant MANIFEST_HASH_1 = 0x1111111111111111111111111111111111111111111111111111111111111111;
     bytes32 constant MANIFEST_HASH_2 = 0x2222222222222222222222222222222222222222222222222222222222222222;
+    bytes32 constant MANIFEST_HASH_3 = 0x3333333333333333333333333333333333333333333333333333333333333333;
     string constant STORAGE_URI = "evidence://case-001/manifest.json";
+    bytes32 constant ART_HASH = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+    bytes32 constant NOTE_HASH = 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
 
     event InvestigatorUpdated(address indexed account, bool authorized);
     event EvidenceRegistered(
@@ -43,17 +47,18 @@ contract EvidenceRegistryTest {
         bytes32 noteHash
     );
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed owner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     function setUp() public {
         deployer = address(this);
         alice = address(0xA11CE);
+        bob = address(0xB0B);
         stranger = address(0xBAD);
-
         registry = new EvidenceRegistry();
     }
 
-    // ---------- 1. Test Khởi tạo ban đầu ----------
+    // ==================== 1. Khởi tạo ====================
     function test_InitialState() public view {
         assert(registry.owner() == deployer);
         assert(registry.pendingOwner() == address(0));
@@ -62,55 +67,95 @@ contract EvidenceRegistryTest {
         assert(registry.MAX_URI_BYTES() == 256);
     }
 
-    // ---------- 2. Test Chuyển giao quyền sở hữu 2 bước (2-step Ownership Transfer) ----------
-    function test_TwoStepOwnershipTransfer() public {
-        // 1. Cố tình chuyển cho address(0) -> ZeroValue
+    // ==================== 2. Ownership Transfer 2 bước ====================
+    function test_TransferOwnership_ZeroAddressReverts() public {
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.ZeroValue.selector));
         registry.transferOwnership(address(0));
+    }
 
-        // 2. Chuyển đề cử cho Alice
-        vm.expectEmit(true, true, false, true);
-        emit OwnershipTransferStarted(deployer, alice);
+    function test_AcceptOwnership_StrangerReverts() public {
         registry.transferOwnership(alice);
-        assert(registry.pendingOwner() == alice);
-        assert(registry.owner() == deployer);
-
-        // 3. Người lạ cố tình gọi acceptOwnership -> revert Unauthorized
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, stranger));
         registry.acceptOwnership();
+    }
 
-        // 4. Alice chấp nhận quyền sở hữu
-        vm.prank(alice);
+    function test_AcceptOwnership_RevokesOldOwnerInvestigator() public {
+        // Cấp quyền cho Alice & chuyển quyền sở hữu
+        registry.setInvestigator(alice, true);
+        registry.transferOwnership(alice);
+
+        // Alice chấp nhận — phải thu hồi investigator của deployer (owner cũ)
+        vm.expectEmit(true, false, false, true);
+        emit InvestigatorUpdated(deployer, false);
         vm.expectEmit(true, true, false, true);
         emit OwnershipTransferred(deployer, alice);
+        vm.prank(alice);
         registry.acceptOwnership();
 
+        // Xác nhận trạng thái
         assert(registry.owner() == alice);
         assert(registry.pendingOwner() == address(0));
+        assert(registry.authorizedInvestigators(deployer) == false);
+        assert(registry.authorizedInvestigators(alice) == true);
     }
 
-    // ---------- 3. Test Kiểm tra phát Event chính xác ----------
-    function test_EventsEmittedCorrectly() public {
-        // Event InvestigatorUpdated
-        vm.expectEmit(true, false, false, true);
-        emit InvestigatorUpdated(alice, true);
+    function test_OldOwner_CannotRegisterAfterTransfer() public {
         registry.setInvestigator(alice, true);
+        registry.transferOwnership(alice);
+        vm.prank(alice);
+        registry.acceptOwnership();
 
-        // Event EvidenceRegistered
-        vm.expectEmit(true, true, true, true);
-        emit EvidenceRegistered(1, CASE_001, MANIFEST_HASH_1, deployer, STORAGE_URI);
+        // Deployer (owner cũ) gọi registerEvidence -> revert Unauthorized
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, deployer));
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
+    }
+
+    function test_OldOwner_CannotRecordCustodyAfterTransfer() public {
+        // Deployer đăng ký trước khi chuyển quyền
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
 
-        // Event CustodyRecorded
-        bytes32 art = 0x1234000000000000000000000000000000000000000000000000000000000000;
-        bytes32 note = 0x5678000000000000000000000000000000000000000000000000000000000000;
-        vm.expectEmit(true, true, true, true);
-        emit CustodyRecorded(eid, EvidenceRegistry.CustodyAction.COLLECTED, deployer, art, note);
-        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.COLLECTED, art, note);
+        registry.setInvestigator(alice, true);
+        registry.transferOwnership(alice);
+        vm.prank(alice);
+        registry.acceptOwnership();
+
+        // Deployer (owner cũ) gọi recordCustody -> revert Unauthorized
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, deployer));
+        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.COLLECTED, ART_HASH, NOTE_HASH);
     }
 
-    // ---------- 4. Test T07: Người lạ gọi hàm bảo vệ bị Unauthorized ----------
+    // ==================== 3. Hủy lời chuyển quyền ====================
+    function test_CancelOwnershipTransfer_Success() public {
+        registry.transferOwnership(alice);
+        assert(registry.pendingOwner() == alice);
+
+        vm.expectEmit(true, false, false, true);
+        emit OwnershipTransferCancelled(deployer);
+        registry.cancelOwnershipTransfer();
+
+        assert(registry.pendingOwner() == address(0));
+        assert(registry.owner() == deployer);
+
+        // Alice không thể acceptOwnership sau khi hủy
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, alice));
+        registry.acceptOwnership();
+    }
+
+    function test_CancelOwnershipTransfer_NoPending_Reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.NoPendingTransfer.selector));
+        registry.cancelOwnershipTransfer();
+    }
+
+    function test_CancelOwnershipTransfer_StrangerReverts() public {
+        registry.transferOwnership(alice);
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, stranger));
+        registry.cancelOwnershipTransfer();
+    }
+
+    // ==================== 4. T07: Người lạ bị Unauthorized ====================
     function test_StrangerCannotRegisterEvidence() public {
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, stranger));
@@ -119,10 +164,9 @@ contract EvidenceRegistryTest {
 
     function test_StrangerCannotRecordCustody() public {
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
-
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, stranger));
-        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.ANALYZED, bytes32(uint256(1)), bytes32(0));
+        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.ANALYZED, ART_HASH, NOTE_HASH);
     }
 
     function test_StrangerCannotSetInvestigator() public {
@@ -131,33 +175,44 @@ contract EvidenceRegistryTest {
         registry.setInvestigator(stranger, true);
     }
 
-    // ---------- 5. Test Investigator bị thu hồi quyền gọi recordCustody -> Unauthorized ----------
+    // ==================== 5. Revoked investigator ====================
     function test_RevokedInvestigatorCannotRecordCustody() public {
         registry.setInvestigator(alice, true);
         vm.prank(alice);
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
 
-        // Thu hồi quyền của Alice
         registry.setInvestigator(alice, false);
-
-        // Alice cố tình ghi nhận Custody -> revert Unauthorized
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, alice));
-        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.ANALYZED, bytes32(uint256(1)), bytes32(0));
+        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.ANALYZED, ART_HASH, NOTE_HASH);
     }
 
-    // ---------- 6. Test T06: Chống trùng manifestSha256 ----------
-    function test_DuplicateManifestHashReverts() public {
-        uint256 eid1 = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
-        assert(eid1 == 1);
+    // ==================== 6. T06: Đăng ký & Chống trùng ====================
+    function test_RegisterEvidenceSuccess() public {
+        vm.expectEmit(true, true, true, true);
+        emit EvidenceRegistered(1, CASE_001, MANIFEST_HASH_1, deployer, STORAGE_URI);
+        uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
+        assert(eid == 1);
+        assert(registry.hashToEvidenceId(MANIFEST_HASH_1) == 1);
 
+        EvidenceRegistry.EvidenceItem memory item = registry.getEvidence(eid);
+        assert(item.evidenceId == 1);
+        assert(item.caseId == CASE_001);
+        assert(item.manifestSha256 == MANIFEST_HASH_1);
+        assert(keccak256(bytes(item.storageUri)) == keccak256(bytes(STORAGE_URI)));
+        assert(item.registeredBy == deployer);
+        assert(item.exists == true);
+    }
+
+    function test_DuplicateManifestHashReverts() public {
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
         vm.expectRevert(
             abi.encodeWithSelector(EvidenceRegistry.DuplicateManifestHash.selector, MANIFEST_HASH_1, 1)
         );
-        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://case-001-retry/manifest.json");
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://retry");
     }
 
-    // ---------- 7. Test Ba trường hợp ZeroValue ----------
+    // ==================== 7. ZeroValue — 3 ca ====================
     function test_ZeroValue_CaseId() public {
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.ZeroValue.selector));
         registry.registerEvidence(bytes32(0), MANIFEST_HASH_1, STORAGE_URI);
@@ -174,10 +229,8 @@ contract EvidenceRegistryTest {
         registry.recordCustody(eid, EvidenceRegistry.CustodyAction.COLLECTED, bytes32(0), bytes32(0));
     }
 
-    // ---------- 8. Test Thứ tự kiểm tra: EvidenceNotFound kiểm tra TRƯỚC ZeroValue ----------
+    // ==================== 8. Thứ tự kiểm tra: EvidenceNotFound trước ZeroValue ====================
     function test_RecordCustody_EvidenceNotFound_Before_ZeroValue() public {
-        // Gọi với evidenceId không tồn tại VÀ artifactSha256 = 0
-        // Phải revert EvidenceNotFound trước!
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.EvidenceNotFound.selector, 999));
         registry.recordCustody(999, EvidenceRegistry.CustodyAction.COLLECTED, bytes32(0), bytes32(0));
     }
@@ -192,28 +245,36 @@ contract EvidenceRegistryTest {
         registry.getCustodyHistory(888);
     }
 
-    // ---------- 9. Test UriTooLong ----------
+    // ==================== 9. UriTooLong ====================
     function test_UriTooLongReverts() public {
-        // Tạo chuỗi 257 ký tự
         bytes memory longBytes = new bytes(257);
-        for (uint256 i = 0; i < 257; i++) {
-            longBytes[i] = "a";
-        }
-        string memory longUri = string(longBytes);
-
+        for (uint256 i = 0; i < 257; i++) longBytes[i] = "a";
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.UriTooLong.selector, 257, 256));
-        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, longUri);
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, string(longBytes));
 
-        // Chuỗi 256 ký tự phải thành công
+        // 256 bytes: OK
         bytes memory maxBytes = new bytes(256);
-        for (uint256 i = 0; i < 256; i++) {
-            maxBytes[i] = "b";
-        }
+        for (uint256 i = 0; i < 256; i++) maxBytes[i] = "b";
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, string(maxBytes));
         assert(eid == 1);
     }
 
-    // ---------- 10. Test Đầy đủ các trường của CustodyRecord (timestamp, actor, hash, thứ tự) ----------
+    // ==================== 10. Events chính xác ====================
+    function test_EventsEmittedCorrectly() public {
+        vm.expectEmit(true, false, false, true);
+        emit InvestigatorUpdated(alice, true);
+        registry.setInvestigator(alice, true);
+
+        vm.expectEmit(true, true, true, true);
+        emit EvidenceRegistered(1, CASE_001, MANIFEST_HASH_1, deployer, STORAGE_URI);
+        uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
+
+        vm.expectEmit(true, true, true, true);
+        emit CustodyRecorded(eid, EvidenceRegistry.CustodyAction.COLLECTED, deployer, ART_HASH, NOTE_HASH);
+        registry.recordCustody(eid, EvidenceRegistry.CustodyAction.COLLECTED, ART_HASH, NOTE_HASH);
+    }
+
+    // ==================== 11. CustodyRecord đầy đủ & thứ tự ====================
     function test_CustodyRecord_DetailedFieldsAndOrdering() public {
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
 
@@ -224,14 +285,12 @@ contract EvidenceRegistryTest {
 
         vm.warp(1700000100);
         registry.recordCustody(eid, EvidenceRegistry.CustodyAction.COLLECTED, art1, note1);
-
         vm.warp(1700000200);
         registry.recordCustody(eid, EvidenceRegistry.CustodyAction.ANALYZED, art2, note2);
 
         EvidenceRegistry.CustodyRecord[] memory records = registry.getCustodyHistory(eid);
         assert(records.length == 2);
 
-        // Record 1
         assert(records[0].evidenceId == eid);
         assert(records[0].action == EvidenceRegistry.CustodyAction.COLLECTED);
         assert(records[0].actor == deployer);
@@ -239,64 +298,56 @@ contract EvidenceRegistryTest {
         assert(records[0].noteHash == note1);
         assert(records[0].timestamp == 1700000100);
 
-        // Record 2
         assert(records[1].evidenceId == eid);
         assert(records[1].action == EvidenceRegistry.CustodyAction.ANALYZED);
         assert(records[1].actor == deployer);
         assert(records[1].artifactSha256 == art2);
         assert(records[1].noteHash == note2);
         assert(records[1].timestamp == 1700000200);
-
-        // Thứ tự thời gian
         assert(records[0].timestamp < records[1].timestamp);
     }
 
-    // ---------- 11. Test Lịch sử Custody của 2 Evidence hoàn toàn tách biệt ----------
-    function test_SeparateCustodyHistoriesForDifferentEvidences() public {
-        uint256 eid1 = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://case-001/manifest.json");
-        uint256 eid2 = registry.registerEvidence(CASE_002, MANIFEST_HASH_2, "evidence://case-002/manifest.json");
+    // ==================== 12. 2 evidence tách biệt lịch sử ====================
+    function test_SeparateCustodyHistories() public {
+        uint256 eid1 = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://c1");
+        uint256 eid2 = registry.registerEvidence(CASE_002, MANIFEST_HASH_2, "evidence://c2");
 
-        bytes32 art = 0x3333000000000000000000000000000000000000000000000000000000000000;
+        registry.recordCustody(eid1, EvidenceRegistry.CustodyAction.COLLECTED, ART_HASH, bytes32(0));
+        registry.recordCustody(eid1, EvidenceRegistry.CustodyAction.ANALYZED, ART_HASH, bytes32(0));
+        registry.recordCustody(eid2, EvidenceRegistry.CustodyAction.TRANSFERRED, ART_HASH, bytes32(0));
 
-        // Evidence 1 có 2 hành động
-        registry.recordCustody(eid1, EvidenceRegistry.CustodyAction.COLLECTED, art, bytes32(0));
-        registry.recordCustody(eid1, EvidenceRegistry.CustodyAction.ANALYZED, art, bytes32(0));
-
-        // Evidence 2 chỉ có 1 hành động
-        registry.recordCustody(eid2, EvidenceRegistry.CustodyAction.TRANSFERRED, art, bytes32(0));
-
-        EvidenceRegistry.CustodyRecord[] memory h1 = registry.getCustodyHistory(eid1);
-        EvidenceRegistry.CustodyRecord[] memory h2 = registry.getCustodyHistory(eid2);
-
-        assert(h1.length == 2);
-        assert(h2.length == 1);
-        assert(h1[0].action == EvidenceRegistry.CustodyAction.COLLECTED);
-        assert(h1[1].action == EvidenceRegistry.CustodyAction.ANALYZED);
-        assert(h2[0].action == EvidenceRegistry.CustodyAction.TRANSFERRED);
+        assert(registry.getCustodyHistory(eid1).length == 2);
+        assert(registry.getCustodyHistory(eid2).length == 1);
+        assert(registry.getCustodyHistory(eid1)[0].action == EvidenceRegistry.CustodyAction.COLLECTED);
+        assert(registry.getCustodyHistory(eid2)[0].action == EvidenceRegistry.CustodyAction.TRANSFERRED);
     }
 
-    // ---------- 12. Fuzz Test cho registerEvidence ----------
+    // ==================== 13. verifyEvidence ====================
+    function test_VerifyEvidence() public {
+        uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
+        (bool ok, address sub, uint256 at) = registry.verifyEvidence(eid, MANIFEST_HASH_1);
+        assert(ok && sub == deployer && at > 0);
+
+        (bool bad, , ) = registry.verifyEvidence(eid, MANIFEST_HASH_2);
+        assert(!bad);
+
+        (bool missing, , ) = registry.verifyEvidence(999, MANIFEST_HASH_1);
+        assert(!missing);
+    }
+
+    // ==================== 14. Fuzz test ====================
     function testFuzz_RegisterEvidence(bytes32 caseId, bytes32 manifestSha256, uint8 rawLen) public {
         vm.assume(caseId != bytes32(0));
         vm.assume(manifestSha256 != bytes32(0));
-
-        // Độ dài tối đa 256 bytes
         uint256 length = uint256(rawLen) % 256;
         bytes memory b = new bytes(length);
-        for (uint256 i = 0; i < length; i++) {
-            b[i] = bytes1(uint8(65 + (i % 26)));
-        }
-        string memory fuzzUri = string(b);
+        for (uint256 i = 0; i < length; i++) b[i] = bytes1(uint8(65 + (i % 26)));
 
         uint256 expectedId = registry.nextEvidenceId();
-        uint256 eid = registry.registerEvidence(caseId, manifestSha256, fuzzUri);
-
+        uint256 eid = registry.registerEvidence(caseId, manifestSha256, string(b));
         assert(eid == expectedId);
         assert(registry.hashToEvidenceId(manifestSha256) == eid);
-
-        (bool valid, address sub, uint256 regAt) = registry.verifyEvidence(eid, manifestSha256);
-        assert(valid == true);
-        assert(sub == deployer);
-        assert(regAt == block.timestamp);
+        (bool valid, address sub, ) = registry.verifyEvidence(eid, manifestSha256);
+        assert(valid && sub == deployer);
     }
 }

@@ -34,11 +34,10 @@ contract EvidenceRegistry {
     mapping(address => bool) public authorizedInvestigators;
     mapping(bytes32 => uint256) public hashToEvidenceId;
 
-    // Lưu trữ thông tin chứng cứ và lịch sử custody
     mapping(uint256 => EvidenceItem) private _evidences;
     mapping(uint256 => CustodyRecord[]) private _custodyHistory;
 
-    // evidenceId bắt đầu từ 1 (0 là giá trị mặc định đại diện cho chưa đăng ký trong hashToEvidenceId)
+    // evidenceId bắt đầu từ 1 (0 là giá trị mặc định đại diện cho "chưa đăng ký" trong hashToEvidenceId)
     uint256 public nextEvidenceId = 1;
 
     error Unauthorized(address caller);
@@ -46,6 +45,7 @@ contract EvidenceRegistry {
     error EvidenceNotFound(uint256 evidenceId);
     error ZeroValue();
     error UriTooLong(uint256 length, uint256 maxLength);
+    error NoPendingTransfer();
 
     event InvestigatorUpdated(address indexed account, bool authorized);
     event EvidenceRegistered(
@@ -63,6 +63,7 @@ contract EvidenceRegistry {
         bytes32 noteHash
     );
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed owner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -82,17 +83,32 @@ contract EvidenceRegistry {
         emit InvestigatorUpdated(msg.sender, true);
     }
 
+    /// @notice Đề cử owner mới. newOwner không được là address(0).
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroValue();
         pendingOwner = newOwner;
         emit OwnershipTransferStarted(owner, newOwner);
     }
 
+    /// @notice Hủy bỏ lời đề cử chuyển quyền đang chờ. Chỉ owner hiện tại gọi được.
+    function cancelOwnershipTransfer() external onlyOwner {
+        if (pendingOwner == address(0)) revert NoPendingTransfer();
+        pendingOwner = address(0);
+        emit OwnershipTransferCancelled(msg.sender);
+    }
+
+    /// @notice pendingOwner chấp nhận quyền sở hữu. Thu hồi quyền investigator của owner cũ.
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert Unauthorized(msg.sender);
-        emit OwnershipTransferred(owner, pendingOwner);
+        address oldOwner = owner;
         owner = pendingOwner;
         pendingOwner = address(0);
+
+        // Thu hồi quyền investigator của owner cũ để giảm thiểu rủi ro lộ khóa
+        authorizedInvestigators[oldOwner] = false;
+        emit InvestigatorUpdated(oldOwner, false);
+
+        emit OwnershipTransferred(oldOwner, msg.sender);
     }
 
     function setInvestigator(address account, bool authorized) external onlyOwner {
@@ -142,7 +158,6 @@ contract EvidenceRegistry {
         if (!_evidences[evidenceId].exists) {
             revert EvidenceNotFound(evidenceId);
         }
-        // Kiểm tra artifactSha256
         if (artifactSha256 == bytes32(0)) {
             revert ZeroValue();
         }
