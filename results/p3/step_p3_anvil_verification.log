@@ -1,0 +1,49 @@
+================================================================================
+ BẮT ĐẦU KIỂM NGHIỆM GIAI ĐOẠN P3 TRÊN ANVIL (SMART CONTRACT & CHAIN OF CUSTODY) 
+================================================================================
+
+1. Khởi động Anvil trên port 61862 (Chain ID: 31337)...
+2. Triển khai hợp đồng EvidenceRegistry.sol bằng forge create...
+No files changed, compilation skipped
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+Transaction hash: 0x45e6eb9ba46aa566b08a7172be34b4395daa12ba63c9c112a71c8ec506f9721e
+
+>> Hợp đồng EvidenceRegistry đã deploy tại: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+3. Thực hiện lệnh CLI 'anchor' neo gói chứng cứ lên EvidenceRegistry...
+OK: Neo chứng cứ thành công lên blockchain!
+  Evidence ID: 1
+  Tx Hash: 0xa48338f9cd8c55d6cc31b1d73a9b0b9270f010d480972cd1b3a9382f2bd2f4ca
+  Block: 2
+  Contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+  Manifest SHA-256: a9409fe97d3177f4837048c010e759a06a8b9bbd41744fd77a47f3f4e1ed35dc
+
+>> Xác nhận: DB SQLite đã cập nhật onchain_evidence_id=1 và bản ghi custody_events.
+
+4. Thực hiện lệnh CLI 'custody' ghi nhận hành trình ANALYZED on-chain...
+OK: Ghi nhận custody event thành công!
+  Evidence ID: 1
+  Action: 1
+  Tx Hash: 0x160c8fe48a71db44a96a0bb4d3022ab606be846b1f867de085e284168d7c9103
+  Block: 3
+
+>> Xác nhận: Sự kiện CustodyRecord đã ghi nhận thành công on-chain.
+
+5. Thực hiện lệnh CLI 'verify-onchain' trên gói chứng cứ nguyên vẹn...
+OK: OK: Khớp 100% với bản ghi on-chain (evidence_id=1, submitter=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, registeredAt=1793193842 [1.793e9])
+
+>> Xác nhận: verify-onchain xác thực thành công dữ liệu nguyên vẹn (Mã thoát 0).
+
+6. Kịch bản T05 Ca 3: Can thiệp sửa file dữ liệu sau khi neo on-chain...
+>> Đã sửa 1 byte trong asset_transfers.csv và cập nhật hash trong manifest.json cục bộ.
+>> Chạy verify-onchain để kiểm tra phát hiện giả mạo đối chiếu với Smart Contract bất biến...
+Mã thoát: 1
+STDOUT: 
+STDERR: THẤT BẠI: MISMATCH: Dữ liệu trên đĩa không khớp với bản ghi bất biến on-chain (evidence_id=1, hash=3705b78789bafd2816b41303cf6f61144ccddf1af83a4259741e1e8e82cf43fd)
+
+>> XÁC NHẬN T05 CA 3 THÀNH CÔNG: Kẻ tấn công sửa file và tự sinh lại manifest cục bộ bị Smart Contract bắt ngay lập tức!
+
+================================================================================
+ HOÀN TẤT TOÀN BỘ KIỂM NGHIỆM GIAI ĐOẠN P3 TRÊN ANVIL ĐẠT 100% TIÊU CHÍ 
+================================================================================

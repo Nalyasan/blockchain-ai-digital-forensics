@@ -1,0 +1,84 @@
+{
+  "block_range": {
+    "end_block": 3,
+    "start_block": 0
+  },
+  "block_timestamps_utc": {
+    "end": "2026-10-28T10:30:53Z",
+    "start": "2026-10-28T10:30:51Z"
+  },
+  "case_id": "case-anvil-p1-001",
+  "chain_id": 31337,
+  "counts": {
+    "asset_transfers": 3,
+    "audit_events": 2,
+    "canonical_blocks": 4,
+    "orphaned_blocks": 0,
+    "total_blocks": 4,
+    "transactions": 3
+  },
+  "exported_at": "2026-10-28T13:19:43Z",
+  "files": [
+    {
+      "path": "asset_transfers.csv",
+      "sha256": "a42d75acb660fc455284d2afc8c0bd7ce6cdd8f5f1e8ce2587384acba53022fa",
+      "size_bytes": 1028
+    },
+    {
+      "path": "audit_events.jsonl",
+      "sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+      "size_bytes": 281
+    },
+    {
+      "path": "raw_blocks.jsonl",
+      "sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+      "size_bytes": 18311
+    },
+    {
+      "path": "timeline.csv",
+      "sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+      "size_bytes": 1576
+    }
+  ],
+  "finalization": {
+    "confirmations": 2,
+    "is_finalized": false,
+    "unfinalized_blocks": [
+      2,
+      3
+    ],
+    "unfinalized_blocks_count": 2
+  },
+  "integrity_checks": {
+    "gaps": [],
+    "gaps_count": 0,
+    "verify_derived": {
+      "mismatches": 0,
+      "status": "PASSED"
+    },
+    "verify_local": {
+      "mismatches": 0,
+      "status": "PASSED"
+    }
+  },
+  "manifest_version": "1.0.0",
+  "operator": "Investigator_Lead",
+  "package_digest": "3c87bfe6d86cb0b55a5e6ee4769d66c89f9bbe71043a7f4ff3d0653de36378ec",
+  "rpc_label": "anvil-local-p1",
+  "sanitized_config": {
+    "CONFIRMATIONS": 2,
+    "POLL_INTERVAL": 3.0,
+    "RATE_LIMIT_RPS": 5.0,
+    "RPC_LABEL": "anvil-local-p1",
+    "RPC_SYNTHETIC": true,
+    "TIMEOUT": 15.0,
+    "commit_hash": "bb0a6a8c650aedb80199b1cb46dac31eef00a9c3",
+    "version": "0.2.0"
+  },
+  "software": {
+    "commit_hash": "bb0a6a8c650aedb80199b1cb46dac31eef00a9c3",
+    "version": "0.2.0",
+    "working_tree_dirty": false
+  },
+  "synthetic": true
+}

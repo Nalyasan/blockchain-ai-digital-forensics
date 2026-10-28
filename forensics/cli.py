@@ -17,6 +17,7 @@ import argparse
 import logging
 from forensics.evidence import export_evidence, verify_manifest, validate_case_id
 from forensics.schemas import init_db
+import forensics.onchain as onchain
 import collector
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -81,6 +82,71 @@ def cli_verify_derived(args):
     collector.DB_PATH = db_file
     return collector.cmd_verify_derived(args)
 
+def cli_anchor(args):
+    """Neo gói chứng cứ lên blockchain qua EvidenceRegistry."""
+    try:
+        res = onchain.anchor_evidence(
+            manifest_path_or_dir=args.manifest_path,
+            contract_address=args.contract,
+            db_path=args.db,
+            account=args.account,
+            password_file=args.password_file,
+            from_addr=args.from_addr,
+            allow_dirty=args.allow_dirty,
+            rpc_url=args.rpc_url
+        )
+        print("OK: Neo chứng cứ thành công lên blockchain!")
+        print(f"  Evidence ID: {res['evidence_id']}")
+        print(f"  Tx Hash: {res['tx_hash']}")
+        print(f"  Block: {res['block_number']}")
+        print(f"  Contract: {res['contract_address']}")
+        print(f"  Manifest SHA-256: {res['manifest_sha256']}")
+        return 0
+    except Exception as e:
+        print(f"THẤT BẠI anchor: {e}", file=sys.stderr)
+        return 1
+
+def cli_custody(args):
+    """Ghi nhận hành trình chứng cứ (CustodyRecord) on-chain."""
+    try:
+        res = onchain.record_custody_action(
+            evidence_id=args.evidence_id,
+            action=args.action,
+            artifact_sha256=args.artifact_hash,
+            note=args.note,
+            contract_address=args.contract,
+            db_path=args.db,
+            account=args.account,
+            password_file=args.password_file,
+            from_addr=args.from_addr,
+            rpc_url=args.rpc_url
+        )
+        print("OK: Ghi nhận custody event thành công!")
+        print(f"  Evidence ID: {res['evidence_id']}")
+        print(f"  Action: {res['action']}")
+        print(f"  Tx Hash: {res['tx_hash']}")
+        print(f"  Block: {res['block_number']}")
+        return 0
+    except Exception as e:
+        print(f"THẤT BẠI custody: {e}", file=sys.stderr)
+        return 1
+
+def cli_verify_onchain(args):
+    """Xác minh tầng 3: đối chiếu manifest trên đĩa với bản ghi on-chain."""
+    ok, msg = onchain.verify_onchain_evidence(
+        manifest_path_or_dir=args.manifest_path,
+        contract_address=args.contract,
+        evidence_id=args.evidence_id,
+        db_path=args.db,
+        rpc_url=args.rpc_url
+    )
+    if ok:
+        print(f"OK: {msg}")
+        return 0
+    else:
+        print(f"THẤT BẠI: {msg}", file=sys.stderr)
+        return 1
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="python -m forensics.cli",
@@ -122,6 +188,41 @@ def build_parser():
     pd = sub.add_parser("verify-derived", help="Tính lại asset_transfers từ dữ liệu thô và so sánh")
     pd.add_argument("--db", default=None, help="Đường dẫn database SQLite")
     pd.set_defaults(func=cli_verify_derived)
+
+    # 6. anchor
+    pa = sub.add_parser("anchor", help="Neo gói chứng cứ lên smart contract EvidenceRegistry")
+    pa.add_argument("manifest_path", help="Đường dẫn đến manifest.json hoặc thư mục gói chứng cứ")
+    pa.add_argument("--contract", required=True, help="Địa chỉ hợp đồng EvidenceRegistry")
+    pa.add_argument("--db", default=None, help="Đường dẫn database SQLite")
+    pa.add_argument("--account", default=None, help="Tên tài khoản keystore của Foundry cast")
+    pa.add_argument("--password-file", default=None, help="Tệp chứa mật khẩu giải mã keystore")
+    pa.add_argument("--from", dest="from_addr", default=None, help="Địa chỉ ví người ký (dùng cho Anvil / unlocked)")
+    pa.add_argument("--allow-dirty", action="store_true", help="Cho phép neo kể cả khi working_tree_dirty=True")
+    pa.add_argument("--rpc-url", default=None, help="RPC URL của mạng blockchain")
+    pa.set_defaults(func=cli_anchor)
+
+    # 7. custody
+    pc = sub.add_parser("custody", help="Ghi nhận sự kiện hành trình chứng cứ (CustodyRecord) on-chain")
+    pc.add_argument("--evidence-id", type=int, required=True, help="ID của chứng cứ trên hợp đồng")
+    pc.add_argument("--action", type=int, required=True, choices=[0, 1, 2, 3], help="Hành động: 0=COLLECTED, 1=ANALYZED, 2=TRANSFERRED, 3=EXPORTED")
+    pc.add_argument("--artifact-hash", required=True, help="SHA-256 của file bằng chứng / báo cáo")
+    pc.add_argument("--note", required=True, help="Ghi chú hành trình")
+    pc.add_argument("--contract", required=True, help="Địa chỉ hợp đồng EvidenceRegistry")
+    pc.add_argument("--db", default=None, help="Đường dẫn database SQLite")
+    pc.add_argument("--account", default=None, help="Tên tài khoản keystore của Foundry cast")
+    pc.add_argument("--password-file", default=None, help="Tệp mật khẩu giải mã keystore")
+    pc.add_argument("--from", dest="from_addr", default=None, help="Địa chỉ ví người ký")
+    pc.add_argument("--rpc-url", default=None, help="RPC URL")
+    pc.set_defaults(func=cli_custody)
+
+    # 8. verify-onchain
+    pvo = sub.add_parser("verify-onchain", help="Xác minh tầng 3: đối chiếu manifest với hợp đồng on-chain")
+    pvo.add_argument("manifest_path", help="Đường dẫn đến manifest.json hoặc thư mục gói chứng cứ")
+    pvo.add_argument("--contract", required=True, help="Địa chỉ hợp đồng EvidenceRegistry")
+    pvo.add_argument("--evidence-id", type=int, default=None, help="ID chứng cứ (nếu không tra cứu từ DB)")
+    pvo.add_argument("--db", default=None, help="Đường dẫn database SQLite")
+    pvo.add_argument("--rpc-url", default=None, help="RPC URL")
+    pvo.set_defaults(func=cli_verify_onchain)
 
     return p
 

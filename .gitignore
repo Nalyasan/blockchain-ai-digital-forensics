@@ -19,5 +19,7 @@ __pycache__/
 .pytest_cache/
 
 # Foundry
+out/
+cache/
 contracts/out/
 contracts/cache/
