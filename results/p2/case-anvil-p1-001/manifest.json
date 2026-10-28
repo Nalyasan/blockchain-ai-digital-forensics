@@ -17,7 +17,7 @@
     "total_blocks": 4,
     "transactions": 3
   },
-  "exported_at": "2026-10-28T13:19:43Z",
+  "exported_at": "2026-10-28T13:58:50Z",
   "files": [
     {
       "path": "asset_transfers.csv",
@@ -62,7 +62,7 @@
     }
   },
   "manifest_version": "1.0.0",
-  "operator": "Investigator_Lead",
+  "operator": "AI Investigator",
   "package_digest": "3c87bfe6d86cb0b55a5e6ee4769d66c89f9bbe71043a7f4ff3d0653de36378ec",
   "rpc_label": "anvil-local-p1",
   "sanitized_config": {
@@ -72,11 +72,11 @@
     "RPC_LABEL": "anvil-local-p1",
     "RPC_SYNTHETIC": true,
     "TIMEOUT": 15.0,
-    "commit_hash": "bb0a6a8c650aedb80199b1cb46dac31eef00a9c3",
+    "commit_hash": "ea5dc8200e12d1b62633516a63c8525c958c07ac",
     "version": "0.2.0"
   },
   "software": {
-    "commit_hash": "bb0a6a8c650aedb80199b1cb46dac31eef00a9c3",
+    "commit_hash": "ea5dc8200e12d1b62633516a63c8525c958c07ac",
     "version": "0.2.0",
     "working_tree_dirty": false
   },
