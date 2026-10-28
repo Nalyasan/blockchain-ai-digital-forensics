@@ -2,22 +2,22 @@
  BẮT ĐẦU KIỂM NGHIỆM GIAI ĐOẠN P3 TRÊN ANVIL (SMART CONTRACT & CHAIN OF CUSTODY) 
 ================================================================================
 
-1. Khởi động Anvil trên port 55437 (Chain ID: 31337)...
+1. Khởi động Anvil trên port 64262 (Chain ID: 31337)...
 2. Triển khai hợp đồng EvidenceRegistry.sol bằng forge create (--unlocked --from, không dùng private key)...
 No files changed, compilation skipped
 Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 Deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-Transaction hash: 0xe131b91ea660f22f79733787fb6051d85bab8b98c0d53c5c362a81e704cc4d3c
+Transaction hash: 0xe04d5d4d4fff24db945d795bd86abb6f400d152ffd076a45df6d6c49edf128c6
 
 >> Hợp đồng EvidenceRegistry đã deploy tại: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 
 3. Thực hiện lệnh CLI 'anchor' neo gói chứng cứ lên EvidenceRegistry...
 OK: Neo chứng cứ thành công lên blockchain!
   Evidence ID: 1
-  Tx Hash: 0x3289f0e8299d7a86f43e22596e0cef024fdcf95994a63256be55c3c851975472
+  Tx Hash: 0x6559ecced7f84618951a0a068d581d92f6045dabf38270801b2564de4f1c1d1e
   Block: 2
   Contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-  Manifest SHA-256: 11ab5f0dc78c18f88a9afe8c19f32ad06f8c01421fbe103bdd73eaa0876219cd
+  Manifest SHA-256: 964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e
 
 >> Xác nhận: DB SQLite đã cập nhật onchain_evidence_id=1, bản ghi custody_events và audit_events.
 
@@ -25,13 +25,13 @@ OK: Neo chứng cứ thành công lên blockchain!
 OK: Ghi nhận custody event thành công!
   Evidence ID: 1
   Action: 1
-  Tx Hash: 0xc18d279bffc74a735c8f184b0f863e58d3a437ee1fa346d48249846786b66c66
+  Tx Hash: 0xf976cff5b4ba45ed47000d20b7f8ce1d33b8612d5bc6550a0df8b5fdd480e462
   Block: 3
 
 >> Xác nhận: Sự kiện CustodyRecord đã ghi nhận thành công on-chain.
 
 5. Thực hiện lệnh CLI 'verify-onchain' trên gói chứng cứ nguyên vẹn...
-OK: OK: Khớp 100% với bản ghi on-chain (evidence_id=1, submitter=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, registeredAt=1793196129 [1.793e9])
+OK: OK: Khớp 100% với bản ghi on-chain (evidence_id=1, submitter=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, registeredAt=1793196896 [1.793e9])
 
 >> Xác nhận: verify-onchain xác thực thành công dữ liệu nguyên vẹn (Mã thoát 0).
 
@@ -40,7 +40,7 @@ OK: OK: Khớp 100% với bản ghi on-chain (evidence_id=1, submitter=0xf39Fd6e
 >> Chạy verify-onchain để kiểm tra phát hiện giả mạo đối chiếu với Smart Contract bất biến...
 Mã thoát: 1
 STDOUT: 
-STDERR: THẤT BẠI: MISMATCH: Dữ liệu trên đĩa không khớp với bản ghi bất biến on-chain (evidence_id=1, hash=624dbf7d9d1061cd5a28360b3cc03e3f0a19d7b72838913045f6333c14547450)
+STDERR: THẤT BẠI: MISMATCH: Dữ liệu trên đĩa không khớp với bản ghi bất biến on-chain (evidence_id=1, hash=078f52e1ded99d70f0a64f035dd5bb5c8f16257d3488b944317740333ca57123)
 
 >> Xác nhận: Kẻ tấn công sửa file và tự sinh lại manifest cục bộ bị Smart Contract phát hiện MISMATCH (exit 1).
 
