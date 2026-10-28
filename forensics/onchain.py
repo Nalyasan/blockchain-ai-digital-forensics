@@ -16,6 +16,7 @@ import logging
 import sqlite3
 import subprocess
 import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 
 from forensics.schemas import init_db
@@ -84,11 +85,30 @@ def compute_anvil_default_accounts() -> list[str]:
         return fallback
     return accounts
 
-def validate_chain_and_guard(signer_address: str, rpc_url: str = None, override_chain_id: bool = False) -> int:
+def is_loopback_rpc(rpc_url: str) -> bool:
+    """Xác định URL của RPC endpoint có trỏ về loopback cục bộ hay không.
+    Chấp nhận: 127.0.0.1, localhost, [::1], ::1.
+    Từ chối bất kỳ domain từ xa hoặc IP mạng ngoài nào.
+    """
+    try:
+        parsed = urllib.parse.urlparse(rpc_url)
+        hostname = (parsed.hostname or "").lower().strip()
+        hostname = hostname.strip("[]")
+        return hostname in {"127.0.0.1", "localhost", "::1"}
+    except Exception:
+        return False
+
+def validate_chain_and_guard(
+    signer_address: str,
+    rpc_url: str = None,
+    override_chain_id: bool = False,
+    is_write: bool = False
+) -> int:
     """Chốt chặn an toàn:
     1. chain_id đọc từ RPC eth_chainId phải khớp với ANCHOR_CHAIN_ID trong env (nếu có cấu hình).
-    2. chain_id phải thuộc allowlist [31337, 11155111] (trừ khi có override_chain_id=True).
-    3. Nếu chain khác 31337, từ chối ký nếu signer_address trùng 10 tài khoản mặc định của Anvil.
+    2. Đối với giao dịch ghi (is_write=True): TUYỆT ĐỐI CẤM override_chain_id; bắt buộc rpc_chain_id in ALLOWED_CHAIN_IDS.
+    3. Đối với thao tác đọc: chỉ cho phép ngoài ALLOWED_CHAIN_IDS nếu override_chain_id=True.
+    4. Nếu chain khác 31337, từ chối ký nếu signer_address trùng 10 tài khoản mặc định của Anvil.
     """
     url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
     rpc_chain_id = get_rpc_chain_id(url)
@@ -101,11 +121,18 @@ def validate_chain_and_guard(signer_address: str, rpc_url: str = None, override_
                 f"nhưng ANCHOR_CHAIN_ID trong .env cấu hình là {env_chain.strip()}!"
             )
 
-    if rpc_chain_id not in ALLOWED_CHAIN_IDS and not override_chain_id:
-        raise ValueError(
-            f"Chain ID {rpc_chain_id} không nằm trong danh sách cho phép {list(ALLOWED_CHAIN_IDS)}. "
-            "Sử dụng cờ --override-chain-id nếu cố tình muốn ghi đè."
-        )
+    if is_write:
+        if rpc_chain_id not in ALLOWED_CHAIN_IDS:
+            raise ValueError(
+                f"Chốt chặn an toàn ghi: Chain ID {rpc_chain_id} không nằm trong danh sách cho phép {list(ALLOWED_CHAIN_IDS)}. "
+                "Giao dịch ghi on-chain (anchor/custody) tuyệt đối không cho phép sử dụng cờ override để ngăn ngừa rủi ro giao dịch ngoài ý muốn trên mainnet hoặc mạng lạ."
+            )
+    else:
+        if rpc_chain_id not in ALLOWED_CHAIN_IDS and not override_chain_id:
+            raise ValueError(
+                f"Chain ID {rpc_chain_id} không nằm trong danh sách cho phép {list(ALLOWED_CHAIN_IDS)}. "
+                "Sử dụng cờ --override-chain-id nếu cố tình muốn ghi đè."
+            )
 
     if rpc_chain_id != 31337:
         anvil_defaults = compute_anvil_default_accounts()
@@ -250,7 +277,7 @@ def anchor_evidence(
     signer = from_addr or os.environ.get("ANCHOR_FROM") or "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
     # Chốt chặn an toàn
-    chain_id = validate_chain_and_guard(signer, rpc_url=url)
+    chain_id = validate_chain_and_guard(signer, rpc_url=url, is_write=True)
 
     # RÀNG BUỘC BẢO MẬT: Trên chain khác Anvil (31337), bắt buộc dùng keystore (--account)
     if chain_id != 31337 and not account:
@@ -258,6 +285,14 @@ def anchor_evidence(
             f"Trên mạng không phải Anvil (chain_id={chain_id}), bắt buộc sử dụng keystore "
             "với đối số --account (và tùy chọn --password-file). "
             "Tuyệt đối không cho phép dùng cờ --unlocked hoặc --from trực tiếp."
+        )
+
+    # RÀNG BUỘC LOOPBACK: --unlocked chỉ cho phép trên endpoint loopback (127.0.0.1, localhost, ::1)
+    if not account and not is_loopback_rpc(url):
+        raise ValueError(
+            f"Chốt chặn an toàn: Chế độ ký --unlocked CHỈ được phép trên RPC cục bộ loopback (127.0.0.1, localhost, ::1). "
+            f"Endpoint hiện tại '{url}' là địa chỉ từ xa hoặc không an toàn. "
+            "Bắt buộc sử dụng Foundry keystore (--account) để ký trên môi trường này."
         )
 
     case_id_b32 = string_to_bytes32_hex(case_id)
@@ -373,7 +408,7 @@ def record_custody_action(
 
     url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
     signer = from_addr or os.environ.get("ANCHOR_FROM") or "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-    chain_id = validate_chain_and_guard(signer, rpc_url=url)
+    chain_id = validate_chain_and_guard(signer, rpc_url=url, is_write=True)
 
     # RÀNG BUỘC BẢO MẬT: Trên chain khác Anvil (31337), bắt buộc dùng keystore (--account)
     if chain_id != 31337 and not account:
@@ -381,6 +416,14 @@ def record_custody_action(
             f"Trên mạng không phải Anvil (chain_id={chain_id}), bắt buộc sử dụng keystore "
             "với đối số --account (và tùy chọn --password-file). "
             "Tuyệt đối không cho phép dùng cờ --unlocked hoặc --from trực tiếp."
+        )
+
+    # RÀNG BUỘC LOOPBACK: --unlocked chỉ cho phép trên endpoint loopback (127.0.0.1, localhost, ::1)
+    if not account and not is_loopback_rpc(url):
+        raise ValueError(
+            f"Chốt chặn an toàn: Chế độ ký --unlocked CHỈ được phép trên RPC cục bộ loopback (127.0.0.1, localhost, ::1). "
+            f"Endpoint hiện tại '{url}' là địa chỉ từ xa hoặc không an toàn. "
+            "Bắt buộc sử dụng Foundry keystore (--account) để ký trên môi trường này."
         )
 
     art_b32 = "0x" + artifact_sha256 if not artifact_sha256.startswith("0x") else artifact_sha256

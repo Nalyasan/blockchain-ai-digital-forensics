@@ -54,16 +54,18 @@ Hệ thống cung cấp ba cơ chế kiểm tra toàn vẹn ở tầng dữ li�
 ## 6. Chính sách Quản lý Khóa & Quy chuẩn An toàn On-chain (P3 Hardening)
 
 1. **Xử lý `storageUri` trong `EvidenceRegistry.sol`**:
-   - Hợp đồng nhận dữ liệu thô `string` và giới hạn độ dài byte `1 <= bytes(storageUri).length <= 256` (revert `ZeroValue` nếu rỗng và `UriTooLong` nếu vượt quá 256 bytes).
-   - Hợp đồng không phân tích khoảng trắng (whitespace parsing) ở tầng bytecode EVM nhằm tiết kiệm gas thực thi; quy trình client-side (`forensics/onchain.py`) chịu trách nhiệm chuẩn hóa, cắt tỉa (`strip()`) chuỗi URI trước khi tạo giao dịch nhằm từ chối các URI chỉ chứa khoảng trắng hoặc rỗng.
+   - Hợp đồng giới hạn độ dài byte `1 <= bytes(storageUri).length <= 256` (revert `ZeroValue` nếu rỗng và `UriTooLong` nếu vượt quá 256 bytes).
+   - Bất biến chuỗi không khoảng trắng được cưỡng chế trực tiếp on-chain thông qua hàm nội bộ `_isNonWhitespace`: nếu chuỗi chỉ toàn ký tự khoảng trắng (space 0x20, tab 0x09, newline 0x0A, carriage return 0x0D), hợp đồng sẽ lập tức revert với custom error `WhitespaceUri()`. Client-side (`forensics/onchain.py`) đồng thời thực hiện chuẩn hóa và `strip()` chuỗi trước khi gửi.
 2. **Quy trình chuyển quyền quản trị 2 bước và hủy đề cử đang chờ**:
    - `transferOwnership` từ chối `address(0)` (`ZeroValue`) và từ chối chính chủ sở hữu hiện tại (`SameOwner`) nhằm ngăn ngừa tự khóa (self-lockout) làm mất quyền investigator.
    - Nếu đang tồn tại một đề cử chuyển quyền chưa được chấp thuận (`pendingOwner != address(0)`), các lệnh đề cử mới sẽ bị chặn với lỗi `PendingTransferExists(pendingOwner)`. Chủ sở hữu hiện tại bắt buộc phải gọi `cancelOwnershipTransfer()` một cách tường minh trước khi đề cử địa chỉ mới.
    - Khi `acceptOwnership()` được thực thi, chủ sở hữu mới tự động được cấp quyền investigator (`authorizedInvestigators[newOwner] = true`), đồng thời quyền investigator của chủ sở hữu cũ bị thu hồi ngay lập tức (`authorizedInvestigators[oldOwner] = false`).
-3. **Chốt chặn an toàn khóa (Key Safety Guard) & Ràng buộc Keystore**:
-   - Phương thức gửi giao dịch qua `--unlocked` / `--from` CHỈ được phép hoạt động trên chuỗi Anvil cục bộ (`chain_id == 31337`).
+3. **Chốt chặn an toàn khóa (Key Safety Guard), Loopback RPC & Ràng buộc Keystore**:
+   - Phương thức gửi giao dịch qua `--unlocked` / `--from` CHỈ được phép hoạt động trên chuỗi Anvil (`chain_id == 31337`) VÀ RPC endpoint bắt buộc phải là địa chỉ loopback cục bộ (`127.0.0.1`, `localhost`, `::1`). Bất kỳ RPC từ xa nào (dù khai báo chain ID 31337) đều bị từ chối chế độ unlocked và bắt buộc phải dùng Foundry keystore (`--account`).
+   - Giao dịch ghi on-chain (`anchor`, `custody`) TUYỆT ĐỐI KHÔNG cho phép cờ ghi đè (`--override-chain-id`) nhằm loại trừ hoàn toàn nguy cơ vô tình thực thi trên Ethereum Mainnet hoặc các mạng trái phép.
    - Trên các mạng công khai (Sepolia `11155111` hoặc các chain khác), hệ thống bắt buộc sử dụng keystore đã mã hóa (`--account` và tùy chọn `--password-file`). Tuyệt đối không cho phép truyền khóa riêng tư trực tiếp qua đối số dòng lệnh hoặc biến môi trường.
    - Hệ thống từ chối mọi giao dịch sử dụng 10 tài khoản mặc định của Anvil trên bất kỳ mạng nào có `chain_id != 31337`.
 4. **Kiểm tra trạng thái Working Tree khi Neo Bằng chứng (Anchor)**:
    - Hệ thống đối soát cả trường `working_tree_dirty` trong tệp `manifest.json` và trạng thái thực tế từ Git (`git status --porcelain`) tại thời điểm thực thi lệnh `anchor`.
+   - Các tệp nhật ký thực thi runtime (`*.log`) được loại trừ khỏi kiểm tra dirty-tree vì chúng là kết quả đầu ra của chính kịch bản chạy thử nghiệm, trong khi toàn bộ mã nguồn, cấu hình và tệp chứng cứ được giám sát nghiêm ngặt.
    - Nếu phát hiện thư mục làm việc chưa sạch, lệnh sẽ bị từ chối trừ khi người dùng chỉ định rõ cờ `--allow-dirty`. Việc sử dụng cờ này sẽ được ghi nhận bền vững vào bảng `audit_events` và bảng `custody_events` trong cơ sở dữ liệu SQLite để phục vụ truy vết.

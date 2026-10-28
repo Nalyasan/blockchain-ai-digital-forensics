@@ -267,6 +267,17 @@ contract EvidenceRegistryTest {
         registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "");
     }
 
+    function test_WhitespaceUriReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.WhitespaceUri.selector));
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, " ");
+
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.WhitespaceUri.selector));
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "   ");
+
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.WhitespaceUri.selector));
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "\t\n\r ");
+    }
+
     function test_ZeroValue_ArtifactSha256() public {
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.ZeroValue.selector));

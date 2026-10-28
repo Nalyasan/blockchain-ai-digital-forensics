@@ -249,3 +249,59 @@ def test_decode_evidence_registered_event_full_validation():
             expected_case_id=case_id,
             expected_manifest_sha256="99" * 32
         )
+
+    # Không có event EvidenceRegistered trong logs -> từ chối
+    fake_empty_logs_receipt = {"status": "0x1", "logs": []}
+    with pytest.raises(ValueError, match="Không tìm thấy event EvidenceRegistered hợp lệ"):
+        onchain.extract_evidence_id_from_receipt(fake_empty_logs_receipt)
+
+def test_chain_id_write_override_blocked(monkeypatch):
+    """Test T08-9: Giao dịch ghi (is_write=True) tuyệt đối cấm override chain_id ngoài allowlist."""
+    monkeypatch.setenv("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
+    monkeypatch.setenv("ANCHOR_CHAIN_ID", "1")
+
+    with patch.object(onchain, "get_rpc_chain_id", return_value=1):
+        with pytest.raises(ValueError, match="Chốt chặn an toàn ghi"):
+            onchain.validate_chain_and_guard(
+                signer_address="0x1234567890123456789012345678901234567890",
+                rpc_url="http://127.0.0.1:8545",
+                override_chain_id=True,
+                is_write=True
+            )
+
+def test_non_loopback_rpc_rejected_for_unlocked(tmp_path):
+    """Test T08-10: Cấm chế độ --unlocked trên RPC endpoint từ xa (không phải 127.0.0.1, localhost, ::1) kể cả chain_id=31337."""
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text(json.dumps({
+        "case_id": "case-remote-01",
+        "package_digest": "e" * 64,
+        "files": [],
+        "software": {"version": "0.2.0", "commit_hash": "abc", "working_tree_dirty": False}
+    }), encoding="utf-8")
+
+    contract_addr = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+
+    with patch.object(onchain, "get_rpc_chain_id", return_value=31337), \
+         patch.object(onchain, "is_working_tree_dirty", return_value=False):
+        # RPC trỏ tới IP từ xa: 192.168.1.100
+        with pytest.raises(ValueError, match="Chế độ ký --unlocked CHỈ được phép trên RPC cục bộ loopback"):
+            onchain.anchor_evidence(
+                manifest_path_or_dir=str(manifest_file),
+                contract_address=contract_addr,
+                account=None,
+                from_addr="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                rpc_url="http://192.168.1.100:8545"
+            )
+
+        # RPC trỏ tới domain từ xa
+        with pytest.raises(ValueError, match="Chế độ ký --unlocked CHỈ được phép trên RPC cục bộ loopback"):
+            onchain.record_custody_action(
+                evidence_id=1,
+                action=1,
+                artifact_sha256="0x" + "b" * 64,
+                note="test remote",
+                contract_address=contract_addr,
+                account=None,
+                from_addr="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                rpc_url="http://remote.anvil-node.internal:8545"
+            )

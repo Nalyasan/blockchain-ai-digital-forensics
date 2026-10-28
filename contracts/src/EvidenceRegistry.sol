@@ -47,6 +47,7 @@ contract EvidenceRegistry {
     error SameOwner();
     error PendingTransferExists(address pendingOwner);
     error UriTooLong(uint256 length, uint256 maxLength);
+    error WhitespaceUri();
     error NoPendingTransfer();
 
     event InvestigatorUpdated(address indexed account, bool authorized);
@@ -127,9 +128,19 @@ contract EvidenceRegistry {
         emit InvestigatorUpdated(account, authorized);
     }
 
+    /// @dev Kiểm tra mảng byte có chứa ít nhất một ký tự không phải khoảng trắng (space, tab, newline, carriage return).
+    function _isNonWhitespace(bytes memory b) private pure returns (bool) {
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 char = b[i];
+            if (char != 0x20 && char != 0x09 && char != 0x0a && char != 0x0d) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// @notice Đăng ký gói chứng cứ số bất biến.
-    /// @dev storageUri phải có độ dài byte từ 1 đến MAX_URI_BYTES (256).
-    ///      Hợp đồng nhận chuỗi byte thô; việc kiểm tra loại bỏ URI rỗng/toàn khoảng trắng được client thực hiện trước khi gửi.
+    /// @dev storageUri phải có độ dài byte từ 1 đến MAX_URI_BYTES (256) và không được chỉ chứa khoảng trắng.
     function registerEvidence(
         bytes32 caseId,
         bytes32 manifestSha256,
@@ -137,9 +148,13 @@ contract EvidenceRegistry {
     ) external onlyInvestigator returns (uint256 evidenceId) {
         if (caseId == bytes32(0)) revert ZeroValue();
         if (manifestSha256 == bytes32(0)) revert ZeroValue();
-        if (bytes(storageUri).length == 0) revert ZeroValue();
-        if (bytes(storageUri).length > MAX_URI_BYTES) {
-            revert UriTooLong(bytes(storageUri).length, MAX_URI_BYTES);
+        bytes memory uriBytes = bytes(storageUri);
+        if (uriBytes.length == 0) revert ZeroValue();
+        if (uriBytes.length > MAX_URI_BYTES) {
+            revert UriTooLong(uriBytes.length, MAX_URI_BYTES);
+        }
+        if (!_isNonWhitespace(uriBytes)) {
+            revert WhitespaceUri();
         }
 
         uint256 existingId = hashToEvidenceId[manifestSha256];
