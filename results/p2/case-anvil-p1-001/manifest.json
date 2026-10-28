@@ -11,13 +11,13 @@
   "chain_id": 31337,
   "counts": {
     "asset_transfers": 3,
-    "audit_events": 2,
+    "audit_events": 4,
     "canonical_blocks": 4,
     "orphaned_blocks": 0,
     "total_blocks": 4,
     "transactions": 3
   },
-  "exported_at": "2026-10-28T14:01:06Z",
+  "exported_at": "2026-10-28T14:13:08Z",
   "files": [
     {
       "path": "asset_transfers.csv",
@@ -26,8 +26,8 @@
     },
     {
       "path": "audit_events.jsonl",
-      "sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
-      "size_bytes": 281
+      "sha256": "0b2717be53083c135495b5616fb8e176eb364a103525487f44f7c85c7888e076",
+      "size_bytes": 927
     },
     {
       "path": "raw_blocks.jsonl",
@@ -63,7 +63,7 @@
   },
   "manifest_version": "1.0.0",
   "operator": "AI Investigator",
-  "package_digest": "3c87bfe6d86cb0b55a5e6ee4769d66c89f9bbe71043a7f4ff3d0653de36378ec",
+  "package_digest": "d8ed60c0bb414147d19fe9cf760967ccf532cb95234070bbe37b9a84bc3b261e",
   "rpc_label": "anvil-local-p1",
   "sanitized_config": {
     "CONFIRMATIONS": 2,
@@ -72,11 +72,11 @@
     "RPC_LABEL": "anvil-local-p1",
     "RPC_SYNTHETIC": true,
     "TIMEOUT": 15.0,
-    "commit_hash": "280978cc3d8037c9414e8d2cb4d6c0095d412524",
+    "commit_hash": "0166dd4bade1e87bf6661693cc0600a98e5015ed",
     "version": "0.2.0"
   },
   "software": {
-    "commit_hash": "280978cc3d8037c9414e8d2cb4d6c0095d412524",
+    "commit_hash": "0166dd4bade1e87bf6661693cc0600a98e5015ed",
     "version": "0.2.0",
     "working_tree_dirty": false
   },
