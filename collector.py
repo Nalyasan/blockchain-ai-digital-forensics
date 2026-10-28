@@ -218,70 +218,11 @@ def get_receipts_for_block(blk):
         receipts[tx["hash"].lower()] = rc
     return receipts
 
-# ---------- DB & Schema Migration ----------
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS blocks(
-  chain_id INT, number INT, hash TEXT, parent_hash TEXT, block_timestamp INT,
-  block_time_utc TEXT, first_observed_at TEXT, collected_at TEXT, status TEXT DEFAULT 'canonical',
-  raw_json TEXT, raw_sha256 TEXT, synthetic INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY(chain_id, hash)
-);
-CREATE TABLE IF NOT EXISTS transactions(
-  chain_id INT, tx_hash TEXT, block_hash TEXT, block_number INT, tx_index INT,
-  from_addr TEXT, to_addr TEXT, value_raw TEXT, nonce INT, input TEXT, raw_json TEXT, raw_sha256 TEXT,
-  PRIMARY KEY(chain_id, tx_hash, block_hash)
-);
-CREATE TABLE IF NOT EXISTS receipts(
-  chain_id INT, tx_hash TEXT, block_hash TEXT, status INT, gas_used INT,
-  contract_address TEXT, raw_json TEXT, raw_sha256 TEXT,
-  PRIMARY KEY(chain_id, tx_hash, block_hash)
-);
-CREATE TABLE IF NOT EXISTS logs(
-  chain_id INT, block_hash TEXT, log_index INT, tx_hash TEXT, address TEXT,
-  topics TEXT, data TEXT, raw_json TEXT,
-  PRIMARY KEY(chain_id, block_hash, log_index)
-);
-CREATE TABLE IF NOT EXISTS checkpoints(
-  chain_id INT, stream TEXT, last_block INT, last_hash TEXT, updated_at TEXT,
-  PRIMARY KEY(chain_id, stream)
-);
-CREATE TABLE IF NOT EXISTS audit_events(
-  id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, action TEXT, object_ref TEXT, metadata TEXT
-);
-CREATE TABLE IF NOT EXISTS asset_transfers(
-  transfer_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  chain_id INT, block_number INT, block_hash TEXT, block_timestamp INT, tx_hash TEXT, log_index INT,
-  asset_id TEXT, from_addr TEXT, to_addr TEXT, amount_raw TEXT, synthetic INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(chain_id, block_hash, tx_hash, log_index)
-);
-CREATE TABLE IF NOT EXISTS collector_runs(
-  run_id TEXT PRIMARY KEY, rpc_label TEXT, chain_id INT, synthetic INT, mode TEXT,
-  start_block INT, end_block INT, blocks_count INT, txs_count INT,
-  blocks_per_sec REAL, txs_per_sec REAL, retries_count INT, gaps_count INT,
-  watch_filter TEXT, status TEXT, started_at TEXT, ended_at TEXT, commit_hash TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_blocks_time ON blocks(block_timestamp);
-CREATE INDEX IF NOT EXISTS idx_tx_from ON transactions(from_addr);
-CREATE INDEX IF NOT EXISTS idx_tx_to ON transactions(to_addr);
-CREATE INDEX IF NOT EXISTS idx_transfers_from ON asset_transfers(from_addr);
-CREATE INDEX IF NOT EXISTS idx_transfers_to ON asset_transfers(to_addr);
-CREATE INDEX IF NOT EXISTS idx_transfers_asset ON asset_transfers(asset_id);
-"""
-
-def migrate_db(c):
-    """Đảm bảo bảng blocks cũ có cột synthetic qua ALTER TABLE an toàn."""
-    cols = [r[1] for r in c.execute("PRAGMA table_info(blocks)").fetchall()]
-    if cols and "synthetic" not in cols:
-        c.execute("ALTER TABLE blocks ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 0")
-        log.info("Đã migrate: thêm cột synthetic vào bảng blocks")
+# ---------- DB & Schema Migration (Đồng bộ với forensics.schemas) ----------
+from forensics.schemas import SCHEMA, migrate_db, init_db
 
 def db(path=None):
-    p = path or DB_PATH
-    os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
-    c = sqlite3.connect(p)
-    c.executescript(SCHEMA)
-    migrate_db(c)
-    return c
+    return init_db(path or DB_PATH)
 
 def audit(c, action, ref, meta=None):
     c.execute("INSERT INTO audit_events(ts,action,object_ref,metadata) VALUES(?,?,?,?)",

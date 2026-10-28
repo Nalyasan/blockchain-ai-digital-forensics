@@ -1,0 +1,2 @@
+{"id": 1, "ts": "2026-10-28T10:30:54.353685Z", "action": "BACKFILL_START", "object_ref": "range:0-3", "metadata": {"version": "collector-0.2-p1", "watch": false}}
+{"id": 2, "ts": "2026-10-28T10:30:55.063249Z", "action": "BACKFILL_END", "object_ref": "range:0-3", "metadata": {}}
