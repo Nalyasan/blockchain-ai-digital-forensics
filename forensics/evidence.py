@@ -197,6 +197,8 @@ def export_evidence(
     """Xuất gói chứng cứ có thể tái lập trong một transaction đọc nhất quán của SQLite.
     Tạo raw_blocks.jsonl, timeline.csv, asset_transfers.csv, audit_events.jsonl và manifest.json.
     """
+    # Ghi nhận trạng thái git tree trước khi tạo hoặc ghi bất kỳ file xuất nào
+    initial_tree_dirty = is_working_tree_dirty()
     validate_case_id(case_id)
     op = get_operator(operator)
     db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
@@ -434,7 +436,7 @@ def export_evidence(
         "software": {
             "version": __version__,
             "commit_hash": get_commit_hash(),
-            "working_tree_dirty": is_working_tree_dirty()
+            "working_tree_dirty": initial_tree_dirty
         },
         "sanitized_config": sanitize_config({
             "RPC_LABEL": rpc_label,
