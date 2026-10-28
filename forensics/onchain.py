@@ -1,11 +1,12 @@
 """Module tương tác On-chain với EvidenceRegistry.sol (Mục 6.5 & P3).
 Đảm bảo:
-1. subprocess với shell=False, timeout=30s, đối số chặt chẽ.
+1. subprocess với shell=False, timeout=30s, đối số danh sách cố định.
 2. Không truyền private key qua đối số dòng lệnh (dùng cast keystore / unlocked account).
 3. Chốt chặn an toàn khóa (Key Safety Guard): chặn tài khoản mặc định Anvil trên chain khác 31337.
-4. Đối soát chain_id giữa RPC và ANCHOR_CHAIN_ID; chỉ cho phép allowlist [31337, 11155111].
-5. Giải mã event EvidenceRegistered để lấy evidenceId từ receipt (không suy đoán).
-6. Ghi nhận đầy đủ vào custody_events, audit_events và cập nhật evidence_exports.onchain_evidence_id.
+4. Cơ chế --from / --unlocked CHỈ được phép trên chuỗi Anvil (chain_id == 31337). Trên chain khác, bắt buộc dùng keystore (--account).
+5. Đối soát chain_id giữa RPC và ANCHOR_CHAIN_ID; chỉ cho phép allowlist [31337, 11155111].
+6. Giải mã event EvidenceRegistered từ receipt: kiểm tra status=1, đủ 4 topics, khớp caseId và manifestSha256.
+7. Kiểm tra trạng thái Git working tree cả từ manifest và động tại thời điểm anchor; ghi nhận bền vững vào SQLite khi dùng --allow-dirty.
 """
 import os
 import re
@@ -18,7 +19,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 from forensics.schemas import init_db
-from forensics.evidence import verify_manifest, compute_file_sha256
+from forensics.evidence import is_working_tree_dirty, compute_file_sha256
 
 log = logging.getLogger("forensics.onchain")
 
@@ -54,7 +55,6 @@ def get_rpc_chain_id(rpc_url: str) -> int:
 def compute_anvil_default_accounts() -> list[str]:
     """Tính toán 10 địa chỉ mặc định của Anvil tại runtime từ mnemonic chuẩn."""
     accounts = []
-    # Thử tính qua cast nếu có sẵn
     try:
         for i in range(10):
             res = subprocess.run(
@@ -68,7 +68,6 @@ def compute_anvil_default_accounts() -> list[str]:
     except Exception:
         pass
 
-    # Nếu không gọi được cast, dùng danh sách chuẩn dẫn xuất từ mnemonic này
     if len(accounts) < 10:
         fallback = [
             "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
@@ -119,21 +118,40 @@ def validate_chain_and_guard(signer_address: str, rpc_url: str = None, override_
     return rpc_chain_id
 
 def verify_manifest_ready_for_anchor(manifest_data: dict, allow_dirty: bool = False) -> str:
-    """Kiểm tra điều kiện manifest trước khi neo on-chain:
-    Từ chối nếu working_tree_dirty=True trừ khi có cờ allow_dirty.
+    """Kiểm tra điều kiện manifest và git working tree trước khi neo on-chain:
+    Kiểm tra cả trường working_tree_dirty trong manifest VÀ kiểm tra Git động tại thời điểm neo.
+    Từ chối nếu có bất kỳ thay đổi chưa commit nào trừ khi có cờ allow_dirty.
     """
-    is_dirty = manifest_data.get("software", {}).get("working_tree_dirty", False)
-    if is_dirty:
+    manifest_dirty = bool(manifest_data.get("software", {}).get("working_tree_dirty", False))
+    dynamic_dirty = is_working_tree_dirty()
+
+    if manifest_dirty or dynamic_dirty:
+        reasons = []
+        if manifest_dirty:
+            reasons.append("manifest ghi nhận working_tree_dirty=True lúc xuất gói")
+        if dynamic_dirty:
+            reasons.append("git working tree có thay đổi chưa commit lúc anchor")
+        reasons_desc = "; ".join(reasons)
+
         if not allow_dirty:
             raise ValueError(
-                "Gói chứng cứ có working_tree_dirty=True (thư mục git chứa thay đổi chưa commit). "
+                f"Phát hiện trạng thái working tree chưa sạch ({reasons_desc}). "
                 "Cần commit git trước khi anchor hoặc sử dụng cờ --allow-dirty để ghi nhận ngoại lệ."
             )
-        return "ALLOW_DIRTY_WARNING: Gói chứng cứ được xuất khi working tree chưa sạch"
+        return f"ALLOW_DIRTY_WARNING: Gói chứng cứ được neo khi git tree chưa sạch ({reasons_desc})"
     return "CLEAN_TREE"
 
-def extract_evidence_id_from_receipt(receipt: dict) -> int:
-    """Giải mã event EvidenceRegistered trong receipt để lấy chính xác evidenceId."""
+def extract_evidence_id_from_receipt(
+    receipt: dict,
+    expected_case_id: str = None,
+    expected_manifest_sha256: str = None
+) -> int:
+    """Giải mã event EvidenceRegistered trong receipt để lấy chính xác evidenceId.
+    Kiểm tra:
+    1. Giao dịch thành công (status == 1).
+    2. Event tồn tại và đủ 4 topics (topic0, topic1=evidenceId, topic2=caseId, topic3=manifestSha256).
+    3. Đối soát caseId và manifestSha256 nếu được truyền vào.
+    """
     status = receipt.get("status")
     if status not in (1, "0x1", "1"):
         raise RuntimeError(f"Giao dịch on-chain thất bại (receipt status={status})")
@@ -142,10 +160,22 @@ def extract_evidence_id_from_receipt(receipt: dict) -> int:
     for lg in logs:
         topics = lg.get("topics", [])
         if topics and topics[0].lower() == TOPIC_EVIDENCE_REGISTERED.lower():
-            if len(topics) >= 2:
-                return int(topics[1], 16)
+            if len(topics) < 4:
+                raise ValueError(
+                    f"Event EvidenceRegistered không hợp lệ hoặc thiếu indexed topics (yêu cầu 4 topics, nhận {len(topics)})"
+                )
+            evidence_id = int(topics[1], 16)
+            if expected_case_id:
+                exp_case_b32 = string_to_bytes32_hex(expected_case_id).lower()
+                if topics[2].lower() != exp_case_b32:
+                    raise ValueError(f"Event caseId mismatch: mong muốn {exp_case_b32}, nhận {topics[2]}")
+            if expected_manifest_sha256:
+                exp_hash_b32 = ("0x" + expected_manifest_sha256 if not expected_manifest_sha256.startswith("0x") else expected_manifest_sha256).lower()
+                if topics[3].lower() != exp_hash_b32:
+                    raise ValueError(f"Event manifestSha256 mismatch: mong muốn {exp_hash_b32}, nhận {topics[3]}")
+            return evidence_id
 
-    raise ValueError("Không tìm thấy event EvidenceRegistered trong receipt của giao dịch!")
+    raise ValueError("Không tìm thấy event EvidenceRegistered hợp lệ trong receipt của giao dịch!")
 
 def string_to_bytes32_hex(text: str) -> str:
     """Chuyển đổi chuỗi sang bytes32 định dạng 0x hex có padding."""
@@ -196,9 +226,10 @@ def anchor_evidence(
 ) -> dict:
     """Neo gói chứng cứ lên blockchain qua EvidenceRegistry.sol.
     1. Xác minh toàn vẹn gói chứng cứ trên đĩa.
-    2. Kiểm tra chốt chặn an toàn (working_tree_dirty, chain_id, Key Safety Guard).
-    3. Gửi transaction registerEvidence(bytes32,bytes32,string).
-    4. Giải mã receipt trích xuất evidenceId, cập nhật evidence_exports và custody_events.
+    2. Kiểm tra chốt chặn an toàn (working_tree_dirty cả manifest và git động, chain_id, Key Safety Guard).
+    3. Ràng buộc: trên mạng non-Anvil, bắt buộc dùng keystore (--account).
+    4. Gửi transaction registerEvidence(bytes32,bytes32,string).
+    5. Giải mã receipt trích xuất evidenceId (đủ 4 topics), cập nhật evidence_exports, custody_events và audit_events.
     """
     if not re.match(r"^0x[0-9a-fA-F]{40}$", contract_address):
         raise ValueError(f"Địa chỉ contract không hợp lệ: {contract_address}")
@@ -208,7 +239,7 @@ def anchor_evidence(
     with open(manifest_file, "r", encoding="utf-8") as f:
         manifest_data = json.load(f)
 
-    # 2. Kiểm tra working_tree_dirty
+    # 2. Kiểm tra working_tree_dirty (manifest + git động)
     dirty_note = verify_manifest_ready_for_anchor(manifest_data, allow_dirty=allow_dirty)
 
     # 3. Tính toán SHA-256 của manifest
@@ -221,12 +252,24 @@ def anchor_evidence(
     # Chốt chặn an toàn
     chain_id = validate_chain_and_guard(signer, rpc_url=url)
 
+    # RÀNG BUỘC BẢO MẬT: Trên chain khác Anvil (31337), bắt buộc dùng keystore (--account)
+    if chain_id != 31337 and not account:
+        raise ValueError(
+            f"Trên mạng không phải Anvil (chain_id={chain_id}), bắt buộc sử dụng keystore "
+            "với đối số --account (và tùy chọn --password-file). "
+            "Tuyệt đối không cho phép dùng cờ --unlocked hoặc --from trực tiếp."
+        )
+
     case_id_b32 = string_to_bytes32_hex(case_id)
     manifest_hash_b32 = "0x" + manifest_sha256
-    storage_uri = f"evidence://{case_id}/manifest.json"
+    storage_uri = f"evidence://{case_id}/manifest.json".strip()
+    if not storage_uri:
+        raise ValueError("storage_uri không được để trống!")
+    if len(storage_uri.encode("utf-8")) > 256:
+        raise ValueError(f"storage_uri vượt quá 256 bytes ({len(storage_uri.encode('utf-8'))} bytes)")
 
     # Chuẩn bị đối số cho cast send
-    # Không truyền private-key qua CLI! Dùng --account + --password-file hoặc --from + unlocked
+    # Không truyền private-key qua CLI! Dùng --account + --password-file hoặc --from + unlocked (chỉ Anvil)
     cast_args = [
         contract_address,
         "registerEvidence(bytes32,bytes32,string)",
@@ -250,7 +293,6 @@ def anchor_evidence(
         tx_data = json.loads(send_out)
         tx_hash = tx_data.get("transactionHash") or tx_data.get("hash")
     except Exception:
-        # Nếu output là raw text, trích xuất tx_hash
         m = re.search(r"0x[0-9a-fA-F]{64}", send_out)
         tx_hash = m.group(0) if m else None
 
@@ -258,10 +300,14 @@ def anchor_evidence(
         raise RuntimeError(f"Không nhận được transaction hash sau khi gửi: {send_out}")
 
     receipt = get_transaction_receipt(tx_hash, url)
-    evidence_id = extract_evidence_id_from_receipt(receipt)
+    evidence_id = extract_evidence_id_from_receipt(
+        receipt,
+        expected_case_id=case_id,
+        expected_manifest_sha256=manifest_sha256
+    )
     block_num = int(receipt.get("blockNumber", "0x0"), 16) if isinstance(receipt.get("blockNumber"), str) else receipt.get("blockNumber", 0)
 
-    # 4. Ghi nhận vào SQLite (evidence_exports và custody_events)
+    # 4. Ghi nhận bền vững vào SQLite (evidence_exports, custody_events, audit_events)
     db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -289,12 +335,12 @@ def anchor_evidence(
                 )
             )
 
-            # Ghi audit_event
+            # Ghi audit_event ghi nhận cờ allow_dirty và dirty_note bền vững
             conn.execute(
                 "INSERT INTO audit_events(ts, action, object_ref, metadata) VALUES(?, 'ANCHOR_EVIDENCE', ?, ?)",
                 (now_utc, f"evidence:{evidence_id}", json.dumps({
                     "case_id": case_id, "tx_hash": tx_hash, "chain_id": chain_id,
-                    "contract": contract_address, "note": dirty_note
+                    "contract": contract_address, "allow_dirty": allow_dirty, "note": dirty_note
                 }))
             )
         conn.close()
@@ -329,8 +375,19 @@ def record_custody_action(
     signer = from_addr or os.environ.get("ANCHOR_FROM") or "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     chain_id = validate_chain_and_guard(signer, rpc_url=url)
 
+    # RÀNG BUỘC BẢO MẬT: Trên chain khác Anvil (31337), bắt buộc dùng keystore (--account)
+    if chain_id != 31337 and not account:
+        raise ValueError(
+            f"Trên mạng không phải Anvil (chain_id={chain_id}), bắt buộc sử dụng keystore "
+            "với đối số --account (và tùy chọn --password-file). "
+            "Tuyệt đối không cho phép dùng cờ --unlocked hoặc --from trực tiếp."
+        )
+
     art_b32 = "0x" + artifact_sha256 if not artifact_sha256.startswith("0x") else artifact_sha256
-    note_b32 = string_to_bytes32_hex(note) if len(note.encode('utf-8')) <= 32 else "0x" + compute_file_sha256(note) if os.path.exists(note) else string_to_bytes32_hex(note[:32])
+    clean_note = note.strip()
+    if not clean_note:
+        raise ValueError("note không được để trống!")
+    note_b32 = string_to_bytes32_hex(clean_note) if len(clean_note.encode('utf-8')) <= 32 else "0x" + compute_file_sha256(clean_note) if os.path.exists(clean_note) else string_to_bytes32_hex(clean_note[:32])
 
     cast_args = [
         contract_address,
@@ -382,6 +439,13 @@ def record_custody_action(
                     tx_hash.lower(), block_num, now_utc
                 )
             )
+            conn.execute(
+                "INSERT INTO audit_events(ts, action, object_ref, metadata) VALUES(?, 'RECORD_CUSTODY', ?, ?)",
+                (now_utc, f"evidence:{evidence_id}", json.dumps({
+                    "evidence_id": evidence_id, "action": action, "tx_hash": tx_hash,
+                    "chain_id": chain_id, "contract": contract_address
+                }))
+            )
         conn.close()
 
     return {
@@ -406,13 +470,11 @@ def verify_onchain_evidence(
     if not os.path.exists(manifest_file):
         return False, f"MISMATCH: Tệp manifest không tồn tại: {manifest_file}"
 
-    # Băm lại manifest trên đĩa
     current_manifest_sha256 = compute_file_sha256(manifest_file)
     with open(manifest_file, "r", encoding="utf-8") as f:
         m_data = json.load(f)
     case_id = m_data.get("case_id")
 
-    # Xác định evidence_id
     eid = evidence_id
     db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
     if eid is None and os.path.exists(db_file):
@@ -428,7 +490,6 @@ def verify_onchain_evidence(
     url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
     exp_hash_b32 = "0x" + current_manifest_sha256
 
-    # Gọi verifyEvidence(uint256,bytes32) -> (bool, address, uint256)
     call_args = [
         contract_address,
         "verifyEvidence(uint256,bytes32)(bool,address,uint256)",

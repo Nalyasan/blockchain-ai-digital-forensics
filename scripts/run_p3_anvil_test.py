@@ -1,9 +1,9 @@
 """Kịch bản kiểm nghiệm thực tế Giai đoạn P3 trên Anvil:
 1. Khởi động node Anvil (Chain ID: 31337).
-2. Deploy contract EvidenceRegistry.sol bằng Foundry forge create.
+2. Deploy contract EvidenceRegistry.sol bằng Foundry forge create (--unlocked --from, không dùng private-key).
 3. Chạy lệnh CLI anchor neo gói chứng cứ results/p2/case-anvil-p1-001.
 4. Chạy lệnh CLI custody ghi nhận sự kiện CustodyRecord on-chain.
-5. Chạy lệnh CLI verify-onchain khi dữ liệu nguyên vẹn -> xác nhận khớp 100% (exit 0).
+5. Chạy lệnh CLI verify-onchain khi dữ liệu nguyên vẹn -> xác nhận khớp với bản ghi on-chain (exit 0).
 6. Kịch bản T05 Ca 3: Sửa file chứng cứ sau khi neo -> verify-onchain phát hiện và báo MISMATCH (exit 1).
 7. Ghi nhận log đầy đủ vào results/p3/step_p3_anvil_verification.log.
 """
@@ -48,7 +48,6 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
     log_file = os.path.join(results_dir, "step_p3_anvil_verification.log")
 
-    # Mở file log để ghi đồng thời
     log_fp = open(log_file, "w", encoding="utf-8")
     def log_print(msg):
         print(msg)
@@ -71,11 +70,12 @@ def main():
 
     try:
         # 2. Deploy EvidenceRegistry.sol
-        log_print("2. Triển khai hợp đồng EvidenceRegistry.sol bằng forge create...")
+        log_print("2. Triển khai hợp đồng EvidenceRegistry.sol bằng forge create (--unlocked --from, không dùng private key)...")
         deploy_res = run_proc([
             forge_bin, "create", "contracts/src/EvidenceRegistry.sol:EvidenceRegistry",
             "--rpc-url", rpc_url,
-            "--private-key", "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+            "--unlocked",
+            "--from", "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
             "--broadcast"
         ])
         log_print(deploy_res.stdout)
@@ -107,7 +107,8 @@ def main():
             "--contract", contract_addr,
             "--db", db_path,
             "--rpc-url", rpc_url,
-            "--from", "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+            "--from", "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "--allow-dirty"
         ], env=env_anchor)
         log_print(anchor_res.stdout)
         assert anchor_res.returncode == 0, "Lệnh anchor thất bại"
@@ -120,8 +121,10 @@ def main():
         assert row_exp and row_exp[0] == 1, f"evidence_exports chưa cập nhật onchain_evidence_id: {row_exp}"
         row_custody = conn.execute("SELECT evidence_id, action, contract_address, verified FROM custody_events WHERE evidence_id=1").fetchone()
         assert row_custody and row_custody[0] == 1, f"custody_events chưa ghi nhận: {row_custody}"
+        row_audit = conn.execute("SELECT action, object_ref, metadata FROM audit_events WHERE action='ANCHOR_EVIDENCE' ORDER BY id DESC LIMIT 1").fetchone()
+        assert row_audit and "allow_dirty" in row_audit[2], f"audit_events chưa ghi nhận allow_dirty: {row_audit}"
         conn.close()
-        log_print(">> Xác nhận: DB SQLite đã cập nhật onchain_evidence_id=1 và bản ghi custody_events.\n")
+        log_print(">> Xác nhận: DB SQLite đã cập nhật onchain_evidence_id=1, bản ghi custody_events và audit_events.\n")
 
         # 5. Ghi nhận sự kiện hành trình tiếp theo (custody)
         log_print("4. Thực hiện lệnh CLI 'custody' ghi nhận hành trình ANALYZED on-chain...")
@@ -157,7 +160,6 @@ def main():
 
         # 7. Kịch bản T05 Ca 3: Sửa file chứng cứ sau khi neo -> verify-onchain phát hiện và báo MISMATCH
         log_print("6. Kịch bản T05 Ca 3: Can thiệp sửa file dữ liệu sau khi neo on-chain...")
-        # Tạo gói bản sao can thiệp
         tamper_dir = os.path.join(root_dir, "results", "p3", "case-tampered-t05")
         os.makedirs(tamper_dir, exist_ok=True)
         for fname in os.listdir(manifest_pkg):
@@ -207,10 +209,10 @@ def main():
 
         assert verify_tamper.returncode == 1, f"Kỳ vọng mã thoát 1 khi bị can thiệp nhưng nhận {verify_tamper.returncode}"
         assert "MISMATCH: Dữ liệu trên đĩa không khớp với bản ghi bất biến on-chain" in verify_tamper.stderr
-        log_print(">> XÁC NHẬN T05 CA 3 THÀNH CÔNG: Kẻ tấn công sửa file và tự sinh lại manifest cục bộ bị Smart Contract bắt ngay lập tức!\n")
+        log_print(">> Xác nhận: Kẻ tấn công sửa file và tự sinh lại manifest cục bộ bị Smart Contract phát hiện MISMATCH (exit 1).\n")
 
         log_print("================================================================================")
-        log_print(" HOÀN TẤT TOÀN BỘ KIỂM NGHIỆM GIAI ĐOẠN P3 TRÊN ANVIL ĐẠT 100% TIÊU CHÍ ")
+        log_print(" HOÀN TẤT KIỂM NGHIỆM GIAI ĐOẠN P3 TRÊN ANVIL (TẤT CẢ TIÊU CHÍ ĐÃ ĐỐI SOÁT) ")
         log_print("================================================================================")
 
     finally:

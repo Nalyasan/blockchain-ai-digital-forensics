@@ -47,7 +47,6 @@ def test_chain_id_allowlist(monkeypatch):
 
 def test_anvil_default_account_rejected_on_non_anvil_chain(monkeypatch):
     """Test T08-3: Địa chỉ người ký trùng tài khoản mặc định Anvil trên chain khác 31337 -> Từ chối."""
-    # Địa chỉ mặc định Anvil #0
     anvil_acc_0 = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 
     monkeypatch.setenv("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
@@ -84,7 +83,6 @@ def test_secret_never_leaked_in_logs_or_errors(caplog):
     fake_key = "0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d"
     fake_pass = "SuperSecretPassword123!"
 
-    # Gọi hàm xử lý với mật khẩu/khóa và gây lỗi
     try:
         onchain.safe_redact_error(f"Failed transaction with key={fake_key} and pass={fake_pass}")
     except Exception:
@@ -94,11 +92,8 @@ def test_secret_never_leaked_in_logs_or_errors(caplog):
     assert fake_key not in log_text
     assert fake_pass not in log_text
 
-def test_working_tree_dirty_guard_in_anchor(tmp_path):
+def test_working_tree_dirty_guard_in_anchor():
     """Test T08-5: Lệnh anchor từ chối manifest có working_tree_dirty=True trừ khi có cờ allow_dirty."""
-    db_file = str(tmp_path / "test_anchor.db")
-    init_db(db_file)
-
     manifest_dirty = {
         "case_id": "case-dirty-01",
         "package_digest": "a" * 64,
@@ -120,45 +115,137 @@ def test_working_tree_dirty_guard_in_anchor(tmp_path):
         }
     }
 
-    # Manifest dirty không có allow_dirty -> từ chối
-    with pytest.raises(ValueError, match="working_tree_dirty=True"):
-        onchain.verify_manifest_ready_for_anchor(manifest_dirty, allow_dirty=False)
+    # Khi dynamic git sạch nhưng manifest dirty:
+    with patch.object(onchain, "is_working_tree_dirty", return_value=False):
+        with pytest.raises(ValueError, match="working_tree_dirty=True lúc xuất gói"):
+            onchain.verify_manifest_ready_for_anchor(manifest_dirty, allow_dirty=False)
 
-    # Manifest dirty có allow_dirty -> chấp thuận
-    note = onchain.verify_manifest_ready_for_anchor(manifest_dirty, allow_dirty=True)
-    assert "ALLOW_DIRTY" in note
+        # Manifest dirty có allow_dirty -> chấp thuận kèm cảnh báo
+        note = onchain.verify_manifest_ready_for_anchor(manifest_dirty, allow_dirty=True)
+        assert "ALLOW_DIRTY_WARNING" in note
 
-    # Manifest clean -> chấp thuận
-    clean_note = onchain.verify_manifest_ready_for_anchor(manifest_clean, allow_dirty=False)
-    assert clean_note == "CLEAN_TREE"
+        # Manifest clean và git clean -> chấp thuận
+        clean_note = onchain.verify_manifest_ready_for_anchor(manifest_clean, allow_dirty=False)
+        assert clean_note == "CLEAN_TREE"
 
-def test_decode_evidence_registered_event():
-    """Test T08-6: Giải mã chính xác evidenceId từ event EvidenceRegistered thay vì suy đoán."""
-    # Topic 0: EvidenceRegistered
+def test_dynamic_git_dirty_detected_even_if_manifest_clean():
+    """Test T08-6: Kiểm tra động từ Git tại thời điểm anchor: phát hiện dirty kể cả khi manifest ghi false."""
+    manifest_clean = {
+        "case_id": "case-clean-02",
+        "package_digest": "c" * 64,
+        "files": [],
+        "software": {
+            "version": "0.2.0",
+            "commit_hash": "abc",
+            "working_tree_dirty": False
+        }
+    }
+
+    # Manifest ghi clean, nhưng Git lúc anchor có file dirty:
+    with patch.object(onchain, "is_working_tree_dirty", return_value=True):
+        with pytest.raises(ValueError, match="git working tree có thay đổi chưa commit lúc anchor"):
+            onchain.verify_manifest_ready_for_anchor(manifest_clean, allow_dirty=False)
+
+        # Với cờ allow_dirty -> cho phép và ghi nhận warning
+        note = onchain.verify_manifest_ready_for_anchor(manifest_clean, allow_dirty=True)
+        assert "ALLOW_DIRTY_WARNING" in note
+        assert "lúc anchor" in note
+
+def test_unlocked_flag_blocked_on_non_anvil_chain(tmp_path):
+    """Test T08-7: Chặn cờ --unlocked/--from trên mạng non-Anvil (Sepolia 11155111); bắt buộc keystore (--account)."""
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text(json.dumps({
+        "case_id": "case-sepolia-01",
+        "package_digest": "d" * 64,
+        "files": [],
+        "software": {"version": "0.2.0", "commit_hash": "abc", "working_tree_dirty": False}
+    }), encoding="utf-8")
+
+    contract_addr = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+
+    with patch.object(onchain, "get_rpc_chain_id", return_value=11155111), \
+         patch.object(onchain, "is_working_tree_dirty", return_value=False):
+        # anchor_evidence không có account -> bị từ chối ngay lập tức
+        with pytest.raises(ValueError, match="bắt buộc sử dụng keystore với đối số --account"):
+            onchain.anchor_evidence(
+                manifest_path_or_dir=str(manifest_file),
+                contract_address=contract_addr,
+                account=None,
+                from_addr="0x9999999999999999999999999999999999999999"
+            )
+
+        # record_custody_action không có account -> bị từ chối
+        with pytest.raises(ValueError, match="bắt buộc sử dụng keystore với đối số --account"):
+            onchain.record_custody_action(
+                evidence_id=1,
+                action=1,
+                artifact_sha256="0x" + "a" * 64,
+                note="analysis note",
+                contract_address=contract_addr,
+                account=None,
+                from_addr="0x9999999999999999999999999999999999999999"
+            )
+
+def test_decode_evidence_registered_event_full_validation():
+    """Test T08-8: Giải mã event EvidenceRegistered: kiểm tra status, đủ 4 topics và khớp caseId/manifestHash."""
     topic0 = onchain.TOPIC_EVIDENCE_REGISTERED
     evidence_id = 42
     topic1 = f"0x{evidence_id:064x}"
-    case_id_bytes32 = "0x" + "11" * 32
-    manifest_hash = "0x" + "22" * 32
+    case_id = "CASE-2026-001"
+    case_id_bytes32 = onchain.string_to_bytes32_hex(case_id).lower()
+    manifest_hash = "22" * 32
+    topic3 = "0x" + manifest_hash
 
     fake_receipt = {
         "status": "0x1",
         "logs": [
             {
                 "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-                "topics": [topic0, topic1, case_id_bytes32, manifest_hash],
+                "topics": [topic0, topic1, case_id_bytes32, topic3],
                 "data": "0x"
             }
         ]
     }
 
-    extracted_id = onchain.extract_evidence_id_from_receipt(fake_receipt)
+    # Giải mã thành công và khớp đầy đủ
+    extracted_id = onchain.extract_evidence_id_from_receipt(
+        fake_receipt,
+        expected_case_id=case_id,
+        expected_manifest_sha256=manifest_hash
+    )
     assert extracted_id == 42
 
     # Receipt status = 0 -> lỗi
-    fake_failed_receipt = {
-        "status": "0x0",
-        "logs": []
-    }
+    fake_failed_receipt = {"status": "0x0", "logs": []}
     with pytest.raises(RuntimeError, match="Giao dịch on-chain thất bại"):
         onchain.extract_evidence_id_from_receipt(fake_failed_receipt)
+
+    # Thiếu topics (< 4 topics) -> từ chối
+    fake_incomplete_receipt = {
+        "status": "0x1",
+        "logs": [
+            {
+                "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+                "topics": [topic0, topic1],  # chỉ có 2 topics
+                "data": "0x"
+            }
+        ]
+    }
+    with pytest.raises(ValueError, match="Event EvidenceRegistered không hợp lệ hoặc thiếu indexed topics"):
+        onchain.extract_evidence_id_from_receipt(fake_incomplete_receipt)
+
+    # Sai caseId -> từ chối
+    with pytest.raises(ValueError, match="Event caseId mismatch"):
+        onchain.extract_evidence_id_from_receipt(
+            fake_receipt,
+            expected_case_id="DIFFERENT-CASE",
+            expected_manifest_sha256=manifest_hash
+        )
+
+    # Sai manifestHash -> từ chối
+    with pytest.raises(ValueError, match="Event manifestSha256 mismatch"):
+        onchain.extract_evidence_id_from_receipt(
+            fake_receipt,
+            expected_case_id=case_id,
+            expected_manifest_sha256="99" * 32
+        )

@@ -73,6 +73,35 @@ contract EvidenceRegistryTest {
         registry.transferOwnership(address(0));
     }
 
+    function test_TransferOwnership_SameOwnerReverts() public {
+        // Chặn chuyển quyền cho chính mình: phòng ngừa self-lockout và mất quyền investigator
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.SameOwner.selector));
+        registry.transferOwnership(deployer);
+
+        // Trạng thái không bị ảnh hưởng
+        assert(registry.owner() == deployer);
+        assert(registry.pendingOwner() == address(0));
+        assert(registry.authorizedInvestigators(deployer) == true);
+    }
+
+    function test_TransferOwnership_PendingTransferExistsReverts() public {
+        // Đề cử Alice
+        registry.transferOwnership(alice);
+        assert(registry.pendingOwner() == alice);
+
+        // Thử ghi đè sang Bob khi chưa hủy Alice -> revert PendingTransferExists
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.PendingTransferExists.selector, alice));
+        registry.transferOwnership(bob);
+
+        // Hủy đề cử đang chờ
+        registry.cancelOwnershipTransfer();
+        assert(registry.pendingOwner() == address(0));
+
+        // Bây giờ đề cử Bob thành công
+        registry.transferOwnership(bob);
+        assert(registry.pendingOwner() == bob);
+    }
+
     function test_AcceptOwnership_StrangerReverts() public {
         registry.transferOwnership(alice);
         vm.prank(stranger);
@@ -80,16 +109,23 @@ contract EvidenceRegistryTest {
         registry.acceptOwnership();
     }
 
-    function test_AcceptOwnership_RevokesOldOwnerInvestigator() public {
-        // Cấp quyền cho Alice & chuyển quyền sở hữu
-        registry.setInvestigator(alice, true);
+    function test_AcceptOwnership_GrantsNewOwnerAndRevokesOldOwner() public {
+        // Ban đầu Alice KHÔNG phải là investigator
+        assert(registry.authorizedInvestigators(alice) == false);
+
         registry.transferOwnership(alice);
 
-        // Alice chấp nhận — phải thu hồi investigator của deployer (owner cũ)
+        // Alice chấp nhận:
+        // 1. Cấp quyền investigator cho Alice (owner mới)
+        // 2. Thu hồi investigator của Deployer (owner cũ)
+        // 3. Phát OwnershipTransferred
+        vm.expectEmit(true, false, false, true);
+        emit InvestigatorUpdated(alice, true);
         vm.expectEmit(true, false, false, true);
         emit InvestigatorUpdated(deployer, false);
         vm.expectEmit(true, true, false, true);
         emit OwnershipTransferred(deployer, alice);
+
         vm.prank(alice);
         registry.acceptOwnership();
 
@@ -98,10 +134,14 @@ contract EvidenceRegistryTest {
         assert(registry.pendingOwner() == address(0));
         assert(registry.authorizedInvestigators(deployer) == false);
         assert(registry.authorizedInvestigators(alice) == true);
+
+        // Alice có thể đăng ký chứng cứ
+        vm.prank(alice);
+        uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
+        assert(eid == 1);
     }
 
     function test_OldOwner_CannotRegisterAfterTransfer() public {
-        registry.setInvestigator(alice, true);
         registry.transferOwnership(alice);
         vm.prank(alice);
         registry.acceptOwnership();
@@ -115,7 +155,6 @@ contract EvidenceRegistryTest {
         // Deployer đăng ký trước khi chuyển quyền
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);
 
-        registry.setInvestigator(alice, true);
         registry.transferOwnership(alice);
         vm.prank(alice);
         registry.acceptOwnership();
@@ -155,7 +194,7 @@ contract EvidenceRegistryTest {
         registry.cancelOwnershipTransfer();
     }
 
-    // ==================== 4. T07: Người lạ bị Unauthorized ====================
+    // ==================== 4. Người lạ bị Unauthorized ====================
     function test_StrangerCannotRegisterEvidence() public {
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.Unauthorized.selector, stranger));
@@ -187,7 +226,7 @@ contract EvidenceRegistryTest {
         registry.recordCustody(eid, EvidenceRegistry.CustodyAction.ANALYZED, ART_HASH, NOTE_HASH);
     }
 
-    // ==================== 6. T06: Đăng ký & Chống trùng ====================
+    // ==================== 6. Đăng ký & Chống trùng ====================
     function test_RegisterEvidenceSuccess() public {
         vm.expectEmit(true, true, true, true);
         emit EvidenceRegistered(1, CASE_001, MANIFEST_HASH_1, deployer, STORAGE_URI);
@@ -212,7 +251,7 @@ contract EvidenceRegistryTest {
         registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://retry");
     }
 
-    // ==================== 7. ZeroValue — 3 ca ====================
+    // ==================== 7. ZeroValue ====================
     function test_ZeroValue_CaseId() public {
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.ZeroValue.selector));
         registry.registerEvidence(bytes32(0), MANIFEST_HASH_1, STORAGE_URI);
@@ -221,6 +260,11 @@ contract EvidenceRegistryTest {
     function test_ZeroValue_ManifestSha256() public {
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.ZeroValue.selector));
         registry.registerEvidence(CASE_001, bytes32(0), STORAGE_URI);
+    }
+
+    function test_ZeroValue_EmptyStorageUri() public {
+        vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.ZeroValue.selector));
+        registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "");
     }
 
     function test_ZeroValue_ArtifactSha256() public {
@@ -339,7 +383,8 @@ contract EvidenceRegistryTest {
     function testFuzz_RegisterEvidence(bytes32 caseId, bytes32 manifestSha256, uint8 rawLen) public {
         vm.assume(caseId != bytes32(0));
         vm.assume(manifestSha256 != bytes32(0));
-        uint256 length = uint256(rawLen) % 256;
+        // Đảm bảo length >= 1 và <= 256 byte
+        uint256 length = 1 + (uint256(rawLen) % 256);
         bytes memory b = new bytes(length);
         for (uint256 i = 0; i < length; i++) b[i] = bytes1(uint8(65 + (i % 26)));
 

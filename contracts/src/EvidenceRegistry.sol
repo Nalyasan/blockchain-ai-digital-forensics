@@ -44,6 +44,8 @@ contract EvidenceRegistry {
     error DuplicateManifestHash(bytes32 manifestSha256, uint256 existingEvidenceId);
     error EvidenceNotFound(uint256 evidenceId);
     error ZeroValue();
+    error SameOwner();
+    error PendingTransferExists(address pendingOwner);
     error UriTooLong(uint256 length, uint256 maxLength);
     error NoPendingTransfer();
 
@@ -83,9 +85,13 @@ contract EvidenceRegistry {
         emit InvestigatorUpdated(msg.sender, true);
     }
 
-    /// @notice Đề cử owner mới. newOwner không được là address(0).
+    /// @notice Đề cử owner mới (quy trình 2 bước).
+    /// @dev Chặn address(0) (ZeroValue), chặn chính owner hiện tại (SameOwner) để tránh tự thu hồi quyền investigator.
+    ///      Nếu đang có đề cử chờ xử lý, bắt buộc gọi cancelOwnershipTransfer() trước (PendingTransferExists).
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroValue();
+        if (newOwner == owner) revert SameOwner();
+        if (pendingOwner != address(0)) revert PendingTransferExists(pendingOwner);
         pendingOwner = newOwner;
         emit OwnershipTransferStarted(owner, newOwner);
     }
@@ -97,12 +103,17 @@ contract EvidenceRegistry {
         emit OwnershipTransferCancelled(msg.sender);
     }
 
-    /// @notice pendingOwner chấp nhận quyền sở hữu. Thu hồi quyền investigator của owner cũ.
+    /// @notice pendingOwner chấp nhận quyền sở hữu.
+    /// @dev Cấp quyền investigator cho owner mới, và thu hồi quyền investigator của owner cũ để giảm thiểu rủi ro lộ khóa.
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert Unauthorized(msg.sender);
         address oldOwner = owner;
         owner = pendingOwner;
         pendingOwner = address(0);
+
+        // Cấp quyền investigator cho owner mới
+        authorizedInvestigators[msg.sender] = true;
+        emit InvestigatorUpdated(msg.sender, true);
 
         // Thu hồi quyền investigator của owner cũ để giảm thiểu rủi ro lộ khóa
         authorizedInvestigators[oldOwner] = false;
@@ -116,6 +127,9 @@ contract EvidenceRegistry {
         emit InvestigatorUpdated(account, authorized);
     }
 
+    /// @notice Đăng ký gói chứng cứ số bất biến.
+    /// @dev storageUri phải có độ dài byte từ 1 đến MAX_URI_BYTES (256).
+    ///      Hợp đồng nhận chuỗi byte thô; việc kiểm tra loại bỏ URI rỗng/toàn khoảng trắng được client thực hiện trước khi gửi.
     function registerEvidence(
         bytes32 caseId,
         bytes32 manifestSha256,
@@ -123,6 +137,7 @@ contract EvidenceRegistry {
     ) external onlyInvestigator returns (uint256 evidenceId) {
         if (caseId == bytes32(0)) revert ZeroValue();
         if (manifestSha256 == bytes32(0)) revert ZeroValue();
+        if (bytes(storageUri).length == 0) revert ZeroValue();
         if (bytes(storageUri).length > MAX_URI_BYTES) {
             revert UriTooLong(bytes(storageUri).length, MAX_URI_BYTES);
         }
