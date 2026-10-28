@@ -17,7 +17,7 @@
     "total_blocks": 4,
     "transactions": 3
   },
-  "exported_at": "2026-10-28T13:58:50Z",
+  "exported_at": "2026-10-28T14:01:06Z",
   "files": [
     {
       "path": "asset_transfers.csv",
@@ -72,11 +72,11 @@
     "RPC_LABEL": "anvil-local-p1",
     "RPC_SYNTHETIC": true,
     "TIMEOUT": 15.0,
-    "commit_hash": "ea5dc8200e12d1b62633516a63c8525c958c07ac",
+    "commit_hash": "280978cc3d8037c9414e8d2cb4d6c0095d412524",
     "version": "0.2.0"
   },
   "software": {
-    "commit_hash": "ea5dc8200e12d1b62633516a63c8525c958c07ac",
+    "commit_hash": "280978cc3d8037c9414e8d2cb4d6c0095d412524",
     "version": "0.2.0",
     "working_tree_dirty": false
   },
