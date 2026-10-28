@@ -70,7 +70,7 @@ def sanitize_config(extra_config: dict = None) -> dict:
     return {k: base[k] for k in sorted(base.keys()) if k in ALLOWED_CONFIG_KEYS}
 
 def is_working_tree_dirty() -> bool:
-    """Kiểm tra xem git working tree có thay đổi chưa commit hay không."""
+    """Kiểm tra xem git working tree có thay đổi chưa commit hay không (bỏ qua tệp .log nhật ký)."""
     git_paths = [
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "git", "cmd", "git.exe"),
         "git"
@@ -79,7 +79,12 @@ def is_working_tree_dirty() -> bool:
         try:
             res = subprocess.run([g, "status", "--porcelain"], capture_output=True, text=True, check=False)
             if res.returncode == 0:
-                return bool(res.stdout.strip())
+                lines = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+                meaningful = [
+                    l for l in lines
+                    if not (l.endswith(".log") or l.endswith('.log"'))
+                ]
+                return bool(meaningful)
         except Exception:
             continue
     return False
