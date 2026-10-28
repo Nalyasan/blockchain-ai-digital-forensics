@@ -1,0 +1,23 @@
+# Secrets & Environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Databases & Runtime Data
+data/
+evidence/
+logs/
+*.db
+*.sqlite
+
+# Testing & Tools
+tools/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Foundry
+contracts/out/
+contracts/cache/

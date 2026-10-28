@@ -1,0 +1,63 @@
+[2026-10-28 17:30:29] === BẮT ĐẦU KIỂM THỬ CONTINUOUS COLLECT TRÊN ANVIL ===
+[2026-10-28 17:30:31] 1. Khởi động tiến trình collector.py collect chạy ngầm...
+[2026-10-28 17:30:33] 2. Phát giao dịch ETH #1 (1.0 ether -> Account 1)...
+[2026-10-28 17:30:33] CHẠY: D:\Projest\Blockchain\tools\foundry\cast.exe send --rpc-url http://127.0.0.1:8548 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 --value 1.0ether
+[2026-10-28 17:30:33] STDOUT: blockHash            0x1eed9906f51ac5f3491db993e9cfebea8a6dc18bfe2663277892d2071c17d772
+blockNumber          1
+contractAddress      
+cumulativeGasUsed    21000
+effectiveGasPrice    1000000001
+from                 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+gasUsed              21000
+logs                 []
+logsBloom            0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+root                 
+status               1 (success)
+transactionHash      0xce09985d94caad02fc26f64a68a95d3ae7ec58fa0ef5208c672d4f42052488dc
+transactionIndex     0
+type                 2
+blobGasPrice         
+blobGasUsed          
+to                   0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+[2026-10-28 17:30:35] 3. Deploy contract MockERC20 trong lúc collector đang chạy...
+[2026-10-28 17:30:35] CHẠY: D:\Projest\Blockchain\tools\foundry\forge.exe create --root contracts --rpc-url http://127.0.0.1:8548 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --broadcast src/MockToken.sol:MockERC20 --constructor-args 500000000000000000000000
+[2026-10-28 17:30:35] STDOUT: No files changed, compilation skipped
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Deployed to: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+Transaction hash: 0x0f67fd75554d8fe7465ab180ab1f0586a700a9e6371c01a890126c495ac423bc
+[2026-10-28 17:30:35] Token deployed: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+[2026-10-28 17:30:37] 4. Phát giao dịch chuyển ERC-20 (250 FTT -> Account 2)...
+[2026-10-28 17:30:37] CHẠY: D:\Projest\Blockchain\tools\foundry\cast.exe send --rpc-url http://127.0.0.1:8548 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 transfer(address,uint256) 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC 250000000000000000000
+[2026-10-28 17:30:38] STDOUT: blockHash            0x74a3b8cf1d304615d6118f976fb373e16c051adf2d3b13db46366c34f2b633e0
+blockNumber          3
+contractAddress      
+cumulativeGasUsed    52397
+effectiveGasPrice    770302395
+from                 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+gasUsed              52397
+logs                 [{"address":"0xe7f1725e7734ce288f8367e1bb143e90bb3f0512","topics":["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","0x000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266","0x0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc"],"data":"0x00000000000000000000000000000000000000000000000d8d726b7177a80000","blockHash":"0x74a3b8cf1d304615d6118f976fb373e16c051adf2d3b13db46366c34f2b633e0","blockNumber":"0x3","blockTimestamp":"0x6ae1cecd","transactionHash":"0x86d0277e146a2e74d8d3ecf4c675d80682f3b5c7c94de949bc78cbc6a80b1894","transactionIndex":"0x0","logIndex":"0x0","removed":false}]
+logsBloom            0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000100000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000100000000000800000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000002000000200000000000001000000000002000000000000000000000000000000000000000000000000000000000000000000000800000000000000000
+root                 
+status               1 (success)
+transactionHash      0x86d0277e146a2e74d8d3ecf4c675d80682f3b5c7c94de949bc78cbc6a80b1894
+transactionIndex     0
+type                 2
+blobGasPrice         
+blobGasUsed          
+to                   0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+[2026-10-28 17:30:41] 5. Dừng tiến trình collector.py collect...
+[2026-10-28 17:30:41] 6. Đối soát DB: kiểm tra checkpoint tăng, không trùng...
+[2026-10-28 17:30:41] Checkpoint đạt mức block: 3
+[2026-10-28 17:30:41] Số lượng bản ghi: blocks=4, txs=3, asset_transfers=3
+[2026-10-28 17:30:41] Audit events: ['COLLECT_START']
+[2026-10-28 17:30:41] 7. Chạy verify-derived...
+[2026-10-28 17:30:41] CHẠY: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe collector.py verify-derived
+[2026-10-28 17:30:41] STDOUT: OK: verify-derived hoàn tất, 4 blocks đã đối soát, asset_transfers khớp 100% với dữ liệu thô.
+[2026-10-28 17:30:41] verify-derived: OK: verify-derived hoàn tất, 4 blocks đã đối soát, asset_transfers khớp 100% với dữ liệu thô.
+[2026-10-28 17:30:41] 8. Chạy verify-rpc...
+[2026-10-28 17:30:41] CHẠY: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe collector.py verify-rpc --start-block 0 --end-block 3
+[2026-10-28 17:30:42] STDOUT: OK: verify-rpc hoàn tất, đối chiếu nội dung đầy đủ khớp 100% với RPC nguồn (4 blocks).
+[2026-10-28 17:30:42] STDERR: 2026-10-28 17:30:41,386 INFO Bắt đầu verify-rpc cho khoảng block 0..3...
+[2026-10-28 17:30:42] verify-rpc: OK: verify-rpc hoàn tất, đối chiếu nội dung đầy đủ khớp 100% với RPC nguồn (4 blocks).
+[2026-10-28 17:30:42] === Hoàn tất kiểm thử collect (continuous): Checkpoint tăng đúng, không trùng lặp ===
+[2026-10-28 17:30:42] Anvil node đã dừng an toàn.
