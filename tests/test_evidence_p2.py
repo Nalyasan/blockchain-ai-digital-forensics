@@ -74,7 +74,10 @@ def populate_sample_db(db_path, num_blocks=5, synthetic=0):
             (chain_id, tx_hash, b_hash, n, from_a, to_a, str(val), tx_raw, tx_sha)
         )
 
-        rc_obj = {"transactionHash": tx_hash, "blockHash": b_hash, "status": "0x1", "gasUsed": "0x5208", "logs": []}
+        # Full RPC receipt identity is needed by the 1.1 completeness verifier.
+        rc_obj = {"transactionHash": tx_hash, "blockHash": b_hash, "blockNumber": hex(n),
+                  "transactionIndex": "0x0", "contractAddress": None,
+                  "status": "0x1", "gasUsed": "0x5208", "logs": []}
         rc_raw = json.dumps(rc_obj, sort_keys=True, separators=(',', ':'))
         rc_sha = sha(rc_obj)
         conn.execute(

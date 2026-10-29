@@ -34,7 +34,8 @@ def cli_export_evidence(args):
             db_path=args.db,
             operator=args.operator,
             allow_gaps=args.allow_gaps,
-            require_final=args.require_final
+            require_final=args.require_final,
+            chain_id=args.chain_id
         )
         print(f"OK: Đã xuất thành công gói chứng cứ '{args.case_id}'")
         print(f"  Thư mục: {args.out_dir or os.path.join('evidence', args.case_id)}")
@@ -42,20 +43,31 @@ def cli_export_evidence(args):
         print(f"  Blocks: {manifest['counts']['total_blocks']} | Txs: {manifest['counts']['transactions']} | Transfers: {manifest['counts']['asset_transfers']}")
         return 0
     except Exception as e:
-        print(f"LỖI export-evidence: {e}", file=sys.stderr)
+        from forensics.integrity import InvalidPackage
+        from forensics.exporter import ExportPolicyError
+        # Only application-owned codes/messages may cross this error boundary.
+        if isinstance(e, InvalidPackage):
+            message = e.code.value
+        elif isinstance(e, ExportPolicyError):
+            message = str(e)
+        elif isinstance(e, FileExistsError):
+            message = 'DESTINATION_EXISTS'
+        else:
+            known = {'GIT_UNKNOWN', 'DATABASE_UNAVAILABLE', 'INVALID_CASE_ID',
+                     'EXPORT_INVALID_OR_INCOMPLETE_DATA', 'NO_CLOBBER_UNSUPPORTED', 'PUBLISH_FAILED',
+                     'EXPORT_IO_OR_DB_ERROR: published package, if present, is retained'}
+            message = str(e) if str(e) in known else 'EXPORT_FAILED'
+        print(f"LỖI export-evidence: {message}", file=sys.stderr)
         return 1
 
 def cli_verify_manifest(args):
     """Lệnh xác minh toàn vẹn gói chứng cứ và manifest.json trên đĩa."""
-    valid, errors = verify_manifest(args.manifest_path, db_path=args.db)
-    if valid:
-        print(f"OK: Gói chứng cứ '{args.manifest_path}' toàn vẹn và khớp hoàn toàn với manifest.json.")
-        return 0
-    else:
-        print(f"THẤT BẠI: Phát hiện {len(errors)} lỗi toàn vẹn trong gói chứng cứ:")
-        for err in errors:
-            print(f"  - {err}")
-        return 1
+    from forensics.integrity import verify_package
+    result = verify_package(args.manifest_path, db_path=args.db)
+    print(f"{result.status}: {result.reason_code.value}; coverage={result.coverage}")
+    if result.status == 'VALID':
+        print('Các file được kiểm tra toàn vẹn và khớp hoàn toàn với manifest.json.')
+    return {'VALID': 0, 'INVALID': 1, 'ERROR': 2}[result.status]
 
 def cli_verify_local(args):
     """Kiểm tra toàn vẹn SQLite cục bộ (SHA-256 raw + parentHash + gaps)."""
@@ -164,6 +176,7 @@ def build_parser():
     pe.add_argument("--operator", default=None, help="Định danh điều tra viên")
     pe.add_argument("--allow-gaps", action="store_true", help="Cho phép xuất kể cả khi thiếu block")
     pe.add_argument("--require-final", action="store_true", help="Từ chối xuất nếu có block chưa finalized")
+    pe.add_argument("--chain-id", type=int, default=None, help="Chọn source chain khi DB chứa nhiều chain")
     pe.set_defaults(func=cli_export_evidence)
 
     # 2. verify-manifest

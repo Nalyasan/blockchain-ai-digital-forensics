@@ -59,6 +59,20 @@ def main():
                    P3_SMOKE_REPORT=str(output / 'smoke.json'))
         if args.pytest_path:
             env['PYTHONPATH'] = str(args.pytest_path.resolve())
+        # A real, isolated Git repository is required by fail-closed provenance.
+        # Its commit identifies the snapshot; checks.json identifies product bytes.
+        (snapshot / '.gitignore').write_text('tools/\nresults/\n__pycache__/\n*.pyc\n.pytest_cache/\ncontracts/out/\ncontracts/cache/\n', encoding='utf-8')
+        git_env = dict(env, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1')
+        for arguments in (['init', '-q'], ['add', '--', '.gitignore', 'collector.py', 'mock_rpc.py', 'forensics', 'tests', 'scripts', 'contracts'],
+                          ['-c', 'user.name=P3 isolated test', '-c', 'user.email=test@invalid',
+                           '-c', 'core.hooksPath=' + os.devnull, 'commit', '-qm', 'isolated test source']):
+            result = subprocess.run(['git', *arguments], cwd=snapshot, env=git_env,
+                                    capture_output=True, timeout=30)
+            if result.returncode:
+                raise RuntimeError('ISOLATED_GIT_SETUP_FAILED')
+        evidence['isolated_git_head'] = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=snapshot,
+            env=git_env, capture_output=True, text=True, check=True).stdout.strip()
+        env['P3_2A_EVIDENCE_DIR'] = str(output)
         forge = str(snapshot / 'tools/foundry' / ('forge' + tool_suffix))
         # Compile from this exact snapshot first so integration deploys its artifact.
         commands = [('forge', [forge, 'test', '--root', 'contracts']),
