@@ -1,5 +1,23 @@
 # Tài liệu Giới hạn Kỹ thuật Hệ thống (System Limitations)
 
+## Cập nhật P3 — nhóm 1 (29/10/2026)
+
+- Guard của `anchor` và `custody` lấy địa chỉ thật bằng `cast wallet address --account`, đối chiếu với `--from`/`ANCHOR_FROM` nếu có, rồi mới kiểm tra chain và danh sách Anvil. Receipt phải có `from` khớp signer; địa chỉ này được ghi vào DB.
+- Mười địa chỉ Anvil được tính bằng cast tại runtime. Không có fallback tĩnh; thiếu cast, timeout, đầu ra sai hoặc địa chỉ trùng đều chặn thao tác trên chain khác 31337. So sánh địa chỉ không phân biệt hoa/thường và chấp nhận đầu vào có/không có `0x`.
+- Mọi `cast send` của hai luồng được cố định `--chain` theo chain đã kiểm tra. API không còn `override_chain_id`. RPC chỉ nhận http/https, yêu cầu HTTPS ngoài loopback; truy vấn Python từ chối redirect. `--unlocked` còn yêu cầu chain 31337, loopback và clientVersion nhận diện Anvil. Kiểm tra tên client là lớp phòng vệ bổ sung; RPC độc hại vẫn có thể giả câu trả lời.
+- Trước gửi phải có bytecode contract. Việc có bytecode chưa chứng minh đó là đúng phiên bản EvidenceRegistry; xác minh/ghim contract và toàn vẹn gói thuộc nhóm 2.
+- Cast chạy với `shell=False`, timeout; loại các cấu hình ví ETH_/TEMPO_, PRIVATE_KEY và CHAIN kế thừa khỏi môi trường subprocess. Lỗi cast/RPC dùng mã và thông điệp cố định, không chuyển tiếp stdout/stderr/args. Timeout gửi là trạng thái chưa xác định, không tự thử gửi lại; sidecar/reconcile thuộc nhóm 3.
+- Kiểm thử nhóm 1 dùng mock RPC và mock gửi giao dịch. Test so mười địa chỉ chạy cast thật ngoại tuyến, không ký hoặc phát giao dịch.
+
+Các bổ sung đã duyệt cho nhóm sau, **chưa triển khai trong nhóm 1**:
+
+- Nhóm 2: các ngoại lệ synthetic trên chain khác 31337, unfinalized, integrity FAILED và gap phải có cờ riêng, `--reason` và audit; giữ nguyên parser dùng chung đã đúng.
+- Nhóm 3: caseId = SHA-256(case_id), URI `evidence://sha256/<case_hash_hex>/manifest.json`; không lộ case_id gốc trong URI/event/ghi chú/log. Export append-only theo manifest hash, không REPLACE. Hoàn thiện custody, idempotency, sidecar và reconcile.
+- Nhóm 4: prefix evidence://, ASCII 0x21–0x7E, trần 256 byte; thêm getCustodyCount/getCustodyAt và giữ getCustodyHistory. Giữ logic ownership đã đúng.
+- Nhóm 5: hoàn thiện test/script/LOW; mọi nguồn gửi để rà soát phải lấy nguyên văn từ checkout kèm Git blob ID tại HEAD và SHA-256 file.
+
+Các mô tả cũ bên dưới về gói, DB và dirty-tree chưa có nghĩa các lỗi nhóm 2–5 đã được sửa.
+
 Tài liệu này ghi nhận trung thực và minh bạch toàn bộ các giới hạn kỹ thuật của hệ thống Blockchain Forensics tính đến giai đoạn P3, phục vụ công tác điều tra số và đánh giá bằng chứng pháp lý.
 
 ---

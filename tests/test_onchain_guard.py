@@ -24,7 +24,7 @@ def test_chain_id_mismatch(monkeypatch):
             )
 
 def test_chain_id_allowlist(monkeypatch):
-    """Test T08-2: Chỉ cho phép chain 31337 và 11155111, chain khác (e.g. 1 - Mainnet) bị từ chối trừ khi ghi đè."""
+    """Test T08-2: Chỉ cho phép chain 31337 và 11155111, chain khác (e.g. 1 - Mainnet) luôn bị từ chối; không còn override."""
     monkeypatch.setenv("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
     monkeypatch.setenv("ANCHOR_CHAIN_ID", "1")
 
@@ -33,17 +33,15 @@ def test_chain_id_allowlist(monkeypatch):
         with pytest.raises(ValueError, match="không nằm trong danh sách cho phép"):
             onchain.validate_chain_and_guard(
                 signer_address="0x1234567890123456789012345678901234567890",
-                rpc_url="http://127.0.0.1:8545",
-                override_chain_id=False
+                rpc_url="http://127.0.0.1:8545"
             )
 
-        # Có override -> chấp thuận
-        chain_id = onchain.validate_chain_and_guard(
-            signer_address="0x1234567890123456789012345678901234567890",
-            rpc_url="http://127.0.0.1:8545",
-            override_chain_id=True
-        )
-        assert chain_id == 1
+        # API no longer accepts a chain override.
+        with pytest.raises(TypeError):
+            onchain.validate_chain_and_guard(
+                signer_address="0x1234567890123456789012345678901234567890",
+                rpc_url="http://127.0.0.1:8545", override_chain_id=True
+            )
 
 def test_anvil_default_account_rejected_on_non_anvil_chain(monkeypatch):
     """Test T08-3: Địa chỉ người ký trùng tài khoản mặc định Anvil trên chain khác 31337 -> Từ chối."""
@@ -265,7 +263,6 @@ def test_chain_id_write_override_blocked(monkeypatch):
             onchain.validate_chain_and_guard(
                 signer_address="0x1234567890123456789012345678901234567890",
                 rpc_url="http://127.0.0.1:8545",
-                override_chain_id=True,
                 is_write=True
             )
 
@@ -290,7 +287,7 @@ def test_non_loopback_rpc_rejected_for_unlocked(tmp_path):
                 contract_address=contract_addr,
                 account=None,
                 from_addr="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-                rpc_url="http://192.168.1.100:8545"
+                rpc_url="https://192.168.1.100:8545"
             )
 
         # RPC trỏ tới domain từ xa
@@ -303,5 +300,5 @@ def test_non_loopback_rpc_rejected_for_unlocked(tmp_path):
                 contract_address=contract_addr,
                 account=None,
                 from_addr="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-                rpc_url="http://remote.anvil-node.internal:8545"
+                rpc_url="https://remote.anvil-node.internal:8545"
             )
