@@ -1,6 +1,6 @@
 # AGENT.md — Blockchain + AI Digital Forensics
 
-> **Phiên bản:** 5.1 (bản 5.0 đã được rà soát và sửa các lỗi kỹ thuật ghi ở mục 13)  
+> **Phiên bản:** 5.1   
 > **Bản chất:** Đặc tả kỹ thuật dành riêng cho Coding Agent để xây dựng hệ thống phần mềm chạy thật. Thu thập dữ liệu giao dịch và sự kiện từ blockchain theo thời gian (mô hình SOC/Forensics), chuẩn hóa chuyển giao tài sản (ETH và ERC-20), phát hiện bất thường bằng Rule Engine, dùng AI Agent truy vết qua công cụ đọc-chỉ, và xác thực chuỗi hành trình chứng cứ (Chain of Custody) bằng Smart Contract.  
 > **Stack:** Python 3.11+ · Solidity 0.8.24+ (Foundry: Anvil, Cast, Forge) · SQLite · LLM Provider tùy chọn (Gemini / OpenRouter)  
 > **Nguyên tắc cốt lõi:** Mọi con số, log, tx hash trong `results/` phải sinh ra từ lần chạy thật bằng script. Không điền tay, không bịa số liệu, không dùng dữ liệu mô phỏng để tuyên bố hiệu năng phát hiện thực tế.
