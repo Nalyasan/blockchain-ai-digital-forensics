@@ -55,3 +55,14 @@ def test_d1_invalid_environment_does_not_echo_canary(flow,monkeypatch,capsys,cap
     assert result.exit_code==2 and result.reason_code=='ANCHOR_CONTEXT_INVALID'
     captured=capsys.readouterr()
     assert canary not in repr(result)+captured.out+captured.err+caplog.text
+
+
+def test_d1e1_overlong_numeric_environment(flow,monkeypatch,capsys,caplog):
+    value='0'*5000
+    monkeypatch.setenv('ANCHOR_CHAIN_ID',value)
+    network=Mock(wraps=flow['network']);monkeypatch.setattr(oc,'rpc_read',network)
+    result=oc.verify_onchain_evidence(str(flow['pkg']),CONTRACT,anchor_chain_id=31337)
+    assert (result.status,result.exit_code,result.reason_code)==('ERROR',2,'ANCHOR_CONTEXT_INVALID')
+    captured=capsys.readouterr()
+    assert value not in repr(result)+captured.out+captured.err+caplog.text
+    network.assert_not_called();flow['sent'].assert_not_called()

@@ -669,7 +669,10 @@ def verify_onchain_evidence(manifest_path_or_dir,contract_address,evidence_id=No
         contract=normalize_address(contract_address)
         configured=os.environ.get('ANCHOR_CHAIN_ID')
         def context_chain(value):
-            if isinstance(value,str) and re.fullmatch(r'[0-9]+',value):value=int(value)
+            if isinstance(value,str) and re.fullmatch(r'[0-9]+',value):
+                try:value=int(value)
+                except (ValueError,OverflowError):
+                    raise ValueError('ANCHOR_CONTEXT_INVALID') from None
             _require(type(value) is int and value>0,'ANCHOR_CONTEXT_INVALID')
             return value
         explicit=context_chain(anchor_chain_id) if anchor_chain_id is not None else None
