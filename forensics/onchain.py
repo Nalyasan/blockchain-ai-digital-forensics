@@ -667,10 +667,17 @@ def verify_onchain_evidence(manifest_path_or_dir,contract_address,evidence_id=No
             return OnchainVerification('ERROR' if provenance['status']=='INDETERMINATE' else 'MISMATCH',
                                        'PROVENANCE_'+provenance['status'],details)
         contract=normalize_address(contract_address)
-        expected=anchor_chain_id if anchor_chain_id is not None else os.environ.get('ANCHOR_CHAIN_ID')
+        configured=os.environ.get('ANCHOR_CHAIN_ID')
+        def context_chain(value):
+            if isinstance(value,str) and re.fullmatch(r'[0-9]+',value):value=int(value)
+            _require(type(value) is int and value>0,'ANCHOR_CONTEXT_INVALID')
+            return value
+        explicit=context_chain(anchor_chain_id) if anchor_chain_id is not None else None
+        configured=context_chain(configured) if configured is not None else None
+        if explicit is not None and configured is not None and explicit!=configured:
+            raise RuntimeError('ANCHOR_CONTEXT_CONFLICT')
+        expected=explicit if explicit is not None else configured
         if expected is None:raise RuntimeError('ANCHOR_CONTEXT_REQUIRED')
-        if isinstance(expected,str) and re.fullmatch(r'[0-9]+',expected):expected=int(expected)
-        _require(type(expected) is int and expected>0,'ANCHOR_CONTEXT_INVALID')
         url=rpc_url or os.environ.get('ANCHOR_RPC_URL','http://127.0.0.1:8545')
         chain=get_rpc_chain_id(url)
         details.update(source_chain_id=result.context['chain_id'],anchor_chain_id=chain,contract=contract)
