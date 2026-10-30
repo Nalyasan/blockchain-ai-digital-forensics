@@ -50,6 +50,8 @@ class VerifyResult:
     manifest_sha256: str | None = None
     manifest_version: str | None = None
     details: dict = field(default_factory=dict)
+    # Internal context from the exact manifest bytes verified; never echoed.
+    context: dict = field(default_factory=dict, repr=False)
 
 
 class InvalidPackage(ValueError):
@@ -258,7 +260,7 @@ def validate_receipt(raw, tx):
             need(kind == 3, Reason.PROFILE)
 
 
-def validate_records(manifest, blocks, receipts, transfers, timeline, audits):
+def validate_records(manifest, blocks, receipts, transfers, timeline, audits, *, declaration_diagnostic=False):
     """Validate complete 1.1 data; called on the SAME bytes that were hashed."""
     from collector import extract_transfers, ERC20_TRANSFER_TOPIC0
     chain = manifest['source_chain_id']
@@ -371,8 +373,15 @@ def validate_records(manifest, blocks, receipts, transfers, timeline, audits):
     integrity = manifest['integrity_checks']
     need(integrity['gaps'] == gaps and type(integrity['gaps_count']) is int
          and integrity['gaps_count'] == sum(b-a+1 for a, b in gaps))
+    declaration_failed = False
     for k in ('verify_local', 'verify_derived'):
-        need(integrity[k]['status'] == 'PASSED' and type(integrity[k]['mismatches']) is int and integrity[k]['mismatches'] == 0)
+        check = integrity[k]
+        need(check['status'] in ('PASSED', 'FAILED') and integer(check['mismatches']), Reason.SCHEMA)
+        if check['status'] == 'FAILED':
+            declaration_failed = True
+            need(declaration_diagnostic)
+        else:
+            need(check['mismatches'] == 0)
     final = manifest['finalization']
     need(integer(final['confirmations']) and integer(final['observed_head']))
     need(final['observed_head'] >= max(canonical))
@@ -380,11 +389,12 @@ def validate_records(manifest, blocks, receipts, transfers, timeline, audits):
     unfinalized = [n for n in sorted(canonical) if n >= threshold]
     need(final['unfinalized_blocks'] == unfinalized and final['unfinalized_blocks_count'] == len(unfinalized))
     need(type(final['is_finalized']) is bool and final['is_finalized'] == (not unfinalized))
-    return {'gaps_count': integrity['gaps_count'], 'is_finalized': final['is_finalized'],
+    return {'declaration_failed': declaration_failed,
+            'gaps_count': integrity['gaps_count'], 'is_finalized': final['is_finalized'],
             'canonical_blocks': len(canonical)}
 
 
-def verify_package(manifest_path_or_dir, db_path=None):
+def verify_package(manifest_path_or_dir, db_path=None, *, declaration_diagnostic=False):
     digest = version = None
     initial = None
     coverage = 'LIMITED'
@@ -474,14 +484,19 @@ def verify_package(manifest_path_or_dir, db_path=None):
         if not issues and version == '1.1.0':
             details = validate_records(m, jsonl(content['raw_blocks.jsonl']), jsonl(content['raw_receipts.jsonl']),
                                        csv_rows(content['asset_transfers.csv']), csv_rows(content['timeline.csv']),
-                                       jsonl(content['audit_events.jsonl']))
+                                       jsonl(content['audit_events.jsonl']), declaration_diagnostic=declaration_diagnostic)
             coverage = 'FULL'
         if inventory(root) != initial:
             raise VerificationError(Reason.UNSTABLE)
         if issues:
             return VerifyResult('INVALID', issues[0], 'LIMITED', digest, version,
                                 {'violations': list(dict.fromkeys(c.value for c in issues))})
-        return VerifyResult('VALID', Reason.OK, coverage, digest, version, details)
+        context = {k: m.get(k) for k in ('case_id', 'chain_id', 'synthetic', 'export_commit',
+                   'working_tree_dirty', 'git_state')}
+        if details.get('declaration_failed'):
+            # Diagnostic eligibility is NOT VALID/FULL. All independent checks ran.
+            return VerifyResult('INVALID', Reason.SEMANTIC, 'LIMITED', digest, version, details, context)
+        return VerifyResult('VALID', Reason.OK, coverage, digest, version, details, context)
     except InvalidPackage as exc:
         return VerifyResult('INVALID', exc.code, 'LIMITED', digest, version)
     except VerificationError as exc:

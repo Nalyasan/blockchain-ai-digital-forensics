@@ -105,6 +105,11 @@ def cli_anchor(args):
             password_file=args.password_file,
             from_addr=args.from_addr,
             allow_dirty=args.allow_dirty,
+            allow_unfinalized=args.allow_unfinalized,
+            allow_gaps=args.allow_gaps,
+            allow_integrity_failed=args.allow_integrity_failed,
+            allow_commit_mismatch=args.allow_commit_mismatch,
+            reason=args.reason,
             rpc_url=args.rpc_url
         )
         print("OK: Neo chứng cứ thành công lên blockchain!")
@@ -115,7 +120,8 @@ def cli_anchor(args):
         print(f"  Manifest SHA-256: {res['manifest_sha256']}")
         return 0
     except Exception as e:
-        print(f"THẤT BẠI anchor: {e}", file=sys.stderr)
+        code = 'SIGNER_MISMATCH' if str(e).startswith('SIGNER_MISMATCH:') else 'ANCHOR_FAILED'
+        print(f"THẤT BẠI anchor: {code}; kiểm tra audit trước khi thử lại", file=sys.stderr)
         return 1
 
 def cli_custody(args):
@@ -140,24 +146,22 @@ def cli_custody(args):
         print(f"  Block: {res['block_number']}")
         return 0
     except Exception as e:
-        print(f"THẤT BẠI custody: {e}", file=sys.stderr)
+        code = 'SIGNER_MISMATCH' if str(e).startswith('SIGNER_MISMATCH:') else 'CUSTODY_FAILED'
+        print(f"THẤT BẠI custody: {code}; kết quả gửi có thể chưa xác định", file=sys.stderr)
         return 1
 
 def cli_verify_onchain(args):
     """Xác minh tầng 3: đối chiếu manifest trên đĩa với bản ghi on-chain."""
-    ok, msg = onchain.verify_onchain_evidence(
+    result = onchain.verify_onchain_evidence(
         manifest_path_or_dir=args.manifest_path,
         contract_address=args.contract,
         evidence_id=args.evidence_id,
         db_path=args.db,
-        rpc_url=args.rpc_url
+        rpc_url=args.rpc_url,
+        anchor_chain_id=args.anchor_chain_id
     )
-    if ok:
-        print(f"OK: {msg}")
-        return 0
-    else:
-        print(f"THẤT BẠI: {msg}", file=sys.stderr)
-        return 1
+    print(f"{result.status}: {result.reason_code}", file=sys.stdout if result.exit_code == 0 else sys.stderr)
+    return result.exit_code
 
 def build_parser():
     p = argparse.ArgumentParser(
@@ -211,6 +215,11 @@ def build_parser():
     pa.add_argument("--password-file", default=None, help="Tệp chứa mật khẩu giải mã keystore")
     pa.add_argument("--from", dest="from_addr", default=None, help="Địa chỉ ví người ký (dùng cho Anvil / unlocked)")
     pa.add_argument("--allow-dirty", action="store_true", help="Cho phép neo kể cả khi working_tree_dirty=True")
+    pa.add_argument("--allow-unfinalized", action="store_true")
+    pa.add_argument("--allow-gaps", action="store_true")
+    pa.add_argument("--allow-integrity-failed", action="store_true")
+    pa.add_argument("--allow-commit-mismatch", action="store_true")
+    pa.add_argument("--reason", choices=sorted(onchain.REASONS))
     pa.add_argument("--rpc-url", default=None, help="RPC URL của mạng blockchain")
     pa.set_defaults(func=cli_anchor)
 
@@ -235,6 +244,7 @@ def build_parser():
     pvo.add_argument("--evidence-id", type=int, default=None, help="ID chứng cứ (nếu không tra cứu từ DB)")
     pvo.add_argument("--db", default=None, help="Đường dẫn database SQLite")
     pvo.add_argument("--rpc-url", default=None, help="RPC URL")
+    pvo.add_argument("--anchor-chain-id", type=int, default=None)
     pvo.set_defaults(func=cli_verify_onchain)
 
     return p

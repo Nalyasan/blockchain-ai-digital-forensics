@@ -1,3 +1,5 @@
+from test_integrity_2a import sample, exported
+from test_onchain_2b import registration_data
 """Kiểm thử T08: Chốt chặn an toàn khóa (Key Safety Guard) & Chuỗi hành trình chứng cứ On-chain.
 Kiểm thử với Mock RPC mà không phụ thuộc vào Foundry daemon.
 """
@@ -149,15 +151,9 @@ def test_dynamic_git_dirty_detected_even_if_manifest_clean():
         assert "ALLOW_DIRTY_WARNING" in note
         assert "lúc anchor" in note
 
-def test_unlocked_flag_blocked_on_non_anvil_chain(tmp_path):
+def test_unlocked_flag_blocked_on_non_anvil_chain(tmp_path, sample):
     """Test T08-7: Chặn cờ --unlocked/--from trên mạng non-Anvil (Sepolia 11155111); bắt buộc keystore (--account)."""
-    manifest_file = tmp_path / "manifest.json"
-    manifest_file.write_text(json.dumps({
-        "case_id": "case-sepolia-01",
-        "package_digest": "d" * 64,
-        "files": [],
-        "software": {"version": "0.2.0", "commit_hash": "abc", "working_tree_dirty": False}
-    }), encoding="utf-8")
+    manifest_file = exported(tmp_path, sample)/'manifest.json'
 
     contract_addr = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
@@ -200,7 +196,7 @@ def test_decode_evidence_registered_event_full_validation():
             {
                 "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
                 "topics": [topic0, topic1, case_id_bytes32, topic3],
-                "data": "0x"
+                "data": registration_data("0x"+"9"*40, "evidence://CASE-2026-001/manifest.json")
             }
         ]
     }
@@ -266,15 +262,9 @@ def test_chain_id_write_override_blocked(monkeypatch):
                 is_write=True
             )
 
-def test_non_loopback_rpc_rejected_for_unlocked(tmp_path):
+def test_non_loopback_rpc_rejected_for_unlocked(tmp_path, sample):
     """Test T08-10: Cấm chế độ --unlocked trên RPC endpoint từ xa (không phải 127.0.0.1, localhost, ::1) kể cả chain_id=31337."""
-    manifest_file = tmp_path / "manifest.json"
-    manifest_file.write_text(json.dumps({
-        "case_id": "case-remote-01",
-        "package_digest": "e" * 64,
-        "files": [],
-        "software": {"version": "0.2.0", "commit_hash": "abc", "working_tree_dirty": False}
-    }), encoding="utf-8")
+    manifest_file = exported(tmp_path, sample)/'manifest.json'
 
     contract_addr = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 

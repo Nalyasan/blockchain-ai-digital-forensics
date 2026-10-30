@@ -18,6 +18,12 @@ import subprocess
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from pathlib import Path
+import uuid
+
+from forensics.integrity import verify_package
+from forensics.provenance import inspect_commit_provenance
 
 from forensics.schemas import init_db
 from forensics.evidence import is_working_tree_dirty, compute_file_sha256
@@ -222,41 +228,122 @@ def verify_manifest_ready_for_anchor(manifest_data: dict, allow_dirty: bool = Fa
         return f"ALLOW_DIRTY_WARNING: Gói chứng cứ được neo khi git tree chưa sạch ({reasons_desc})"
     return "CLEAN_TREE"
 
-def extract_evidence_id_from_receipt(
-    receipt: dict,
-    expected_case_id: str = None,
-    expected_manifest_sha256: str = None
-) -> int:
-    """Giải mã event EvidenceRegistered trong receipt để lấy chính xác evidenceId.
-    Kiểm tra:
-    1. Giao dịch thành công (status == 1).
-    2. Event tồn tại và đủ 4 topics (topic0, topic1=evidenceId, topic2=caseId, topic3=manifestSha256).
-    3. Đối soát caseId và manifestSha256 nếu được truyền vào.
-    """
-    status = receipt.get("status")
-    if status not in (1, "0x1", "1"):
-        raise RuntimeError(f"Giao dịch on-chain thất bại (receipt status={status})")
+def _require(condition, code):
+    if not condition:
+        raise ValueError(code)
 
-    logs = receipt.get("logs", [])
-    for lg in logs:
-        topics = lg.get("topics", [])
-        if topics and topics[0].lower() == TOPIC_EVIDENCE_REGISTERED.lower():
-            if len(topics) < 4:
-                raise ValueError(
-                    f"Event EvidenceRegistered không hợp lệ hoặc thiếu indexed topics (yêu cầu 4 topics, nhận {len(topics)})"
-                )
-            evidence_id = int(topics[1], 16)
-            if expected_case_id:
-                exp_case_b32 = string_to_bytes32_hex(expected_case_id).lower()
-                if topics[2].lower() != exp_case_b32:
-                    raise ValueError(f"Event caseId mismatch: mong muốn {exp_case_b32}, nhận {topics[2]}")
-            if expected_manifest_sha256:
-                exp_hash_b32 = ("0x" + expected_manifest_sha256 if not expected_manifest_sha256.startswith("0x") else expected_manifest_sha256).lower()
-                if topics[3].lower() != exp_hash_b32:
-                    raise ValueError(f"Event manifestSha256 mismatch: mong muốn {exp_hash_b32}, nhận {topics[3]}")
-            return evidence_id
 
-    raise ValueError("Không tìm thấy event EvidenceRegistered hợp lệ trong receipt của giao dịch!")
+def _bytes(value, size=None):
+    _require(isinstance(value, str) and re.fullmatch(r"0x(?:[0-9a-fA-F]{2})*", value), "ABI_INVALID")
+    raw = bytes.fromhex(value[2:])
+    _require(size is None or len(raw) == size, "ABI_INVALID")
+    _require(len(raw) <= 4096, "ABI_INVALID")
+    return raw
+
+
+def _word(value):
+    _require(type(value) is int and 0 <= value < 2**256, "UINT_INVALID")
+    return value.to_bytes(32, 'big').hex()
+
+
+def _uint(value):
+    if type(value) is int:
+        _require(0 <= value < 2**256, "UINT_INVALID")
+        return value
+    _require(isinstance(value, str) and re.fullmatch(r'0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)', value)
+             and len(value) <= 66, "UINT_INVALID")
+    return int(value, 16)
+
+
+def _address_word(raw):
+    _require(len(raw) == 32 and raw[:12] == b'\0'*12, "ABI_INVALID")
+    return '0x' + raw[12:].hex()
+
+
+def _abi_string(raw, head_size, offset_word):
+    _require(len(raw) >= head_size+32 and int.from_bytes(offset_word, 'big') == head_size, "ABI_INVALID")
+    length = int.from_bytes(raw[head_size:head_size+32], 'big')
+    _require(0 < length <= 256, "ABI_INVALID")
+    end = head_size + 32 + length
+    padded = head_size + 32 + ((length+31)//32)*32
+    _require(len(raw) == padded and not any(raw[end:padded]), "ABI_INVALID")
+    try:
+        return raw[head_size+32:end].decode('utf-8', errors='strict')
+    except UnicodeError:
+        raise ValueError('ABI_INVALID') from None
+
+
+def _receipt_success(receipt):
+    if not isinstance(receipt, dict) or type(receipt.get('status')) is bool or receipt.get('status') not in (1, '0x1'):
+        raise RuntimeError('Giao dịch on-chain thất bại: RECEIPT_STATUS')
+
+
+def validate_write_receipt(receipt, tx_hash, contract, signer):
+    actor = receipt_signer(receipt, signer)
+    _receipt_success(receipt)
+    _require(_bytes(receipt.get('transactionHash'),32) == _bytes(tx_hash,32), 'RECEIPT_TX_MISMATCH')
+    _require(normalize_address(receipt.get('to')) == normalize_address(contract), 'RECEIPT_CONTRACT_MISMATCH')
+    _bytes(receipt.get('blockHash'),32)
+    _uint(receipt.get('blockNumber')); _uint(receipt.get('transactionIndex'))
+    _require(isinstance(receipt.get('logs'),list), 'RECEIPT_LOGS_INVALID')
+    return actor
+
+
+def _event_logs(receipt, topic, contract=None):
+    _receipt_success(receipt)
+    _require(isinstance(receipt.get('logs'),list), 'RECEIPT_LOGS_INVALID')
+    found=[]
+    for log_entry in receipt['logs']:
+        _require(isinstance(log_entry,dict), 'EVENT_INVALID')
+        topics=log_entry.get('topics')
+        _require(isinstance(topics,list), 'EVENT_INVALID')
+        if not topics or not isinstance(topics[0],str) or topics[0].lower()!=topic:
+            continue
+        _require(len(topics)==4, 'Event EvidenceRegistered không hợp lệ hoặc thiếu indexed topics')
+        for t in topics: _bytes(t,32)
+        emitter=normalize_address(log_entry.get('address'))
+        if contract is not None:
+            _require(emitter==normalize_address(contract), 'EVENT_EMITTER_MISMATCH')
+        _require(log_entry.get('removed',False) is False, 'EVENT_REMOVED')
+        if 'transactionHash' in receipt:
+            for field in ('transactionHash','blockHash'):
+                _require(_bytes(log_entry.get(field),32)==_bytes(receipt[field],32), 'EVENT_IDENTITY_MISMATCH')
+            for field in ('transactionIndex','blockNumber'):
+                _require(_uint(log_entry.get(field))==_uint(receipt[field]), 'EVENT_IDENTITY_MISMATCH')
+            _uint(log_entry.get('logIndex'))
+        found.append(log_entry)
+    _require(len(found)==1, 'Không tìm thấy event EvidenceRegistered hợp lệ: EVENT_MISSING_OR_AMBIGUOUS')
+    return found[0]
+
+
+def extract_evidence_id_from_receipt(receipt, expected_case_id=None, expected_manifest_sha256=None,
+                                     expected_contract=None, expected_submitter=None, expected_uri=None):
+    event=_event_logs(receipt, TOPIC_EVIDENCE_REGISTERED, expected_contract)
+    topics=event['topics']
+    eid=int(topics[1],16)
+    _require(eid>0, 'EVENT_ID_INVALID')
+    if expected_case_id is not None:
+        _require(topics[2].lower()==string_to_bytes32_hex(expected_case_id).lower(), 'Event caseId mismatch')
+    if expected_manifest_sha256 is not None:
+        expected='0x'+expected_manifest_sha256.removeprefix('0x')
+        _require(_bytes(topics[3],32)==_bytes(expected,32), 'Event manifestSha256 mismatch')
+    data=_bytes(event.get('data'))
+    _require(len(data)>=96, 'ABI_INVALID')
+    submitter=_address_word(data[:32]); uri=_abi_string(data,64,data[32:64])
+    if expected_submitter is not None:
+        _require(submitter==normalize_address(expected_submitter), 'EVENT_SUBMITTER_MISMATCH')
+    if expected_uri is not None:
+        _require(uri==expected_uri, 'EVENT_URI_MISMATCH')
+    return eid
+
+
+def verify_custody_receipt(receipt, contract, signer, evidence_id, action, artifact, note):
+    event=_event_logs(receipt, TOPIC_CUSTODY_RECORDED, contract)
+    topics=event['topics'];data=_bytes(event.get('data'),64)
+    _require(int(topics[1],16)==evidence_id and int(topics[2],16)==action and action in range(4), 'CUSTODY_EVENT_MISMATCH')
+    _require(_address_word(_bytes(topics[3],32))==signer, 'CUSTODY_ACTOR_MISMATCH')
+    _require(data[:32]==_bytes(artifact,32) and data[32:]==_bytes(note,32), 'CUSTODY_DATA_MISMATCH')
+
 
 def string_to_bytes32_hex(text: str) -> str:
     """Chuyển đổi chuỗi sang bytes32 định dạng 0x hex có padding."""
@@ -276,89 +363,113 @@ def run_cast_call(args: list[str]) -> str:
 def get_transaction_receipt(tx_hash: str, rpc_url: str) -> dict:
     return rpc_read(rpc_url, "eth_getTransactionReceipt", [tx_hash])
 
-def anchor_evidence(
-    manifest_path_or_dir: str,
-    contract_address: str,
-    db_path: str = None,
-    account: str = None,
-    password_file: str = None,
-    from_addr: str = None,
-    allow_dirty: bool = False,
-    rpc_url: str = None
-) -> dict:
-    """Neo gói chứng cứ lên blockchain qua EvidenceRegistry.sol.
-    1. Xác minh toàn vẹn gói chứng cứ trên đĩa.
-    2. Kiểm tra chốt chặn an toàn (working_tree_dirty cả manifest và git động, chain_id, Key Safety Guard).
-    3. Ràng buộc: trên mạng non-Anvil, bắt buộc dùng keystore (--account).
-    4. Gửi transaction registerEvidence(bytes32,bytes32,string).
-    5. Giải mã receipt trích xuất evidenceId (đủ 4 topics), cập nhật evidence_exports, custody_events và audit_events.
-    """
-    if not re.match(r"^0x[0-9a-fA-F]{40}$", contract_address):
-        raise ValueError(f"Địa chỉ contract không hợp lệ: {contract_address}")
+REASONS = frozenset({'controlled-test', 'incomplete-collection-review', 'reproducibility-review'})
 
-    # 1. Đọc và xác minh manifest
-    manifest_file = os.path.join(manifest_path_or_dir, "manifest.json") if os.path.isdir(manifest_path_or_dir) else manifest_path_or_dir
-    with open(manifest_file, "r", encoding="utf-8") as f:
-        manifest_data = json.load(f)
 
-    # 2. Kiểm tra working_tree_dirty (manifest + git động)
-    dirty_note = verify_manifest_ready_for_anchor(manifest_data, allow_dirty=allow_dirty)
+def package_preflight(path, allow_integrity_failed=False):
+    result=verify_package(path)
+    if allow_integrity_failed and result.status=='INVALID':
+        diagnostic=verify_package(path, declaration_diagnostic=True)
+        _require(diagnostic.manifest_sha256==result.manifest_sha256, 'PACKAGE_UNSTABLE')
+        if diagnostic.details.get('declaration_failed') and diagnostic.context:
+            result=diagnostic
+    eligible=(result.status=='VALID' and result.coverage=='FULL') or (
+        allow_integrity_failed and result.status=='INVALID' and result.details.get('declaration_failed') and result.context)
+    if not eligible:
+        if result.status=='ERROR':raise RuntimeError('PACKAGE_'+result.reason_code.value)
+        raise ValueError('PACKAGE_'+result.reason_code.value if result.status!='VALID' else 'PACKAGE_LIMITED')
+    return result
 
-    # 3. Tính toán SHA-256 của manifest
-    manifest_sha256 = compute_file_sha256(manifest_file)
-    case_id = manifest_data["case_id"]
 
-    url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
-    signer, chain_id = prepare_write(contract_address, url, account, password_file, from_addr)
+def check_anchor_policy(result, provenance, chain_id, flags, reason):
+    requested=[name for name,value in flags.items() if value]
+    _require(not requested or reason in REASONS, 'REASON_REQUIRED')
+    _require(reason is None or reason in REASONS, 'REASON_INVALID')
+    _require(chain_id==31337 or not result.context['synthetic'], 'SYNTHETIC_PUBLIC_FORBIDDEN')
+    _require(chain_id==31337 or not flags['allow_integrity_failed'], 'INTEGRITY_OVERRIDE_LOCAL_ONLY')
+    status=provenance['status']
+    if status=='INDETERMINATE':raise RuntimeError('GIT_UNKNOWN')
+    _require(status in ('OK','EXISTING_NON_ANCESTOR'), 'PROVENANCE_'+status)
+    applied=[]
+    conditions={
+        'allow_commit_mismatch':status=='EXISTING_NON_ANCESTOR',
+        'allow_dirty':provenance['git_state']=='DIRTY' or result.context['working_tree_dirty'],
+        'allow_gaps':result.details['gaps_count']>0,
+        'allow_unfinalized':not result.details['is_finalized'],
+        'allow_integrity_failed':bool(result.details.get('declaration_failed'))}
+    for name,condition in conditions.items():
+        if condition:
+            _require(flags[name], 'POLICY_'+name.upper())
+            applied.append(name)
+    return {'requested_flags':requested, 'applied_exceptions':applied, 'reason':reason}
 
-    case_id_b32 = string_to_bytes32_hex(case_id)
-    manifest_hash_b32 = "0x" + manifest_sha256
-    storage_uri = f"evidence://{case_id}/manifest.json".strip()
-    if not storage_uri:
-        raise ValueError("storage_uri không được để trống!")
-    if len(storage_uri.encode("utf-8")) > 256:
-        raise ValueError(f"storage_uri vượt quá 256 bytes ({len(storage_uri.encode('utf-8'))} bytes)")
 
-    # Chuẩn bị đối số cho cast send
-    # Không truyền private-key qua CLI! Dùng --account + --password-file hoặc --from + unlocked (chỉ Anvil)
-    cast_args = [
-        contract_address,
-        "registerEvidence(bytes32,bytes32,string)",
-        case_id_b32,
-        manifest_hash_b32,
-        storage_uri,
-        "--rpc-url", url,
-        "--chain", str(chain_id),
-        "--json"
-    ]
-    if account:
-        cast_args.extend(["--account", account])
-        if password_file:
-            cast_args.extend(["--password-file", password_file])
-    else:
-        cast_args.extend(["--from", signer, "--unlocked"])
-
-    log.info("Đang neo chứng cứ case_id=%s, manifest_sha256=%s lên contract %s...", case_id, manifest_sha256, contract_address)
-    send_out = run_cast_send(cast_args)
-
+def pre_send_audit(db_path, metadata):
+    _require(Path(db_path).is_file(), 'AUDIT_DB_REQUIRED')
+    attempt=uuid.uuid4().hex
     try:
-        tx_data = json.loads(send_out)
-        tx_hash = tx_data.get("transactionHash") or tx_data.get("hash")
-    except Exception:
-        m = re.search(r"0x[0-9a-fA-F]{64}", send_out)
-        tx_hash = m.group(0) if m else None
+        conn=sqlite3.connect(Path(db_path).absolute().as_uri()+'?mode=rw', uri=True, timeout=2)
+        try:
+            conn.execute("INSERT INTO audit_events(ts,action,object_ref,metadata) VALUES(?,?,?,?)",
+                (datetime.now(timezone.utc).isoformat(), 'ANCHOR_PREFLIGHT', 'attempt:'+attempt,
+                 json.dumps(metadata, sort_keys=True)))
+            conn.commit()
+        finally:conn.close()
+    except sqlite3.Error:
+        raise RuntimeError('AUDIT_COMMIT_FAILED') from None
+    return attempt
 
-    if not isinstance(tx_hash, str) or not re.fullmatch(r"0x[0-9a-fA-F]{64}", tx_hash):
-        raise RuntimeError("CAST_RESPONSE_INVALID: không nhận được transaction hash")
 
-    receipt = get_transaction_receipt(tx_hash, url)
-    actor = receipt_signer(receipt, signer)
-    evidence_id = extract_evidence_id_from_receipt(
-        receipt,
-        expected_case_id=case_id,
-        expected_manifest_sha256=manifest_sha256
-    )
-    block_num = int(receipt.get("blockNumber", "0x0"), 16) if isinstance(receipt.get("blockNumber"), str) else receipt.get("blockNumber", 0)
+def anchor_evidence(manifest_path_or_dir, contract_address, db_path=None, account=None,
+                    password_file=None, from_addr=None, allow_dirty=False, rpc_url=None,
+                    allow_unfinalized=False, allow_gaps=False, allow_integrity_failed=False,
+                    allow_commit_mismatch=False, reason=None):
+    contract_address=normalize_address(contract_address)
+    result=package_preflight(manifest_path_or_dir, allow_integrity_failed)
+    provenance=inspect_commit_provenance(result.context['export_commit'])
+    url=rpc_url or os.environ.get('ANCHOR_RPC_URL','http://127.0.0.1:8545')
+    chain_id=get_rpc_chain_id(url)
+    flags=dict(allow_dirty=allow_dirty,allow_unfinalized=allow_unfinalized,allow_gaps=allow_gaps,
+               allow_integrity_failed=allow_integrity_failed,allow_commit_mismatch=allow_commit_mismatch)
+    # Preserve guard precedence for signer/loopback/chain failures before any audit write.
+    signer, guarded_chain=prepare_write(contract_address,url,account,password_file,from_addr)
+    _require(chain_id==guarded_chain,'CHAIN_UNSTABLE')
+    policy=check_anchor_policy(result,provenance,chain_id,flags,reason)
+    manifest_sha256=result.manifest_sha256;case_id=result.context['case_id']
+    case_id_b32=string_to_bytes32_hex(case_id);manifest_hash_b32='0x'+manifest_sha256
+    storage_uri=f'evidence://{case_id}/manifest.json'
+    _require(len(storage_uri.encode())<=256,'URI_TOO_LONG')
+    dirty_note='ALLOW_DIRTY_WARNING' if 'allow_dirty' in policy['applied_exceptions'] else 'CLEAN_TREE'
+    db_file=db_path or os.environ.get('DB_PATH','data/forensics.db')
+    attempt=pre_send_audit(db_file,dict(policy,manifest_sha256=manifest_sha256,
+        source_chain_id=result.context['chain_id'],anchor_chain_id=chain_id,contract=contract_address,
+        signer=signer,export_commit=result.context['export_commit'],trusted_head=provenance['head'],
+        provenance=provenance['status'],integrity=result.status))
+    stable=package_preflight(manifest_path_or_dir,allow_integrity_failed)
+    _require(stable==result,'PACKAGE_UNSTABLE')
+    _require(inspect_commit_provenance(result.context['export_commit'])==provenance,'GIT_UNSTABLE')
+    _require(get_rpc_chain_id(url)==chain_id,'CHAIN_UNSTABLE')
+    cast_args=[contract_address,'registerEvidence(bytes32,bytes32,string)',case_id_b32,manifest_hash_b32,
+               storage_uri,'--rpc-url',url,'--chain',str(chain_id),'--json']
+    if account:
+        cast_args+=['--account',account]
+        if password_file:cast_args+=['--password-file',password_file]
+    else:cast_args+=['--from',signer,'--unlocked']
+    log.info('ANCHOR_SEND manifest_sha256=%s chain_id=%s',manifest_sha256,chain_id)
+    send_out=run_cast_send(cast_args)  # Exactly one attempt; ambiguous outcomes never retry.
+    try:
+        tx_data=json.loads(send_out);tx_hash=tx_data.get('transactionHash') or tx_data.get('hash')
+        _bytes(tx_hash,32)
+    except (ValueError,TypeError,AttributeError):
+        raise RuntimeError('CAST_RESPONSE_INVALID: SEND_OUTCOME_UNKNOWN') from None
+    receipt=get_transaction_receipt(tx_hash,url)
+    actor=validate_write_receipt(receipt,tx_hash,contract_address,signer)
+    evidence_id=extract_evidence_id_from_receipt(receipt,case_id,manifest_sha256,contract_address,signer,storage_uri)
+    _require(get_rpc_chain_id(url)==chain_id,'CHAIN_UNSTABLE')
+    state=read_registered_state(url,contract_address,evidence_id,receipt['blockNumber'])
+    check_registered_state(state,evidence_id,case_id_b32,manifest_hash_b32,signer,storage_uri)
+    check_receipt_block(url,receipt)
+    block_num=_uint(receipt['blockNumber'])
 
     # 4. Ghi nhận bền vững vào SQLite (evidence_exports, custody_events, audit_events)
     db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
@@ -405,7 +516,8 @@ def anchor_evidence(
         "contract_address": contract_address,
         "chain_id": chain_id,
         "manifest_sha256": manifest_sha256,
-        "dirty_note": dirty_note
+        "dirty_note": dirty_note, "attempt_id": attempt,
+        "status": "ANCHORED_WITH_EXCEPTION" if policy["applied_exceptions"] else "ANCHORED"
     }
 
 def record_custody_action(
@@ -463,11 +575,11 @@ def record_custody_action(
         raise RuntimeError("CAST_RESPONSE_INVALID: không nhận được transaction hash")
 
     receipt = get_transaction_receipt(tx_hash, url)
-    actor = receipt_signer(receipt, signer)
-    if receipt.get("status") not in (1, "0x1", "1"):
-        raise RuntimeError("Giao dịch recordCustody thất bại trên chuỗi!")
-
-    block_num = int(receipt.get("blockNumber", "0x0"), 16) if isinstance(receipt.get("blockNumber"), str) else receipt.get("blockNumber", 0)
+    actor = validate_write_receipt(receipt, tx_hash, contract_address, signer)
+    verify_custody_receipt(receipt, contract_address, signer, evidence_id, action, art_b32, note_b32)
+    _require(get_rpc_chain_id(url)==chain_id, 'CHAIN_UNSTABLE')
+    check_receipt_block(url,receipt)
+    block_num = _uint(receipt['blockNumber'])
 
     db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -504,57 +616,119 @@ def record_custody_action(
         "block_number": block_num
     }
 
-def verify_onchain_evidence(
-    manifest_path_or_dir: str,
-    contract_address: str,
-    evidence_id: int = None,
-    db_path: str = None,
-    rpc_url: str = None
-) -> tuple[bool, str]:
-    """Xác minh tầng 3 (verify-onchain):
-    Băm lại manifest.json trên đĩa, gọi verifyEvidence trên hợp đồng và đối chiếu.
-    Báo MISMATCH nếu giá trị băm không khớp hoặc id không tồn tại.
-    """
-    manifest_file = os.path.join(manifest_path_or_dir, "manifest.json") if os.path.isdir(manifest_path_or_dir) else manifest_path_or_dir
-    if not os.path.exists(manifest_file):
-        return False, f"MISMATCH: Tệp manifest không tồn tại: {manifest_file}"
+def check_receipt_block(url, receipt):
+    block=rpc_read(url,'eth_getBlockByNumber',[receipt['blockNumber'],False])
+    if not isinstance(block,dict) or block.get('hash','').lower()!=receipt['blockHash'].lower():
+        raise RuntimeError('CHAIN_UNSTABLE')
 
-    current_manifest_sha256 = compute_file_sha256(manifest_file)
-    with open(manifest_file, "r", encoding="utf-8") as f:
-        m_data = json.load(f)
-    case_id = m_data.get("case_id")
 
-    eid = evidence_id
-    db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
-    if eid is None and os.path.exists(db_file):
-        conn = sqlite3.connect(db_file)
-        row = conn.execute("SELECT onchain_evidence_id FROM evidence_exports WHERE case_id=?", (case_id,)).fetchone()
-        conn.close()
-        if row and row[0]:
-            eid = row[0]
+def read_registered_state(url, contract, evidence_id, block='latest'):
+    raw=_bytes(rpc_read(url,'eth_call',[{'to':contract,'data':'0xc956f143'+_word(evidence_id)},block]))
+    _require(len(raw)>=288 and raw[:32]==bytes.fromhex(_word(32)), 'ABI_INVALID')
+    body=raw[32:];uri=_abi_string(body,224,body[96:128])
+    _require(int.from_bytes(body[192:224],'big') in (0,1),'ABI_INVALID')
+    return {'id':int.from_bytes(body[:32],'big'),'case':'0x'+body[32:64].hex(),
+        'hash':'0x'+body[64:96].hex(),'uri':uri,'submitter':_address_word(body[128:160]),
+        'registered_at':int.from_bytes(body[160:192],'big'),'exists':bool(int.from_bytes(body[192:224],'big'))}
 
-    if eid is None:
-        return False, f"MISMATCH: Không xác định được evidence_id on-chain cho vụ việc '{case_id}'"
 
-    url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
-    exp_hash_b32 = "0x" + current_manifest_sha256
+def check_registered_state(state,eid,case_hash,manifest_hash,submitter,uri):
+    _require(state['exists'] and state['id']==eid and state['case']==case_hash.lower() and
+        state['hash']==manifest_hash.lower() and state['submitter']==submitter and state['uri']==uri,
+        'REGISTRY_MISMATCH')
 
-    call_args = [
-        contract_address,
-        "verifyEvidence(uint256,bytes32)(bool,address,uint256)",
-        str(eid),
-        exp_hash_b32,
-        "--rpc-url", url
-    ]
+
+@dataclass
+class OnchainVerification:
+    status: str
+    reason_code: str
+    details: dict = field(default_factory=dict)
+
+    @property
+    def exit_code(self):
+        return {'MATCH':0,'MISMATCH':1,'ERROR':2}[self.status]
+
+    def __iter__(self):
+        # Existing Python callers may unpack; boolean is true only on complete MATCH.
+        yield self.status=='MATCH'
+        yield self.status+': '+self.reason_code
+
+
+def verify_onchain_evidence(manifest_path_or_dir,contract_address,evidence_id=None,db_path=None,
+                            rpc_url=None,anchor_chain_id=None):
+    details={'chain_check':'NOT_RUN'}
     try:
-        out = run_cast_call(call_args)
-    except Exception as e:
-        return False, f"MISMATCH: Lỗi khi truy vấn verifyEvidence trên hợp đồng: {e}"
-
-    lines = [line.strip() for line in out.splitlines() if line.strip()]
-    if lines and lines[0].lower() in ("true", "1"):
-        submitter = lines[1] if len(lines) > 1 else "unknown"
-        registered_at = lines[2] if len(lines) > 2 else "unknown"
-        return True, f"OK: Khớp 100% với bản ghi on-chain (evidence_id={eid}, submitter={submitter}, registeredAt={registered_at})"
-    else:
-        return False, f"MISMATCH: Dữ liệu trên đĩa không khớp với bản ghi bất biến on-chain (evidence_id={eid}, hash={current_manifest_sha256})"
+        result=verify_package(manifest_path_or_dir)
+        if result.status!='VALID' or result.coverage!='FULL':
+            return OnchainVerification('ERROR' if result.status=='ERROR' else 'MISMATCH',
+                result.reason_code.value if result.status!='VALID' else 'PACKAGE_LIMITED',details)
+        provenance=inspect_commit_provenance(result.context['export_commit'])
+        if provenance['status']!='OK':
+            return OnchainVerification('ERROR' if provenance['status']=='INDETERMINATE' else 'MISMATCH',
+                                       'PROVENANCE_'+provenance['status'],details)
+        contract=normalize_address(contract_address)
+        expected=anchor_chain_id if anchor_chain_id is not None else os.environ.get('ANCHOR_CHAIN_ID')
+        if expected is None:raise RuntimeError('ANCHOR_CONTEXT_REQUIRED')
+        if isinstance(expected,str) and re.fullmatch(r'[0-9]+',expected):expected=int(expected)
+        _require(type(expected) is int and expected>0,'ANCHOR_CONTEXT_INVALID')
+        url=rpc_url or os.environ.get('ANCHOR_RPC_URL','http://127.0.0.1:8545')
+        chain=get_rpc_chain_id(url)
+        details.update(source_chain_id=result.context['chain_id'],anchor_chain_id=chain,contract=contract)
+        _require(chain==expected,'ANCHOR_CHAIN_MISMATCH')
+        details['chain_check']='CHECKED'
+        code=rpc_read(url,'eth_getCode',[contract,'latest'])
+        _require(isinstance(code,str) and re.fullmatch(r'0x(?:[0-9a-fA-F]{2})+',code), 'CONTRACT_CODE_MISSING')
+        digest=result.manifest_sha256
+        mapped=_bytes(rpc_read(url,'eth_call',[{'to':contract,'data':'0x5a9535b7'+digest},'latest']),32)
+        eid=int.from_bytes(mapped,'big')
+        _require(eid>0,'EVIDENCE_NOT_FOUND')
+        if evidence_id is not None:
+            _require(type(evidence_id) is int and evidence_id>0,'EVIDENCE_ID_INVALID')
+            _require(eid==evidence_id,'EVIDENCE_ID_MISMATCH')
+        # DB is never authoritative for ID; this read path neither opens a wallet nor writes DB.
+        state=read_registered_state(url,contract,eid)
+        case_hash=string_to_bytes32_hex(result.context['case_id']);uri=f"evidence://{result.context['case_id']}/manifest.json"
+        check_registered_state(state,eid,case_hash,'0x'+digest,state['submitter'],uri)
+        response=_bytes(rpc_read(url,'eth_call',[{'to':contract,'data':'0x9fcc7309'+_word(eid)+digest},'latest']),96)
+        _require(int.from_bytes(response[:32],'big') in (0,1),'ABI_INVALID')
+        _require(response[:32]==bytes.fromhex(_word(1)) and _address_word(response[32:64])==state['submitter']
+                 and int.from_bytes(response[64:],'big')==state['registered_at'],'REGISTRY_MISMATCH')
+        # Find the first block at/after registeredAt; bounded binary search avoids unbounded log scans.
+        latest=rpc_read(url,'eth_getBlockByNumber',['latest',False])
+        _require(isinstance(latest,dict),'RPC_BLOCK_INVALID')
+        low,high=0,_uint(latest.get('number'))
+        if high.bit_length()>64:raise RuntimeError('RPC_RANGE_LIMIT')
+        while low<high:
+            mid=(low+high)//2
+            block=rpc_read(url,'eth_getBlockByNumber',[hex(mid),False])
+            if not isinstance(block,dict):raise RuntimeError('RPC_BLOCK_INVALID')
+            if _uint(block.get('timestamp'))<state['registered_at']:low=mid+1
+            else:high=mid
+        logs=rpc_read(url,'eth_getLogs',[{'address':contract,'fromBlock':hex(low),'toBlock':hex(low),
+             'topics':[TOPIC_EVIDENCE_REGISTERED,'0x'+_word(eid),case_hash,'0x'+digest]}])
+        if not isinstance(logs,list) or len(logs)!=1:raise RuntimeError('REGISTRATION_EVENT_UNAVAILABLE')
+        tx_hash=logs[0].get('transactionHash');_bytes(tx_hash,32)
+        receipt=get_transaction_receipt(tx_hash,url)
+        validate_write_receipt(receipt,tx_hash,contract,state['submitter'])
+        actual=extract_evidence_id_from_receipt(receipt,result.context['case_id'],digest,contract,state['submitter'],uri)
+        _require(actual==eid and logs[0] in receipt['logs'],'EVENT_IDENTITY_MISMATCH')
+        tx=rpc_read(url,'eth_getTransactionByHash',[tx_hash])
+        if not isinstance(tx,dict):raise RuntimeError('TRANSACTION_UNAVAILABLE')
+        _require(_bytes(tx.get('hash'),32)==_bytes(tx_hash,32) and normalize_address(tx.get('from'))==state['submitter']
+            and normalize_address(tx.get('to'))==contract,'TRANSACTION_MISMATCH')
+        if 'chainId' in tx:_require(_uint(tx['chainId'])==chain,'TRANSACTION_CHAIN_MISMATCH')
+        check_receipt_block(url,receipt)
+        _require(get_rpc_chain_id(url)==chain,'CHAIN_UNSTABLE')
+        final=verify_package(manifest_path_or_dir)
+        if final!=result:raise RuntimeError('PACKAGE_UNSTABLE')
+        if inspect_commit_provenance(result.context['export_commit'])!=provenance:raise RuntimeError('GIT_UNSTABLE')
+        details.update(evidence_id=eid,manifest_sha256=digest,registry_match=True,submitter=state['submitter'],tx_hash=tx_hash)
+        return OnchainVerification('MATCH','OK',details)
+    except (RuntimeError,OSError,sqlite3.Error) as exc:
+        code=str(exc)
+        return OnchainVerification('ERROR',code if re.fullmatch(r'[A-Z_]+',code) else 'OPERATION_FAILED',details)
+    except (ValueError,TypeError,KeyError,IndexError,OverflowError) as exc:
+        code=str(exc)
+        if code in ('ABI_INVALID','RPC_BLOCK_INVALID','UINT_INVALID','ANCHOR_CONTEXT_INVALID'):
+            return OnchainVerification('ERROR',code,details)
+        return OnchainVerification('MISMATCH',code if re.fullmatch(r'[A-Z_]+',code) else 'EVENT_OR_INPUT_MISMATCH',details)

@@ -11,6 +11,9 @@ import pytest
 
 from forensics import onchain as oc
 from forensics.schemas import init_db
+from test_evidence_p2 import populate_sample_db
+from forensics.evidence import export_evidence
+from test_onchain_2b import complete_receipt, registry_reply
 
 DEFAULTS = [
     '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
@@ -37,20 +40,23 @@ def isolated_env(monkeypatch):
 
 @pytest.fixture
 def write_flow(tmp_path, monkeypatch):
-    manifest = tmp_path / 'manifest.json'
-    manifest.write_text(json.dumps({'case_id': 'guard-case', 'software': {'working_tree_dirty': False}}))
     db = tmp_path / 'events.db'
-    init_db(str(db)).close()
+    populate_sample_db(str(db),3)
+    package=tmp_path/'package'
+    export_evidence('guard-case',0,2,str(package),str(db))
+    manifest=package/'manifest.json'
     monkeypatch.setattr(oc, 'is_working_tree_dirty', lambda: False)
     monkeypatch.setattr(oc, 'get_rpc_chain_id', lambda url: 31337)
-    monkeypatch.setattr(oc, 'rpc_read', Mock(side_effect=lambda url, method, params:
-                        'anvil/v1.0' if method == 'web3_clientVersion' else '0x6000'))
+    def network(url,method,params):
+        if method=='web3_clientVersion':return 'anvil/v1.0'
+        if method=='eth_getBlockByNumber':return {'hash':'0x'+'6'*64}
+        if method=='eth_call':return registry_reply('guard-case',oc.compute_file_sha256(str(manifest)),SIGNER)
+        return '0x6000'
+    monkeypatch.setattr(oc,'rpc_read',Mock(side_effect=network))
     monkeypatch.setattr(oc, '_run_cast', Mock(return_value=SIGNER))
     send = Mock(return_value=json.dumps({'transactionHash': TX}))
     monkeypatch.setattr(oc, 'run_cast_send', send)
-    receipt = {'from': SIGNER, 'status': '0x1', 'blockNumber': '0x1', 'logs': [{
-        'address': CONTRACT, 'topics': [oc.TOPIC_EVIDENCE_REGISTERED, '0x1',
-        oc.string_to_bytes32_hex('guard-case'), '0x' + oc.compute_file_sha256(str(manifest))], 'data': '0x'}]}
+    receipt = complete_receipt(CONTRACT,SIGNER,TX,'guard-case',oc.compute_file_sha256(str(manifest)))
     monkeypatch.setattr(oc, 'get_transaction_receipt', Mock(return_value=receipt))
 
     def invoke(kind, **kwargs):
@@ -58,7 +64,9 @@ def write_flow(tmp_path, monkeypatch):
                        rpc_url='http://127.0.0.1:8545')
         options.update(kwargs)
         if kind == 'anchor':
-            return oc.anchor_evidence(str(manifest), **options)
+            return oc.anchor_evidence(str(manifest), allow_dirty=True, allow_unfinalized=True, reason='controlled-test', **options)
+        receipt['logs'][0].update(topics=[oc.TOPIC_CUSTODY_RECORDED,f'0x{1:064x}',f'0x{1:064x}','0x'+'0'*24+SIGNER[2:]],
+                                  data='0x'+'a'*64+oc.string_to_bytes32_hex('note')[2:])
         return oc.record_custody_action(1, 1, '0x' + 'a' * 64, 'note', **options)
     return invoke, send, receipt, db
 

@@ -20,7 +20,7 @@ def _git(args, root, input_data=None):
     if not executable:
         raise OSError('GIT_UNAVAILABLE')
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('GIT_')}
-    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0')
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0', GIT_NO_REPLACE_OBJECTS='1')
     return subprocess.run([executable, '-c', 'core.fsmonitor=false', *args], cwd=root, env=env, shell=False,
                           timeout=10, capture_output=True, check=False, input=input_data)
 
@@ -92,3 +92,41 @@ def check_commit_provenance(export_commit, repo_root) -> str:
         return {0: 'OK', 1: 'MISMATCH'}.get(ancestor.returncode, 'UNKNOWN')
     except (OSError, subprocess.SubprocessError):
         return 'UNKNOWN'
+
+
+def inspect_commit_provenance(export_commit, repo_root=None):
+    """Detailed write policy; only a proven existing non-ancestor is overridable."""
+    root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[1]
+    state = get_git_state(root)
+    result = {'status': 'INDETERMINATE', 'head': state.head, 'git_state': state.state,
+              'repo_root': state.repo_root}
+    if state.state == 'UNKNOWN':
+        return result
+    if Path(state.repo_root).resolve() != root.resolve():
+        return dict(result, status='WRONG_REPOSITORY')
+    if not isinstance(export_commit, str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', export_commit):
+        return dict(result, status='MALFORMED')
+    try:
+        graft = _git(['rev-parse', '--git-path', 'info/grafts'], root)
+        if graft.returncode:
+            return result
+        graft_path = Path(graft.stdout.decode().strip())
+        if not graft_path.is_absolute():
+            graft_path = root / graft_path
+        if graft_path.exists():
+            return result
+        shallow = _git(['rev-parse', '--is-shallow-repository'], root)
+        # Conservative: never infer a divergent history from a truncated graph.
+        if shallow.returncode or shallow.stdout.strip() != b'false':
+            return result
+        obj = _git(['cat-file', '--batch-check=%(objecttype)'], root, (export_commit+'\n').encode('ascii'))
+        if obj.returncode:
+            return result
+        if obj.stdout.strip() == (export_commit+' missing').encode():
+            return dict(result, status='MISSING')
+        if obj.stdout.strip() != b'commit':
+            return dict(result, status='WRONG_OBJECT_TYPE')
+        ancestor = _git(['merge-base', '--is-ancestor', export_commit, state.head], root)
+        return dict(result, status={0:'OK',1:'EXISTING_NON_ANCESTOR'}.get(ancestor.returncode,'INDETERMINATE'))
+    except (OSError, ValueError, UnicodeError, subprocess.SubprocessError):
+        return result

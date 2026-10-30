@@ -75,6 +75,8 @@ def main():
         evidence['isolated_git_head'] = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=snapshot,
             env=git_env, capture_output=True, text=True, check=True).stdout.strip()
         env['P3_2A_EVIDENCE_DIR'] = str(output)
+        env['P3_2B_EVIDENCE_DIR'] = str(output)
+        env['P3_PROTECTED_ROOTS'] = json.dumps([str(ROOT), *map(str,args.protected_root)])
         forge = str(snapshot / 'tools/foundry' / ('forge' + tool_suffix))
         # Compile from this exact snapshot first so integration deploys its artifact.
         commands = [('forge', [forge, 'test', '--root', 'contracts']),

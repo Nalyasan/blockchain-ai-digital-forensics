@@ -267,7 +267,10 @@ def run_smoke():
                 db = work / 'sample.db'
                 shutil.copy2(sample_db, db)
                 package = work / 'package'
-                shutil.copytree(sample_package, package)
+                from forensics.evidence import export_evidence
+                with contextlib.closing(sqlite3.connect(db)) as sample_conn:
+                    lo, hi = sample_conn.execute("SELECT MIN(number),MAX(number) FROM blocks WHERE status='canonical'").fetchone()
+                export_evidence('group1b', lo, hi, str(package), str(db), allow_gaps=True)
                 manifest = package / 'manifest.json'
 
                 def invoke(kind, **changes):
@@ -275,7 +278,8 @@ def run_smoke():
                                 password_file=str(password_file), rpc_url=url)
                     opts.update(changes)
                     if kind == 'anchor':
-                        return oc.anchor_evidence(str(manifest), allow_dirty=True, **opts)
+                        return oc.anchor_evidence(str(manifest), allow_dirty=True, allow_unfinalized=True,
+                                                  allow_gaps=True, reason='controlled-test', **opts)
                     return oc.record_custody_action(1, 1, '0x' + digest(manifest), 'group1b', **opts)
 
                 def call(signature, *args):
@@ -349,7 +353,8 @@ def run_smoke():
 
                     stage = kind + '_cli_from_mismatch'
                     prior = state()
-                    cli_args = (['anchor', str(manifest), '--allow-dirty'] if kind == 'anchor' else
+                    cli_args = (['anchor', str(manifest), '--allow-dirty', '--allow-unfinalized', '--allow-gaps',
+                                 '--reason', 'controlled-test'] if kind == 'anchor' else
                                 ['custody', '--evidence-id', '1', '--action', '1',
                                  '--artifact-hash', '0x' + digest(manifest), '--note', 'group1b'])
                     cli_args += ['--contract', contract, '--db', str(db), '--account', account,
