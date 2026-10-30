@@ -411,7 +411,7 @@ def test_consistent_raw_and_hash_edit_is_not_independent_authenticity(tmp_path, 
     from forensics.integrity import verify_package
     with contextlib.closing(sqlite3.connect(sample)) as conn:
         for tx, text in conn.execute('SELECT tx_hash,raw_json FROM receipts').fetchall():
-            raw = json.loads(text); raw['gasUsed'] = '0x5209'
+            raw = json.loads(text); raw['gasUsed'] = raw['cumulativeGasUsed'] = '0x5209'
             conn.execute('UPDATE receipts SET raw_json=?,raw_sha256=?,gas_used=21001 WHERE tx_hash=?',
                          (json.dumps(raw), ev.sha(raw), tx))
         conn.commit()

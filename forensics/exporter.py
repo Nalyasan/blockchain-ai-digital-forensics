@@ -13,7 +13,7 @@ import tempfile
 import uuid
 
 from forensics.integrity import (BASE_FILES, InvalidPackage, Reason, _no_link, need,
-                                package_digest, quantity, raw_hash, verify_package)
+                                package_digest, quantity, raw_hash, verify_package, validate_receipt)
 from forensics.provenance import get_git_state
 
 
@@ -126,6 +126,7 @@ def _snapshot(conn, chain_id, start, end):
     for receipt in receipts:
         raw = receipt['raw_json']
         need(raw_hash(raw) == receipt['raw_sha256'])
+        validate_receipt(raw, raw_txs[(receipt['block_hash'], receipt['tx_hash'])])
         need(isinstance(raw.get('logs'), list), Reason.INCOMPLETE)
         need(quantity(raw['status']) == receipt['status'] and quantity(raw['gasUsed']) == receipt['gas_used'])
         need(raw.get('contractAddress') == receipt['contract_address'])

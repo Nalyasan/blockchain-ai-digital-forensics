@@ -23,10 +23,12 @@ def sha(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True)
+    parser.add_argument('--protected-root', type=Path, action='append', required=True,
+                        help='Read-only evidence root; repeat for each protected area')
     parser.add_argument('--pytest-path', type=Path, help='Optional directory containing pytest dependencies')
     args = parser.parse_args()
-    output = args.output_dir.resolve()
-    output.mkdir(parents=True, exist_ok=True)
+    from evidence_output import reserve_output
+    output = reserve_output(args.output_dir, [ROOT, *args.protected_root])
     sources = [ROOT / 'collector.py', ROOT / 'mock_rpc.py', ROOT / 'contracts/foundry.toml']
     for folder, suffix in [('forensics', '*.py'), ('tests', '*.py'), ('scripts', '*.py'),
                            ('contracts/src', '*.sol'), ('contracts/test', '*.sol')]:
@@ -54,7 +56,7 @@ def main():
         allowed = {'SYSTEMROOT', 'WINDIR', 'PATH', 'PATHEXT', 'COMSPEC', 'TEMP', 'TMP',
                    'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'}
         env = {k: v for k, v in os.environ.items() if k.upper() in allowed}
-        env.update(PYTHONUTF8='1', PYTHONIOENCODING='utf-8', FOUNDRY_OFFLINE='true',
+        env.update(PYTHONUTF8='1', PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1', FOUNDRY_OFFLINE='true',
                    NO_PROXY='*', RPC_URL='http://127.0.0.1:1', ANCHOR_RPC_URL='http://127.0.0.1:1',
                    P3_SMOKE_REPORT=str(output / 'smoke.json'))
         if args.pytest_path:

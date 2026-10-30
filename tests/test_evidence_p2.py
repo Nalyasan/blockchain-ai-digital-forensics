@@ -40,7 +40,7 @@ def populate_sample_db(db_path, num_blocks=5, synthetic=0):
         utc_str = datetime.fromtimestamp(1700000000 + n * 12, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # 1 giao dịch ETH chuyển tiền
-        tx_hash = f"0xtx{n:062x}"
+        tx_hash = f"0x{n+100:064x}"
         from_a = "0x1111111111111111111111111111111111111111"
         to_a = "0x2222222222222222222222222222222222222222"
         val = 1000000000000000000
@@ -77,7 +77,9 @@ def populate_sample_db(db_path, num_blocks=5, synthetic=0):
         # Full RPC receipt identity is needed by the 1.1 completeness verifier.
         rc_obj = {"transactionHash": tx_hash, "blockHash": b_hash, "blockNumber": hex(n),
                   "transactionIndex": "0x0", "contractAddress": None,
-                  "status": "0x1", "gasUsed": "0x5208", "logs": []}
+                  "status": "0x1", "gasUsed": "0x5208", "logs": [],
+                  "from": from_a, "to": to_a, "cumulativeGasUsed": "0x5208",
+                  "effectiveGasPrice": "0x1", "logsBloom": "0x" + "0" * 512}
         rc_raw = json.dumps(rc_obj, sort_keys=True, separators=(',', ':'))
         rc_sha = sha(rc_obj)
         conn.execute(

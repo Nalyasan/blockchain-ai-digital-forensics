@@ -1,5 +1,13 @@
 # Tài liệu Giới hạn Kỹ thuật Hệ thống (System Limitations)
 
+## Bản vá receipt Phase 2A
+
+- Shared verifier và exporter dùng chung `validate_receipt`. Profile post-Byzantium yêu cầu transactionHash/index, blockHash/number, from, gasUsed, cumulativeGasUsed, logs/logsBloom, effectiveGasPrice và status. Hash/address đúng độ dài; quantity phải là chuỗi hex không âm dạng chuẩn, tối đa 256 bit, không chấp nhận boolean/null/object hoặc số thập phân. Cumulative gas không nhỏ hơn gas của giao dịch; không khẳng định đã tính lại gas EVM hay bloom từ consensus.
+- From phải khớp transaction; to nếu có phải khớp transaction, kể cả null. Contract creation thành công bắt buộc contractAddress hợp lệ dù value=0; creation thất bại và giao dịch thường không được có contractAddress khác null. To/contractAddress không bị bắt buộc toàn cục khi schema cho phép bỏ và quan hệ giao dịch không cần địa chỉ contract mới.
+- Type tùy chọn; hỗ trợ hình dạng receipt cho loại 0–4. Type giữa tx/receipt phải khớp nếu cả hai có. Type 3 yêu cầu blobGasUsed/blobGasPrice đúng quantity; không chấp nhận blob fields với loại chưa xác định. Root/pre-Byzantium và type ngoài tập hỗ trợ bị từ chối (UNSUPPORTED_RECEIPT_PROFILE), không FULL. Không xác minh execution, receipt root, quyền authorization EIP-7702 hay nguồn blockchain chỉ từ các field này.
+- Receipt thiếu → INVALID/INCOMPLETE_RAW_DATA; kiểu/định dạng sai → INVALID/SCHEMA_INVALID; quan hệ sai → INVALID/SEMANTIC_MISMATCH. Coverage của gói bị từ chối là LIMITED. Legacy 1.0.0 giữ nguyên LIMITED, không áp schema 1.1 lên legacy.
+- Harness kiểm thử yêu cầu `--output-dir` mới và `--protected-root` tường minh (có thể lặp); từ chối thư mục đã tồn tại, repository, vùng bằng chứng được bảo vệ và ancestor reparse/symlink. Parent harness sở hữu output đã đặt chỗ; test/smoke con ghi các file riêng trong vùng đó. Không chạy lại script phân tích cũ có đường dẫn output cố định. Kiểm metadata/resolve không loại bỏ tuyệt đối race do tiến trình khác đổi filesystem đồng thời.
+
 ## Cập nhật P3 — nhóm 2A (29/10/2026)
 
 - Shared verifier trả `VALID`, `INVALID` hoặc `ERROR`, mã lỗi hữu hạn và coverage. CLI `verify-manifest` dùng exit 0/1/2, giữ `--db` và chỉ đọc DB. Manifest 1.0.0 hợp lệ vẫn `LIMITED`; không sửa bytes hoặc tự nâng coverage. Manifest 1.1.0 chỉ `FULL` sau khi đối chiếu raw blocks, toàn bộ receipts/logs, transactions, canonical timeline, transfers và counts. `FULL` nói về các block đã thu thập; gaps và finalization được báo riêng. Finalization là ngưỡng confirmations trên canonical head trong snapshot SQLite, không phải chứng nhận finalized của consensus/RPC.

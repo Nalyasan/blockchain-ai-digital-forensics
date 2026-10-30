@@ -39,6 +39,7 @@ class Reason(str, Enum):
     IO = 'IO_ERROR'
     RESOURCE = 'RESOURCE_LIMIT'
     UNSTABLE = 'PACKAGE_UNSTABLE'
+    PROFILE = 'UNSUPPORTED_RECEIPT_PROFILE'
 
 
 @dataclass
@@ -201,6 +202,62 @@ def quantity(value):
     return n
 
 
+def validate_receipt(raw, tx):
+    """Post-Byzantium ReceiptInfo; validate shape before deriving transfers.
+
+    This establishes local consistency, not receipt-root or RPC authenticity.
+    """
+    need(isinstance(raw, dict) and isinstance(tx, dict), Reason.SCHEMA)
+    required = ('transactionHash', 'transactionIndex', 'blockHash', 'blockNumber',
+                'from', 'gasUsed', 'cumulativeGasUsed', 'logs', 'logsBloom',
+                'effectiveGasPrice', 'status')
+    need(all(k in raw for k in required), Reason.INCOMPLETE)
+    def uint(value):
+        need(isinstance(value, str) and re.fullmatch(r'0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)', value), Reason.SCHEMA)
+        need(len(value) <= 66, Reason.SCHEMA)
+        return int(value, 16)
+    def address(value):
+        need(isinstance(value, str) and re.fullmatch(r'0x[0-9a-fA-F]{40}', value), Reason.SCHEMA)
+        return value.lower()
+    def receipt_type(value):
+        # Execution APIs uses byte here, not canonical quantity (0x02 is valid).
+        need(isinstance(value, str) and re.fullmatch(r'0x[0-9a-f]{1,2}', value), Reason.SCHEMA)
+        return int(value, 16)
+    for name in ('transactionHash', 'blockHash'):
+        need(isinstance(raw[name], str) and re.fullmatch(r'0x[0-9a-fA-F]{64}', raw[name]), Reason.SCHEMA)
+    quantities = {k: uint(raw[k]) for k in ('transactionIndex', 'blockNumber', 'gasUsed',
+                  'cumulativeGasUsed', 'effectiveGasPrice', 'status')}
+    need(quantities['status'] in (0, 1), Reason.SCHEMA)
+    need(quantities['cumulativeGasUsed'] >= quantities['gasUsed'])
+    need(isinstance(raw['logs'], list), Reason.SCHEMA)
+    need(isinstance(raw['logsBloom'], str) and re.fullmatch(r'0x[0-9a-fA-F]{512}', raw['logsBloom']), Reason.SCHEMA)
+    need(address(raw['from']) == address(tx['from']))
+    need('to' in tx, Reason.INCOMPLETE)
+    destination = None if tx['to'] is None else address(tx['to'])
+    if 'to' in raw:
+        actual = None if raw['to'] is None else address(raw['to'])
+        need(actual == destination)
+    created = destination is None and quantities['status'] == 1
+    if created:
+        need('contractAddress' in raw and raw['contractAddress'] is not None, Reason.INCOMPLETE)
+        need(address(raw['contractAddress']) != '0x'+'0'*40)
+    elif 'contractAddress' in raw:
+        need(raw['contractAddress'] is None)
+    need('root' not in raw, Reason.PROFILE)  # Pre-Byzantium state-root receipts unsupported.
+    kind = receipt_type(tx['type']) if 'type' in tx else None
+    if 'type' in raw:
+        receipt_kind = receipt_type(raw['type'])
+        need(kind is None or receipt_kind == kind)
+        kind = receipt_kind
+    need(kind is None or kind in (0, 1, 2, 3, 4), Reason.PROFILE)
+    if kind == 3:
+        need(all(k in raw for k in ('blobGasUsed', 'blobGasPrice')), Reason.INCOMPLETE)
+    for k in ('blobGasUsed', 'blobGasPrice'):
+        if k in raw:
+            uint(raw[k])
+            need(kind == 3, Reason.PROFILE)
+
+
 def validate_records(manifest, blocks, receipts, transfers, timeline, audits):
     """Validate complete 1.1 data; called on the SAME bytes that were hashed."""
     from collector import extract_transfers, ERC20_TRANSFER_TOPIC0
@@ -250,6 +307,7 @@ def validate_records(manifest, blocks, receipts, transfers, timeline, audits):
         need(key in tx_map and key not in receipt_map)
         raw, tx = item['raw_json'], tx_map[key]
         need(isinstance(raw, dict) and raw_hash(raw) == item['raw_sha256'])
+        validate_receipt(raw, tx)
         need(all(k in raw for k in ('transactionHash', 'blockHash', 'blockNumber', 'transactionIndex', 'status', 'logs')), Reason.INCOMPLETE)
         need(raw['transactionHash'] == key[2] and raw['blockHash'] == key[1])
         need(quantity(raw['blockNumber']) == item['block_number'] == quantity(tx['blockNumber']))
