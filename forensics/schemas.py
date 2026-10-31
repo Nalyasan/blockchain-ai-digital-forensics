@@ -141,18 +141,32 @@ def _table_columns(c, table):
 
 
 def migrate_group3(c):
-    """Additive Group 3 tables/columns. Safe on copies; does not rewrite custody history."""
-    c.executescript(GROUP3_SCHEMA)
-    cols = _table_columns(c, "custody_events")
-    if cols and "log_index" not in cols:
-        c.execute("ALTER TABLE custody_events ADD COLUMN log_index INTEGER")
-    if cols and "event_type" not in cols:
-        c.execute("ALTER TABLE custody_events ADD COLUMN event_type TEXT")
-    if cols:
-        c.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_custody_event_identity "
-            "ON custody_events(chain_id, contract_address, tx_hash, log_index)"
-        )
+    """Additive Group 3 tables/columns. Safe on copies; does not rewrite custody history.
+
+    Guarantees true transaction atomicity using SQLite SAVEPOINT without implicit commits
+    from executescript().
+    """
+    c.execute("SAVEPOINT migrate_group3")
+    try:
+        for stmt in GROUP3_SCHEMA.strip().split(";"):
+            sql = stmt.strip()
+            if sql:
+                c.execute(sql)
+        cols = _table_columns(c, "custody_events")
+        if cols and "log_index" not in cols:
+            c.execute("ALTER TABLE custody_events ADD COLUMN log_index INTEGER")
+        if cols and "event_type" not in cols:
+            c.execute("ALTER TABLE custody_events ADD COLUMN event_type TEXT")
+        if cols:
+            c.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_custody_event_identity "
+                "ON custody_events(chain_id, contract_address, tx_hash, log_index)"
+            )
+        c.execute("RELEASE migrate_group3")
+    except Exception:
+        c.execute("ROLLBACK TO migrate_group3")
+        c.execute("RELEASE migrate_group3")
+        raise
 
 
 def rollback_group3(c):

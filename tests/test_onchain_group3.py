@@ -273,6 +273,24 @@ def local_anvil():
         proc.kill()
 
 
+class MockRpcClient:
+    """Mock read-only RPC provider simulating eth_chainId, eth_getTransactionReceipt, and eth_getBlockByNumber."""
+    def __init__(self, receipt: dict | None, chain_id: int = 31337):
+        self.receipt = receipt
+        self.chain_id = chain_id
+
+    def eth_chainId(self):
+        return hex(self.chain_id)
+
+    def eth_getTransactionReceipt(self, tx_hash):
+        return self.receipt
+
+    def eth_getBlockByNumber(self, block_num, full_tx):
+        if self.receipt:
+            return {"hash": self.receipt.get("blockHash", "0x" + "bb" * 32)}
+        return None
+
+
 @pytest.fixture
 def test_db(tmp_path: Path) -> Path:
     """Create a fully migrated SQLite test database."""
@@ -436,6 +454,7 @@ class TestGate3_09_OperationJournalAndStateTransitions:
             "status": 1,
             "blockNumber": hex(200),
             "transactionHash": tx_hash,
+            "blockHash": "0x" + "bb" * 32,
             "logs": [{
                 "address": contract,
                 "topics": [
@@ -599,23 +618,28 @@ class TestGate3_10_ReadOnlyReconcileMechanism:
         tx_hash = "0x" + "88" * 32
         record_broadcast(test_db, op_id, tx_hash)
 
-        # Mock read-only confirmed receipt
+        # Mock read-only confirmed receipt via MockRpcClient
         receipt = {
             "status": 1,
             "blockNumber": 105,
+            "blockHash": "0x" + "bb" * 32,
+            "transactionHash": tx_hash,
             "logs": [
                 {
                     "address": contract,
                     "topics": [
                         TOPIC_EVIDENCE_REGISTERED,
-                        "0x000000000000000000000000000000000000000000000000000000000000002a",  # evidenceId 42
+                        "0x" + hex(42)[2:].zfill(64),
+                        "0x" + case_dig,
+                        "0x" + manifest_sha,
                     ],
+                    "data": "0x" + "f39fd6e51aad88f6f4ce6ab8827279cfffb92266".zfill(64) + "00" * 32,
                     "logIndex": 0,
                 }
             ],
         }
 
-        reconcile_res = reconcile_operation(test_db, op_id, receipt)
+        reconcile_res = reconcile_operation(test_db, op_id, MockRpcClient(receipt))
         assert reconcile_res["reconciled"] is True
         assert reconcile_res["state"] == CONFIRMED
 
@@ -659,16 +683,24 @@ class TestGate3_10_ReadOnlyReconcileMechanism:
         receipt = {
             "status": 1,
             "blockNumber": 115,
+            "blockHash": "0x" + "bb" * 32,
+            "transactionHash": tx_hash,
             "logs": [
                 {
                     "address": contract,
-                    "topics": [TOPIC_CUSTODY_RECORDED],
+                    "topics": [
+                        TOPIC_CUSTODY_RECORDED,
+                        "0x" + hex(7)[2:].zfill(64),
+                        "0x" + hex(2)[2:].zfill(64),
+                        "0x" + "f39fd6e51aad88f6f4ce6ab8827279cfffb92266".zfill(64),
+                    ],
+                    "data": "0x" + ("12" * 32) + ("34" * 32),
                     "logIndex": 1,
                 }
             ],
         }
 
-        reconcile_res = reconcile_operation(test_db, op_id, receipt)
+        reconcile_res = reconcile_operation(test_db, op_id, MockRpcClient(receipt))
         assert reconcile_res["reconciled"] is True
         assert reconcile_res["state"] == CONFIRMED
 
@@ -697,10 +729,12 @@ class TestGate3_10_ReadOnlyReconcileMechanism:
         reverted_receipt = {
             "status": 0,
             "blockNumber": 110,
+            "blockHash": "0x" + "bb" * 32,
+            "transactionHash": tx_hash,
             "logs": [],
         }
 
-        reconcile_res = reconcile_operation(test_db, op_id, reverted_receipt)
+        reconcile_res = reconcile_operation(test_db, op_id, MockRpcClient(reverted_receipt))
         assert reconcile_res["reconciled"] is True
         assert reconcile_res["state"] == FAILED
 
@@ -735,11 +769,25 @@ class TestGate3_10_ReadOnlyReconcileMechanism:
         receipt = {
             "status": 1,
             "blockNumber": 120,
-            "logs": [{"address": contract, "topics": [TOPIC_CUSTODY_RECORDED], "logIndex": 0}],
+            "blockHash": "0x" + "bb" * 32,
+            "transactionHash": tx_hash,
+            "logs": [
+                {
+                    "address": contract,
+                    "topics": [
+                        TOPIC_CUSTODY_RECORDED,
+                        "0x" + hex(5)[2:].zfill(64),
+                        "0x" + hex(1)[2:].zfill(64),
+                        "0x" + "0xsigner".lower().removeprefix("0x").zfill(64),
+                    ],
+                    "data": "0x" + ("aa" * 32) + ("bb" * 32),
+                    "logIndex": 0,
+                }
+            ],
         }
 
-        # Calls reconcile_operation with receipt mapping — zero subprocess / cast execution
-        reconcile_res = reconcile_operation(test_db, op_id, receipt)
+        # Calls reconcile_operation with mock RPC provider — zero subprocess / cast execution
+        reconcile_res = reconcile_operation(test_db, op_id, MockRpcClient(receipt))
         assert reconcile_res["state"] == CONFIRMED
 
 

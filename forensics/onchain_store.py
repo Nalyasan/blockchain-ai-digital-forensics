@@ -670,19 +670,26 @@ def verify_receipt_and_event(
     expected_action: int | None = None,
     expected_manifest_sha256: str | None = None,
     expected_case_digest: str | None = None,
+    expected_artifact_sha256: str | None = None,
+    expected_note_hash: str | None = None,
+    legacy_case_encoding: bool = False,
+    expected_case_id: str | None = None,
 ) -> dict[str, Any]:
     """Strictly verify transaction receipt and event log before marking verified=1.
 
-    Requirements (Gates G3-03, G3-04):
-    1. receipt status must equal 1 (success).
-    2. blockNumber must exist and be non-null.
-    3. transactionHash must match expected_tx_hash if specified.
-    4. Event topic0 in logs must match expected_event_type.
-    5. Contract address must match if expected_contract is provided.
-    6. Actor, evidenceId, and action/case/manifest must match event data if provided.
+    Requirements (Gates G3-03, G3-04, G3-10):
+    1. receipt status must equal 1 (success). Reverted receipts (0, False) strictly rejected.
+    2. blockNumber must exist, non-null, valid integer >= 0.
+    3. transactionHash must exist, non-empty hex starting with '0x', and match expected_tx_hash.
+    4. blockHash must exist, non-empty hex starting with '0x'.
+    5. Event topic0 in logs must match expected_event_type.
+    6. Contract address (emitter) must match expected_contract.
+    7. Event ABI topic count strictly enforced (exactly 4 topics for EvidenceRegistered and CustodyRecorded).
+    8. logIndex must exist and be a non-null integer.
+    9. Actor, evidenceId, and action/case/manifest/notes must strictly match event data without skipping.
 
     Args:
-        receipt: Receipt dictionary from eth_getTransactionReceipt or cast.
+        receipt: Receipt dictionary from eth_getTransactionReceipt.
         expected_event_type: 'EvidenceRegistered' or 'CustodyRecorded'.
         expected_contract: Expected contract address (optional).
         expected_tx_hash: Expected transaction hash (optional).
@@ -691,6 +698,10 @@ def verify_receipt_and_event(
         expected_action: Expected custody action (optional).
         expected_manifest_sha256: Expected manifest SHA256 (optional).
         expected_case_digest: Expected case digest (optional).
+        expected_artifact_sha256: Expected artifact SHA256 (optional).
+        expected_note_hash: Expected note hash (optional).
+        legacy_case_encoding: True if legacy unhashed case encoding is allowed.
+        expected_case_id: Raw case ID for legacy check.
 
     Returns:
         Matched event log dictionary.
@@ -722,19 +733,27 @@ def verify_receipt_and_event(
         except ValueError:
             raise RuntimeError(f"VERIFICATION_FAILED: invalid blockNumber format: {raw_block}")
 
-    # 3. Tx hash check
-    if expected_tx_hash:
-        rec_tx = receipt.get("transactionHash")
-        if rec_tx and str(rec_tx).lower() != str(expected_tx_hash).lower():
-            raise RuntimeError(
-                f"VERIFICATION_FAILED: transactionHash mismatch between receipt ({rec_tx}) and expected ({expected_tx_hash})"
-            )
+    # 3. Tx hash check (strictly mandatory)
+    rec_tx = receipt.get("transactionHash")
+    if not rec_tx or not isinstance(rec_tx, str) or not rec_tx.startswith("0x"):
+        raise RuntimeError("VERIFICATION_FAILED: missing or invalid transactionHash in receipt")
+    if expected_tx_hash and str(rec_tx).lower() != str(expected_tx_hash).lower():
+        raise RuntimeError(
+            f"VERIFICATION_FAILED: transactionHash mismatch between receipt ({rec_tx}) and expected ({expected_tx_hash})"
+        )
 
-    # 4. Event topic check
+    # 4. Block hash check (strictly mandatory)
+    rec_bh = receipt.get("blockHash")
+    if not rec_bh or not isinstance(rec_bh, str) or not rec_bh.startswith("0x"):
+        raise RuntimeError("VERIFICATION_FAILED: missing or invalid blockHash in receipt")
+
+    # 5. Event topic check
     expected_topic = get_event_topic(expected_event_type).lower()
-    logs = receipt.get("logs", [])
-    matched_log = None
+    logs = receipt.get("logs")
+    if not isinstance(logs, list):
+        raise RuntimeError("VERIFICATION_FAILED: missing or invalid logs list in receipt")
 
+    matched_log = None
     for log_item in logs:
         if not isinstance(log_item, Mapping):
             continue
@@ -752,7 +771,6 @@ def verify_receipt_and_event(
 
     if matched_log is None:
         if logs and expected_contract:
-            # Check if address was the reason
             addr_mismatch = any(str(l.get("topics", [""])[0]).lower() == expected_topic for l in logs if isinstance(l, Mapping))
             if addr_mismatch:
                 raise RuntimeError(
@@ -762,51 +780,116 @@ def verify_receipt_and_event(
             f"VERIFICATION_FAILED: no matching {expected_event_type} event found in receipt logs (topic mismatch)"
         )
 
-    # 5. Semantic validation of event topics
+    # 6. logIndex check (strictly mandatory)
+    raw_idx = matched_log.get("logIndex")
+    if raw_idx is None:
+        raise RuntimeError("VERIFICATION_FAILED: missing or invalid logIndex in event log")
+    try:
+        int(str(raw_idx), 16 if str(raw_idx).startswith("0x") else 10)
+    except ValueError:
+        raise RuntimeError(f"VERIFICATION_FAILED: invalid logIndex format: {raw_idx}")
+
+    # 7. Semantic ABI validation of event topics
     topics = matched_log.get("topics", [])
-    if expected_evidence_id is not None and expected_evidence_id > 0 and len(topics) > 1:
+
+    if expected_event_type == EVENT_TYPE_EVIDENCE_REGISTERED:
+        if len(topics) != 4:
+            raise RuntimeError(
+                f"VERIFICATION_FAILED: EvidenceRegistered log ABI violation: expected 4 topics, got {len(topics)}"
+            )
         try:
-            ev_id_in_log = int(topics[1], 16 if str(topics[1]).startswith("0x") else 10)
+            ev_id_in_log = int(str(topics[1]), 16 if str(topics[1]).startswith("0x") else 10)
+        except ValueError:
+            raise RuntimeError(f"VERIFICATION_FAILED: invalid evidenceId format in topic: {topics[1]}")
+        if expected_evidence_id is not None and expected_evidence_id > 0:
             if ev_id_in_log != expected_evidence_id:
                 raise RuntimeError(
-                    f"VERIFICATION_FAILED: evidenceId mismatch in {expected_event_type} log (expected {expected_evidence_id}, got {ev_id_in_log})"
+                    f"VERIFICATION_FAILED: evidenceId mismatch in EvidenceRegistered log (expected {expected_evidence_id}, got {ev_id_in_log})"
                 )
-        except ValueError:
-            pass
 
-    if expected_event_type == EVENT_TYPE_CUSTODY_RECORDED:
-        if expected_action is not None and len(topics) > 2:
-            try:
-                act_in_log = int(topics[2], 16 if str(topics[2]).startswith("0x") else 10)
-                if act_in_log != expected_action:
+        log_case = str(topics[2]).lower().removeprefix("0x").zfill(64)
+        if expected_case_digest:
+            exp_case = expected_case_digest.lower().removeprefix("0x").zfill(64)
+            if log_case != exp_case:
+                if legacy_case_encoding and expected_case_id:
+                    from forensics.evidence_identity import string_to_bytes32_hex
+                    leg_case = string_to_bytes32_hex(expected_case_id).lower().removeprefix("0x").zfill(64)
+                    if log_case != leg_case:
+                        raise RuntimeError("VERIFICATION_FAILED: case_digest mismatch in EvidenceRegistered log (legacy mode)")
+                else:
+                    raise RuntimeError("VERIFICATION_FAILED: case_digest mismatch in EvidenceRegistered log")
+
+        log_man = str(topics[3]).lower().removeprefix("0x").zfill(64)
+        if expected_manifest_sha256:
+            exp_man = expected_manifest_sha256.lower().removeprefix("0x").zfill(64)
+            if log_man != exp_man:
+                raise RuntimeError("VERIFICATION_FAILED: manifestSha256 mismatch in EvidenceRegistered log")
+
+        if expected_actor:
+            data_hex = str(matched_log.get("data", "")).lower()
+            if len(data_hex) >= 66:
+                sub_hex = data_hex[2:66][-40:].zfill(40)
+                exp_actor = expected_actor.lower().removeprefix("0x")[-40:].zfill(40)
+                if sub_hex != exp_actor:
                     raise RuntimeError(
-                        f"VERIFICATION_FAILED: action mismatch in CustodyRecorded log (expected {expected_action}, got {act_in_log})"
+                        f"VERIFICATION_FAILED: actor mismatch in EvidenceRegistered log (expected {expected_actor}, got {sub_hex})"
                     )
-            except ValueError:
-                pass
-        if expected_actor and len(topics) > 3:
-            raw_actor_topic = str(topics[3]).lower()
-            topic_actor_40 = raw_actor_topic.removeprefix("0x")[-40:].zfill(40)
+
+    elif expected_event_type == EVENT_TYPE_CUSTODY_RECORDED:
+        if len(topics) != 4:
+            raise RuntimeError(
+                f"VERIFICATION_FAILED: CustodyRecorded log ABI violation: expected 4 topics, got {len(topics)}"
+            )
+        try:
+            ev_id_in_log = int(str(topics[1]), 16 if str(topics[1]).startswith("0x") else 10)
+        except ValueError:
+            raise RuntimeError(f"VERIFICATION_FAILED: invalid evidenceId format in topic: {topics[1]}")
+        if expected_evidence_id is not None and expected_evidence_id > 0:
+            if ev_id_in_log != expected_evidence_id:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: evidenceId mismatch in CustodyRecorded log (expected {expected_evidence_id}, got {ev_id_in_log})"
+                )
+
+        try:
+            act_in_log = int(str(topics[2]), 16 if str(topics[2]).startswith("0x") else 10)
+        except ValueError:
+            raise RuntimeError(f"VERIFICATION_FAILED: invalid action format in topic: {topics[2]}")
+        if expected_action is not None:
+            if act_in_log != expected_action:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: action mismatch in CustodyRecorded log (expected {expected_action}, got {act_in_log})"
+                )
+
+        raw_actor_topic = str(topics[3]).lower()
+        topic_actor_40 = raw_actor_topic.removeprefix("0x")[-40:].zfill(40)
+        if expected_actor:
             expected_actor_40 = str(expected_actor).lower().removeprefix("0x")[-40:].zfill(40)
             if topic_actor_40 != expected_actor_40:
                 raise RuntimeError(
                     f"VERIFICATION_FAILED: actor mismatch in CustodyRecorded log (expected {expected_actor}, got {topic_actor_40})"
                 )
-    elif expected_event_type == EVENT_TYPE_EVIDENCE_REGISTERED:
-        if expected_case_digest and len(topics) > 2:
-            log_case = str(topics[2]).lower().removeprefix("0x").zfill(64)
-            exp_case = expected_case_digest.lower().removeprefix("0x").zfill(64)
-            if log_case != exp_case:
-                raise RuntimeError(
-                    f"VERIFICATION_FAILED: case_digest mismatch in EvidenceRegistered log"
-                )
-        if expected_manifest_sha256 and len(topics) > 3:
-            log_man = str(topics[3]).lower().removeprefix("0x").zfill(64)
-            exp_man = expected_manifest_sha256.lower().removeprefix("0x").zfill(64)
-            if log_man != exp_man:
-                raise RuntimeError(
-                    f"VERIFICATION_FAILED: manifestSha256 mismatch in EvidenceRegistered log"
-                )
+
+        data_hex = str(matched_log.get("data", "")).lower()
+        if len(data_hex) >= 130:
+            if expected_artifact_sha256 and len(expected_artifact_sha256.removeprefix("0x")) == 64:
+                log_art = data_hex[2:66]
+                exp_art = expected_artifact_sha256.lower().removeprefix("0x")
+                if log_art != exp_art:
+                    raise RuntimeError("VERIFICATION_FAILED: artifactSha256 mismatch in CustodyRecorded log")
+            if expected_note_hash and len(expected_note_hash.removeprefix("0x")) == 64:
+                log_nh = data_hex[66:130]
+                exp_nh = expected_note_hash.lower().removeprefix("0x")
+                if log_nh != exp_nh:
+                    is_legacy_padded = False
+                    try:
+                        raw_bytes = bytes.fromhex(log_nh)
+                        stripped = raw_bytes.rstrip(b"\x00")
+                        if stripped and hashlib.sha256(stripped).hexdigest() == exp_nh:
+                            is_legacy_padded = True
+                    except Exception:
+                        pass
+                    if not is_legacy_padded:
+                        raise RuntimeError("VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log")
 
     return matched_log
 
@@ -856,7 +939,9 @@ def persist_verified_event(
     if not event_type:
         raise ValueError("event_type is required")
 
-    actor = str(data.get("actor") or data.get("actor_address") or contract).lower()
+    actor_arg = data.get("actor") or data.get("actor_address")
+    actor_check = str(actor_arg).lower() if actor_arg else None
+    actor = actor_check or contract
     artifact_sha256 = data.get("artifact_sha256")
     artifact_sha256_val = str(artifact_sha256).lower() if artifact_sha256 else None
     note_hash = data.get("note_hash")
@@ -882,11 +967,15 @@ def persist_verified_event(
         event_type,
         expected_contract=contract,
         expected_tx_hash=tx_hash,
-        expected_actor=actor,
+        expected_actor=actor_check,
         expected_evidence_id=evidence_id,
         expected_action=action_val,
         expected_manifest_sha256=manifest_sha256_val,
         expected_case_digest=case_digest_val,
+        expected_artifact_sha256=artifact_sha256_val,
+        expected_note_hash=note_hash_val,
+        legacy_case_encoding=bool(data.get("legacy_case_encoding", False)),
+        expected_case_id=data.get("case_id"),
     )
 
     # Derive verified execution coordinates directly from the verified receipt
@@ -1117,32 +1206,66 @@ def reconcile_operation(
     receipt: dict[str, Any] | None = None
 
     if isinstance(rpc_url_or_client, Mapping):
-        # Direct receipt object or map of tx_hash -> receipt
-        if "status" in rpc_url_or_client or "blockNumber" in rpc_url_or_client:
-            receipt = dict(rpc_url_or_client)
-        else:
-            found = rpc_url_or_client.get(tx) or rpc_url_or_client.get(tx.lower())
-            if isinstance(found, Mapping):
-                receipt = dict(found)
-    elif hasattr(rpc_url_or_client, "get_transaction_receipt"):
-        receipt = rpc_url_or_client.get_transaction_receipt(tx)
-    elif hasattr(rpc_url_or_client, "eth_getTransactionReceipt"):
-        receipt = rpc_url_or_client.eth_getTransactionReceipt(tx)
-    elif callable(rpc_url_or_client):
-        receipt = rpc_url_or_client(tx)
-    elif isinstance(rpc_url_or_client, str):
-        # HTTP JSON-RPC URL
-        req = urllib.request.Request(
-            rpc_url_or_client,
-            data=json.dumps(
-                {"jsonrpc": "2.0", "method": "eth_getTransactionReceipt", "params": [tx], "id": 1}
-            ).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+        raise ValueError(
+            "RECONCILE_FAILED: rpc_url_or_client cannot be a raw receipt dictionary; an RPC endpoint or client is strictly required"
         )
-        try:
+
+    # Fetch receipt in read-only mode from RPC
+    receipt: dict[str, Any] | None = None
+
+    if isinstance(rpc_url_or_client, str):
+        # HTTP JSON-RPC URL
+        def _rpc(method: str, params: list[Any]) -> Any:
+            req = urllib.request.Request(
+                rpc_url_or_client,
+                data=json.dumps({"jsonrpc": "2.0", "method": method, "params": params, "id": 1}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
-                resp_json = json.loads(resp.read().decode("utf-8"))
-                receipt = resp_json.get("result")
+                data = json.loads(resp.read().decode("utf-8"))
+                if "error" in data:
+                    raise RuntimeError(f"RPC_ERROR: {data['error']}")
+                return data.get("result")
+
+        try:
+            # 1. Chain ID check
+            chain_res = _rpc("eth_chainId", [])
+            if chain_res is not None:
+                rpc_cid = int(str(chain_res), 16 if str(chain_res).startswith("0x") else 10)
+                if rpc_cid != chain_id:
+                    return {
+                        "operation_id": op_id,
+                        "state": current_state,
+                        "tx_hash": tx,
+                        "reconciled": False,
+                        "error": f"CHAIN_ID_MISMATCH: RPC chain {rpc_cid} != expected {chain_id}",
+                    }
+
+            # 2. Receipt fetch
+            receipt = _rpc("eth_getTransactionReceipt", [tx])
+            if receipt is None:
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "RECEIPT_NOT_FOUND",
+                }
+
+            # 3. Canonicality check (reorg guard)
+            rec_bn = receipt.get("blockNumber")
+            rec_bh = receipt.get("blockHash")
+            if rec_bn and rec_bh:
+                block = _rpc("eth_getBlockByNumber", [rec_bn, False])
+                if block and block.get("hash"):
+                    if str(block["hash"]).lower() != str(rec_bh).lower():
+                        return {
+                            "operation_id": op_id,
+                            "state": current_state,
+                            "tx_hash": tx,
+                            "reconciled": False,
+                            "reason": "NON_CANONICAL_BLOCK_OR_REORG",
+                        }
         except Exception as e:
             return {
                 "operation_id": op_id,
@@ -1151,23 +1274,99 @@ def reconcile_operation(
                 "reconciled": False,
                 "error": f"RPC_ERROR: {e}",
             }
+    elif rpc_url_or_client is not None:
+        try:
+            if hasattr(rpc_url_or_client, "eth_chainId"):
+                c_id = rpc_url_or_client.eth_chainId()
+                if c_id is not None:
+                    rpc_cid = int(str(c_id), 16 if str(c_id).startswith("0x") else 10)
+                    if rpc_cid != chain_id:
+                        return {
+                            "operation_id": op_id,
+                            "state": current_state,
+                            "tx_hash": tx,
+                            "reconciled": False,
+                            "error": f"CHAIN_ID_MISMATCH: RPC chain {rpc_cid} != expected {chain_id}",
+                        }
 
-    if receipt is None:
+            if hasattr(rpc_url_or_client, "eth_getTransactionReceipt"):
+                receipt = rpc_url_or_client.eth_getTransactionReceipt(tx)
+            elif hasattr(rpc_url_or_client, "get_transaction_receipt"):
+                receipt = rpc_url_or_client.get_transaction_receipt(tx)
+            elif callable(rpc_url_or_client):
+                receipt = rpc_url_or_client(tx)
+
+            if receipt is None:
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "RECEIPT_NOT_FOUND",
+                }
+
+            rec_bn = receipt.get("blockNumber")
+            rec_bh = receipt.get("blockHash")
+            if rec_bn and rec_bh and hasattr(rpc_url_or_client, "eth_getBlockByNumber"):
+                block = rpc_url_or_client.eth_getBlockByNumber(rec_bn, False)
+                if block and block.get("hash"):
+                    if str(block["hash"]).lower() != str(rec_bh).lower():
+                        return {
+                            "operation_id": op_id,
+                            "state": current_state,
+                            "tx_hash": tx,
+                            "reconciled": False,
+                            "reason": "NON_CANONICAL_BLOCK_OR_REORG",
+                        }
+        except Exception as e:
+            return {
+                "operation_id": op_id,
+                "state": current_state,
+                "tx_hash": tx,
+                "reconciled": False,
+                "error": f"RPC_ERROR: {e}",
+            }
+    else:
         return {
             "operation_id": op_id,
             "state": current_state,
             "tx_hash": tx,
             "reconciled": False,
-            "reason": "RECEIPT_NOT_FOUND",
+            "error": "RPC_CLIENT_REQUIRED",
         }
 
     # Determine expected event
     expected_event = (
         EVENT_TYPE_EVIDENCE_REGISTERED if op_type == REGISTER else EVENT_TYPE_CUSTODY_RECORDED
     )
+    intent = json.loads(op["intent_canonical"]) if isinstance(op.get("intent_canonical"), str) else {}
 
     try:
-        matched_log = verify_receipt_and_event(receipt, expected_event, contract)
+        if op_type == REGISTER:
+            matched_log = verify_receipt_and_event(
+                receipt,
+                expected_event_type=expected_event,
+                expected_contract=contract,
+                expected_tx_hash=tx,
+                expected_actor=intent.get("signer"),
+                expected_evidence_id=intent.get("evidence_id"),
+                expected_case_digest=intent.get("case_digest"),
+                expected_manifest_sha256=intent.get("manifest_sha256"),
+                legacy_case_encoding=bool(intent.get("legacy_case_encoding", False)),
+                expected_case_id=intent.get("case_id"),
+            )
+        else:
+            matched_log = verify_receipt_and_event(
+                receipt,
+                expected_event_type=expected_event,
+                expected_contract=contract,
+                expected_tx_hash=tx,
+                expected_actor=intent.get("signer"),
+                expected_evidence_id=int(intent.get("evidence_id", 0)),
+                expected_action=int(intent.get("action", 0)),
+                expected_artifact_sha256=intent.get("artifact_sha256"),
+                expected_note_hash=intent.get("note_hash"),
+            )
     except RuntimeError as e:
         # Check if reverted
         status_val = receipt.get("status")

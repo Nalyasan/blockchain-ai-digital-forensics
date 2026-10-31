@@ -102,6 +102,7 @@ def make_mock_receipt(
         "status": 1,
         "blockNumber": blk_num_hex,
         "transactionHash": tx_hash,
+        "blockHash": "0x" + "bb" * 32,
         "logs": [{
             "address": contract,
             "topics": topics,
@@ -734,9 +735,12 @@ class TestGate3_04_StrictVerification:
         receipt = {
             "status": 1,
             "blockNumber": 100,
+            "transactionHash": tx_hash,
+            "blockHash": "0x" + "bb" * 32,
             "logs": [
                 {
                     "address": contract,
+                    "logIndex": 0,
                     "topics": [unrelated_topic],
                     "data": "0x",
                 }
@@ -762,28 +766,32 @@ class TestGate3_04_StrictVerification:
         contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
 
         # Valid EvidenceRegistered log
-        valid_receipt = {
-            "status": 1,
-            "blockNumber": 50,
-            "logs": [
-                {"address": contract, "topics": [TOPIC_EVIDENCE_REGISTERED]},
-            ],
-        }
+        valid_receipt = make_mock_receipt(
+            contract=contract,
+            tx_hash="0xvalidtx",
+            block_number=50,
+            event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+            evidence_id=1,
+        )
         res = verify_receipt_and_event(valid_receipt, EVENT_TYPE_EVIDENCE_REGISTERED, contract)
         assert res["topics"][0] == TOPIC_EVIDENCE_REGISTERED
 
         # Status 0 failure
+        rec_status0 = dict(valid_receipt, status=0)
         with pytest.raises(RuntimeError, match="status is not 1"):
-            verify_receipt_and_event({"status": 0, "blockNumber": 50}, EVENT_TYPE_EVIDENCE_REGISTERED)
+            verify_receipt_and_event(rec_status0, EVENT_TYPE_EVIDENCE_REGISTERED)
 
         # Missing blockNumber failure
+        rec_no_bn = dict(valid_receipt, blockNumber=None)
         with pytest.raises(RuntimeError, match="missing blockNumber"):
-            verify_receipt_and_event({"status": 1, "blockNumber": None}, EVENT_TYPE_EVIDENCE_REGISTERED)
+            verify_receipt_and_event(rec_no_bn, EVENT_TYPE_EVIDENCE_REGISTERED)
 
         # Topic mismatch failure
+        rec_mismatch = dict(valid_receipt)
+        rec_mismatch["logs"] = [{"address": contract, "logIndex": 0, "topics": ["0x9999"]}]
         with pytest.raises(RuntimeError, match="topic mismatch"):
             verify_receipt_and_event(
-                {"status": 1, "blockNumber": 50, "logs": [{"address": contract, "topics": ["0x9999"]}]},
+                rec_mismatch,
                 EVENT_TYPE_EVIDENCE_REGISTERED,
             )
 
