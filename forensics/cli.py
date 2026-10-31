@@ -13,15 +13,18 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 import os
+import json
 import argparse
 import logging
 from forensics.evidence import export_evidence, verify_manifest, validate_case_id
-from forensics.schemas import init_db
 import forensics.onchain as onchain
-import collector
+from forensics.evidence_identity import sanitize_log_text
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("forensics.cli")
+
+def _safe_sanitize(text: str, forbidden: list[str] | None = None) -> str:
+    return sanitize_log_text(str(text), forbidden or [])
 
 def cli_export_evidence(args):
     """Lệnh xuất gói chứng cứ tái lập."""
@@ -71,9 +74,10 @@ def cli_verify_manifest(args):
 
 def cli_verify_local(args):
     """Kiểm tra toàn vẹn SQLite cục bộ (SHA-256 raw + parentHash + gaps)."""
+    import collector
     db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
     if not os.path.exists(db_file):
-        print(f"LỖI: Database không tồn tại: {db_file}", file=sys.stderr)
+        print(_safe_sanitize(f"LỖI: Database không tồn tại: {db_file}"), file=sys.stderr)
         return 1
 
     # Sử dụng hàm verify từ collector
@@ -84,12 +88,14 @@ def cli_verify_local(args):
 
 def cli_verify_rpc(args):
     """Bọc lại lệnh verify-rpc từ collector."""
+    import collector
     db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
     collector.DB_PATH = db_file
     return collector.cmd_verify_rpc(args)
 
 def cli_verify_derived(args):
     """Bọc lại lệnh verify-derived từ collector."""
+    import collector
     db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
     collector.DB_PATH = db_file
     return collector.cmd_verify_derived(args)
@@ -121,7 +127,7 @@ def cli_anchor(args):
         return 0
     except Exception as e:
         code = 'SIGNER_MISMATCH' if str(e).startswith('SIGNER_MISMATCH:') else 'ANCHOR_FAILED'
-        print(f"THẤT BẠI anchor: {code}; kiểm tra audit trước khi thử lại", file=sys.stderr)
+        print(_safe_sanitize(f"THẤT BẠI anchor: {code}; kiểm tra audit trước khi thử lại"), file=sys.stderr)
         return 1
 
 def cli_custody(args):
@@ -147,7 +153,7 @@ def cli_custody(args):
         return 0
     except Exception as e:
         code = 'SIGNER_MISMATCH' if str(e).startswith('SIGNER_MISMATCH:') else 'CUSTODY_FAILED'
-        print(f"THẤT BẠI custody: {code}; kết quả gửi có thể chưa xác định", file=sys.stderr)
+        print(_safe_sanitize(f"THẤT BẠI custody: {code}; kết quả gửi có thể chưa xác định"), file=sys.stderr)
         return 1
 
 def cli_verify_onchain(args):
@@ -158,10 +164,30 @@ def cli_verify_onchain(args):
         evidence_id=args.evidence_id,
         db_path=args.db,
         rpc_url=args.rpc_url,
-        anchor_chain_id=args.anchor_chain_id
+        anchor_chain_id=args.anchor_chain_id,
+        legacy_case_encoding=getattr(args, "legacy_case_encoding", False)
     )
-    print(f"{result.status}: {result.reason_code}", file=sys.stdout if result.exit_code == 0 else sys.stderr)
+    msg = f"{result.status}: {result.reason_code}"
+    print(_safe_sanitize(msg), file=sys.stdout if result.exit_code == 0 else sys.stderr)
     return result.exit_code
+
+def cli_reconcile(args):
+    """Đối soát trạng thái operation on-chain ở chế độ read-only."""
+    from forensics import onchain_store as ops
+    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    rpc_url = args.rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
+    try:
+        res = ops.reconcile_operation(
+            db_path=db_file,
+            operation_id=args.operation_id,
+            rpc_url_or_client=rpc_url,
+            tx_hash=args.tx_hash
+        )
+        print(_safe_sanitize(json.dumps(res, sort_keys=True, indent=2)))
+        return 0 if res.get("reconciled") else 1
+    except Exception as e:
+        print(_safe_sanitize(f"LỖI reconcile: {e}"), file=sys.stderr)
+        return 1
 
 def build_parser():
     p = argparse.ArgumentParser(
@@ -245,7 +271,17 @@ def build_parser():
     pvo.add_argument("--db", default=None, help="Đường dẫn database SQLite")
     pvo.add_argument("--rpc-url", default=None, help="RPC URL")
     pvo.add_argument("--anchor-chain-id", type=int, default=None)
+    pvo.add_argument("--legacy-case-encoding", action="store_true", default=False,
+                     help="Sử dụng mã hóa case_id kế thừa (raw bytes32 thay vì SHA-256)")
     pvo.set_defaults(func=cli_verify_onchain)
+
+    # 9. reconcile
+    prc = sub.add_parser("reconcile", help="Đối soát trạng thái operation on-chain ở chế độ read-only")
+    prc.add_argument("--operation-id", required=True, help="Định danh operation cần đối soát")
+    prc.add_argument("--db", default=None, help="Đường dẫn database SQLite")
+    prc.add_argument("--rpc-url", default=None, help="RPC URL")
+    prc.add_argument("--tx-hash", default=None, help="Mã băm giao dịch (tx_hash) tùy chọn override")
+    prc.set_defaults(func=cli_reconcile)
 
     return p
 

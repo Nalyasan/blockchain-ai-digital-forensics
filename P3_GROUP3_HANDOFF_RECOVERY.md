@@ -1,0 +1,268 @@
+# P3 GROUP 3 TAKEOVER & RECOVERY REPORT (GATE 0)
+
+**Date**: 2026-10-31  
+**Investigator**: explorer_gate0 (Gate 0 Recovery Specialist)  
+**Parent / Lead Conversation**: 9e873218-6dd4-4ceb-ba35-a1b33afa4f17  
+**Integrity Mode**: development  
+**Takeover Checkpoint Directory**: `D:\Projest\checkpoint_p3_group3_recovery\`  
+
+---
+
+## 1. Executive Summary
+
+This report establishes the baseline, preserves the full intermediate state, and analyzes all changes left by Cursor for **P3 Group 3** (Requirements H5, H6, M4, M5; Gates G3-01 to G3-17) within `D:\Projest\Blockchain`.
+
+All existing Cursor work has been **strictly preserved without resetting, cleaning, stashing, rebasing, or amending**. A complete snapshot including unified diff, Git status, file inventory, and clean backup files has been created in the dedicated external directory:
+`D:\Projest\checkpoint_p3_group3_recovery\`.
+
+### Key Conclusions:
+1. **Git Baseline**: Repository HEAD is strictly at baseline commit `713ad068348cab75046e10d52332f0d850ef93f5` on branch `master`.
+2. **Foundry Contracts**: Contract suite `EvidenceRegistry.sol` is 100% clean and passing all 31 tests in `forge test`.
+3. **Cursor State**: Cursor partially implemented Cluster B (additive SQLite schema in `schemas.py`) and Cluster C (operation journal / atomic send in `onchain_ops.py`), and began wiring privacy primitives (Cluster A) into `onchain.py`.
+4. **Primary Blockers & Regressions**:
+   - **Environment PATH**: `git` and Foundry tools (`forge`, `anvil`, `cast`) reside in `tools/git/cmd` and `tools/foundry`, which are not in the default Windows PATH. Adding them to PATH immediately restores passing status for `test_provenance_2a.py` (28/28) and `test_integrity_2a.py` (75/75).
+   - **Regression in `onchain.py`**: Cursor removed imports of `compute_file_sha256` and `init_db` from `forensics/onchain.py`, breaking 90+ tests across `test_onchain_2b.py`, `test_onchain_d1.py`, and `test_onchain_group1.py`.
+   - **Untouched Custody Routine**: `record_custody_action` in `forensics/onchain.py` still contains forbidden `INSERT OR REPLACE INTO custody_events` and hardcoded `CUSTODY_UPDATE`.
+   - **Missing Target Modules & Tests**: Dedicated modules `forensics/evidence_identity.py`, `forensics/onchain_store.py`, and test suites `tests/test_evidence_identity.py`, `tests/test_onchain_store.py` have not yet been authored. All 17 Group 3 acceptance gates (G3-01..G3-17) are currently **NOT RUN**.
+
+---
+
+## 2. Git Status and Baseline Verification
+
+### 2.1 Git Repository Metadata
+- **Repository Top-Level**: `D:/Projest/Blockchain`
+- **Expected Baseline Commit**: `713ad068348cab75046e10d52332f0d850ef93f5`
+- **Current HEAD Commit**: `713ad068348cab75046e10d52332f0d850ef93f5` (`git rev-parse HEAD` exact match)
+- **Active Branch**: `master`
+- **Staged Changes**: None (`git diff --cached --stat` is empty)
+- **Worktree List**:
+  - `D:/Projest/Blockchain` (713ad06 [master])
+  - `C:/Users/Naly/.codex/worktrees/9530/Blockchain` (2d5eb3e detached HEAD - external worktree)
+
+### 2.2 Recent Commit History (`git log -5 --oneline`)
+```text
+713ad06 fix(p3-2b): classify anchor context parse failures
+7892ef9 fix(p3-2b): reject conflicting anchor chain context
+1871cd3 feat(p3-2b): secure anchor and onchain verification
+2aadefd fix(p3-2a): enforce complete receipt validation
+a4eac8f feat(p3-2a): shared verifier, export 1.1.0, git provenance
+```
+
+### 2.3 Working Tree Status (`git status --porcelain=v1 -uall`)
+```text
+ M forensics/onchain.py
+ M forensics/schemas.py
+?? .cursor/commands/g3-final.md
+?? .cursor/commands/g3-next.md
+?? .cursor/commands/g3-recover.md
+?? .cursor/commands/g3-status.md
+?? .cursor/commands/g3-test.md
+?? forensics/onchain_ops.py
+```
+*(Note: Agent orchestration files located in `.agents/teamwork/` are excluded from code diff and checkpoint).*
+
+---
+
+## 3. Inventory of Cursor Changes
+
+| File Path | Status | Lines | Size (Bytes) | SHA-256 Checksum | Cluster |
+|---|---|---:|---:|---|---|
+| `forensics/schemas.py` | Tracked (Modified) | 165 | 7,753 | `d2a57550ad5a6473d7bdc6acebe5c7747cfc9c53627ba9ac39f67e21d8f8a142` | Cluster B |
+| `forensics/onchain.py` | Tracked (Modified) | 690 | 40,895 | `f7dab5b2110bebeb7e52bae761be4bcd250f4154bdcb762441cbadf8dc6acfd1` | Cluster A, B, C |
+| `forensics/onchain_ops.py` | Untracked (New) | 255 | 10,961 | `83f6ea3501bb43243953eefcc64c52b17ca4959c93a1c34946d050ad13fadbb9` | Cluster B, C |
+| `.cursor/commands/g3-final.md` | Untracked (New) | 19 | 1,352 | `62cf9a39893146fff7f2fd1dd488fff814953be2b90ba5684fd9ab62059b8841` | Cluster D |
+| `.cursor/commands/g3-next.md` | Untracked (New) | 19 | 1,489 | `860d711961a7e70d3fb2d14fc059c3d9b2f1568262d027352719b3969b5be3ba` | Cluster D |
+| `.cursor/commands/g3-recover.md` | Untracked (New) | 14 | 945 | `9b2395aed903490e21638cbadc0d0b72b2e153d6b7a53825f44d470461d9a742` | Cluster D |
+| `.cursor/commands/g3-status.md` | Untracked (New) | 12 | 625 | `21691f3ffdf1051998df7ac657039dcca00e89d6b7421c11e10acb251e65242b` | Cluster D |
+| `.cursor/commands/g3-test.md` | Untracked (New) | 18 | 1,146 | `147c723cef12753d5adf047a8d07a0f547cfdd5d16f8a74f2cdb8e21855cd9d6` | Cluster D |
+
+---
+
+## 4. Classification of Changes by Cluster
+
+### Cluster A: H6 / M5 Identity & Privacy
+**Applicable Gates**: G3-05, G3-06, G3-07, G3-12, G3-15  
+**Responsible Worker**: Worker A
+
+#### What Cursor Implemented:
+1. Added privacy hashing helpers directly into `forensics/onchain.py`:
+   - `sha256_utf8(text)`: SHA-256 digest of UTF-8 encoded string.
+   - `case_id_digest(case_id)`: SHA-256 of validated case ID.
+   - `case_id_hash_bytes32(case_id)`: `0x` + 64-hex SHA-256 digest.
+   - `note_hash_bytes32(note)`: `0x` + 64-hex SHA-256 digest with non-empty validation.
+   - `canonical_storage_uri(case_digest, manifest_digest)`: Canonical URI `evidence://sha256/<case_hash>/<manifest_hash>/manifest.json` with strict 256-byte limit and ASCII character validation.
+   - `identity_for_verify(case_id, manifest_sha256, legacy_uri)`: Helper providing legacy URI vs canonical URI.
+2. Updated `anchor_evidence`:
+   - Computes `case_digest = case_id_digest(case_id)` and passes `case_id_b32 = '0x' + case_digest`.
+   - Computes `storage_uri = canonical_storage_uri(case_digest, manifest_sha256)`.
+   - Redacted raw case ID from audit insertion: uses `policy_note` and references `object_ref = f"evidence:{evidence_id}"`.
+3. Updated `extract_evidence_id_from_receipt`:
+   - Checks `topics[2].lower() == case_id_hash_bytes32(expected_case_id).lower()`.
+
+#### Remaining Gaps & Bugs:
+1. **Missing dedicated module**: Requirement R2 specifies `forensics/evidence_identity.py`. Currently, primitives are inline inside `forensics/onchain.py`.
+2. **Missing tests**: `tests/test_evidence_identity.py` has not been written.
+3. **Legacy verification incompatibility**: In `extract_evidence_id_from_receipt`, topics[2] is checked strictly against `case_id_hash_bytes32`, breaking historical receipt verification (causing failure in `tests/test_onchain_guard.py::test_decode_evidence_registered_event_full_validation`). Legacy check must be supported explicitly via `legacy_uri=True` parameter.
+
+---
+
+### Cluster B: H5 SQLite & Custody Integrity
+**Applicable Gates**: G3-01, G3-02, G3-03, G3-04, G3-11, G3-14  
+**Responsible Worker**: Worker B
+
+#### What Cursor Implemented:
+1. `forensics/schemas.py`:
+   - Added `GROUP3_SCHEMA` creating:
+     * `anchor_links`: `(chain_id, contract_address, manifest_sha256, evidence_id, tx_hash, log_index, event_type, verified, recorded_at)` with composite PK `(chain_id, contract_address, manifest_sha256)`.
+     * `onchain_operations`: `(operation_id, op_type, fingerprint, intent_canonical, state, chain_id, contract_address, signer, tx_hash, created_at, updated_at)`.
+     * `onchain_operation_events`: Journal audit trail.
+   - Added migration functions:
+     * `migrate_group3(c)`: Safely adds `log_index` and `event_type` to `custody_events`, creates unique index `idx_custody_event_identity ON custody_events(chain_id, contract_address, tx_hash, log_index)`.
+     * `rollback_group3(c)`: Drops additive tables and index without touching historical rows.
+     * `group3_schema_present(c)`: Verifies table existence.
+   - Updated `migrate_db(c)` to invoke `migrate_group3(c)`.
+2. `forensics/onchain_ops.py`:
+   - `open_existing_rw(db_path, migrate_before_send=False)`: Enforces `DB_REQUIRED`, `DB_READONLY`, and `DB_LOCKED` checks.
+   - `persist_verified_event`: Gathers `(chain_id, contract, tx_hash, log_index)` into `event_id`, performs pure `INSERT` into `custody_events` and `anchor_links`, and commits atomically with rowcount validation.
+3. Updated `anchor_evidence`:
+   - Replaced old `INSERT OR REPLACE INTO custody_events` and batch `UPDATE evidence_exports` with `ops.persist_verified_event`.
+
+#### Remaining Gaps & Bugs:
+1. **Unmodified `record_custody_action`**: At line 635 of `forensics/onchain.py`, `record_custody_action` STILL uses `INSERT OR REPLACE INTO custody_events`, hardcoded `case_id = 'CUSTODY_UPDATE'`, and lacks `log_index` / `event_type`.
+2. **Missing `forensics/onchain_store.py`**: Requirement R3 requires store logic in `forensics/onchain_store.py`. Logic is currently split between `schemas.py` and `onchain_ops.py`.
+3. **Missing tests**: `tests/test_onchain_store.py` has not been authored.
+
+---
+
+### Cluster C: M4 Idempotency & Recovery
+**Applicable Gates**: G3-08, G3-09, G3-10, G3-16, G3-17  
+**Responsible Worker**: Worker C
+
+#### What Cursor Implemented:
+1. Created `forensics/onchain_ops.py`:
+   - Lifecycle states: `READY`, `SEND_STARTED`, `BROADCAST`, `CONFIRMED`, `UNKNOWN`, `FAILED`.
+   - Immutable Canonical Intent: `canonical_json(intent)` and SHA-256 `fingerprint(intent)`.
+   - Atomic Send Claim: `claim_send(db_path, intent)` executes `BEGIN IMMEDIATE`, checks existing fingerprint, inserts READY if new, and performs atomic `UPDATE onchain_operations SET state='SEND_STARTED' WHERE operation_id=? AND state='READY' AND tx_hash IS NULL` verifying `cur.rowcount == 1`.
+   - State transition updates: `record_broadcast`, `mark_unknown`, `persist_verified_event`.
+   - Recovery Sidecar: `write_sidecar(db_path, payload)` appends to `.recovery.jsonl`, guarded against sensitive secrets (`case_id`, `note`, `private_key`).
+   - Reconcile primitives: `load_operation`, `apply_reconcile_result`.
+2. Integrated `claim_send`, `mark_unknown`, `record_broadcast`, and sidecar fallback into `anchor_evidence`.
+
+#### Remaining Gaps & Bugs:
+1. `record_custody_action` is not wired into `claim_send` or `persist_verified_event`.
+2. Reconcile logic is only a DB updater; it lacks read-only blockchain receipt query and verification logic.
+3. Real multi-process concurrency test (G3-16) and crash-after-commit recovery test (G3-17) not yet authored.
+
+---
+
+### Cluster D: Lead Integration & Compatibility
+**Applicable Gates**: G3-13, Smokes, Acceptance  
+**Responsible Lead**: Lead Agent
+
+#### What Cursor Implemented:
+1. Added 5 command guides in `.cursor/commands/`: `g3-recover.md`, `g3-status.md`, `g3-next.md`, `g3-test.md`, `g3-final.md`.
+
+#### Remaining Gaps & Bugs:
+1. **Regression in `forensics/onchain.py`**:
+   - Cursor deleted `from forensics.schemas import init_db` and `from forensics.evidence import compute_file_sha256`.
+   - Because `forensics/onchain.py` uses `compute_file_sha256` at line 590 and `init_db` at line 632, AND because tests (`test_onchain_2b.py`, `test_onchain_d1.py`, `test_onchain_group1.py`) import `compute_file_sha256` from `forensics.onchain`, 92 test cases threw `AttributeError` / `NameError`.
+2. **Missing CLI Integration**: `forensics/cli.py` has not been updated with Group 3 options (`--legacy-uri`, `--reconcile`, etc.).
+3. **Acceptance Runner**: Final acceptance script and verification suite not assembled.
+
+---
+
+## 5. Test Status & Execution Matrix
+
+### 5.1 Baseline & Regression Test Suites
+All tests were executed against the actual source in `D:\Projest\Blockchain`:
+
+| Test Suite | Total Tests | Pass | Fail / Error | Root Cause / Note |
+|---|---:|---:|---:|---|
+| `forge test --root contracts` | 31 | 31 | 0 | **100% PASS** (18ms). Contract bytecode & tests untouched. |
+| `tests/test_provenance_2a.py` | 28 | 28 | 0 | **100% PASS** (requires `tools/git/cmd` in PATH). |
+| `tests/test_integrity_2a.py` | 75 | 75 | 0 | **100% PASS** (requires `tools/git/cmd` in PATH). |
+| Basic Batch (`collector_erc20`, `evidence_p2`, `output_preservation`, `receipt_patch`) | 93 | 93 | 0 | **100% PASS**. |
+| `tests/test_group2a_smoke.py` | 1 | 1 | 0 | **100% PASS**. |
+| `tests/test_group2b_smoke.py` | 1 | 0 | 1 | `KeyError: P3_2B_EVIDENCE_DIR` (environment fixture). |
+| `tests/test_onchain_guard.py` | 10 | 8 | 2 | Fails on `case_id_hash_bytes32` mismatch on legacy event & error regex. |
+| `tests/test_onchain_2b.py` | 73 | 12 | 61 | `AttributeError: module 'forensics.onchain' has no attribute 'compute_file_sha256'`. |
+| `tests/test_onchain_d1.py` | 18 | 0 | 18 | `AttributeError: module 'forensics.onchain' has no attribute 'compute_file_sha256'`. |
+| `tests/test_onchain_group1.py` | 51 | 37 | 14 | `AttributeError: module 'forensics.onchain' has no attribute 'compute_file_sha256'`. |
+| `scripts/run_p3_group1b_smoke.py` | 35 checks | 34 | 1 | Live Anvil smoke fails at `keystore_anchor` due to missing `compute_file_sha256` / `init_db`. |
+
+### 5.2 Group 3 Acceptance Gates Status (G3-01 to G3-17)
+
+| Gate ID | Area | Required Criteria | Status | Evidence Path |
+|---|---|---|---|---|
+| **G3-01** | H5 SQLite | Schema migration additive; `anchor_links` table created | NOT RUN | Schema drafted in `forensics/schemas.py` |
+| **G3-02** | H5 SQLite | Unique event identity `(chain_id, contract, tx_hash, log_index)` | NOT RUN | Index drafted in `forensics/schemas.py` |
+| **G3-03** | H5 SQLite | No `INSERT OR REPLACE` in custody history | NOT RUN | Partial in `anchor`, untouched in `custody` |
+| **G3-04** | H5 SQLite | Verified=1 only after receipt, event, state check | NOT RUN | Verified check logic drafted |
+| **G3-05** | H6/M5 Privacy | SHA-256 UTF-8 hash for case ID | NOT RUN | Drafted in `forensics/onchain.py` |
+| **G3-06** | H6/M5 Privacy | SHA-256 UTF-8 note hash; non-empty note validation | NOT RUN | Drafted in `forensics/onchain.py` |
+| **G3-07** | H6/M5 Privacy | Canonical URI `evidence://sha256/<case>/<man>/manifest.json` | NOT RUN | Drafted in `forensics/onchain.py` |
+| **G3-08** | M4 Idempotency | Canonical immutable intent & fingerprint | NOT RUN | Drafted in `forensics/onchain_ops.py` |
+| **G3-09** | M4 Idempotency | Operation journal & state transitions | NOT RUN | Drafted in `forensics/onchain_ops.py` |
+| **G3-10** | M4 Idempotency | Atomic `claim_send` via `BEGIN IMMEDIATE` + rowcount=1 | NOT RUN | Drafted in `forensics/onchain_ops.py` |
+| **G3-11** | H5 SQLite | Rejection of send if DB missing or read-only | NOT RUN | Drafted in `open_existing_rw` |
+| **G3-12** | H6/M5 Privacy | Legacy URI verification read-only and explicitly flagged | NOT RUN | Incomplete |
+| **G3-13** | D Integration | Compatibility with exporter 1.1.0 & CLI | NOT RUN | Incomplete |
+| **G3-14** | H5 SQLite | Distinguish `EvidenceRegistered` vs `CustodyRecorded` | NOT RUN | Event topic check drafted |
+| **G3-15** | H6/M5 Privacy | No raw case ID/note in logs, CLI, sidecar, or audit | NOT RUN | Incomplete |
+| **G3-16** | M4 Concurrency | Real 2-process concurrency: exactly 1 send claim | NOT RUN | Test harness pending |
+| **G3-17** | M4 Recovery | Crash after `SEND_STARTED` COMMIT cannot re-claim send | NOT RUN | Test harness pending |
+
+---
+
+## 6. Takeover Risks, Friction Points, and Mitigation Plan
+
+### Risk 1: Execution Environment Missing Tools in PATH
+- **Symptom**: Subprocesses calling `git` or `forge`/`cast`/`anvil` fail with `GIT_UNKNOWN` or `CommandNotFoundException`.
+- **Root Cause**: The workspace packages standalone tools in `D:\Projest\Blockchain\tools\git\cmd` and `D:\Projest\Blockchain\tools\foundry`, which are not permanently in the system `%PATH%`.
+- **Mitigation**: Every agent command and test runner must prepend these directories to the session PATH:
+  ```powershell
+  $env:PATH = "D:\Projest\Blockchain\tools\git\cmd;D:\Projest\Blockchain\tools\foundry;" + $env:PATH
+  ```
+
+### Risk 2: Broken Imports Introduced by Cursor in `forensics/onchain.py`
+- **Symptom**: 92 tests failing with `AttributeError: module 'forensics.onchain' has no attribute 'compute_file_sha256'` or `NameError: name 'init_db' is not defined`.
+- **Root Cause**: Cursor removed `from forensics.schemas import init_db` and `from forensics.evidence import compute_file_sha256` from `forensics/onchain.py`.
+- **Mitigation**: Worker B / Lead must re-export `compute_file_sha256` and `init_db` in `forensics/onchain.py`:
+  ```python
+  from forensics.schemas import init_db
+  from forensics.evidence import is_working_tree_dirty, validate_case_id, compute_file_sha256
+  ```
+
+### Risk 3: Incomplete Refactoring of `record_custody_action`
+- **Symptom**: Custody registration violates R3/H5 (uses `INSERT OR REPLACE`) and fails with `NameError`.
+- **Root Cause**: Cursor stopped midway through refactoring `anchor_evidence` and never touched `record_custody_action`.
+- **Mitigation**: Worker B and Worker C must refactor `record_custody_action` to use `ops.custody_intent`, `ops.claim_send`, and `ops.persist_verified_event`.
+
+### Risk 4: Scope & File Ownership Conflicts
+- **Symptom**: Three workers attempting to edit `forensics/onchain.py` simultaneously will cause git conflicts or regressions.
+- **Mitigation**: Enforce strict module separation per task specification:
+  - **Worker A**: Owns `forensics/evidence_identity.py` and `tests/test_evidence_identity.py`.
+  - **Worker B**: Owns `forensics/schemas.py`, `forensics/onchain_store.py`, and `tests/test_onchain_store.py`.
+  - **Worker C**: Owns `forensics/onchain_ops.py` (idempotency/concurrency) and concurrency tests.
+  - **Lead Agent**: Integrates and coordinates shared files `forensics/onchain.py` and `forensics/cli.py`.
+
+---
+
+## 7. Checkpoint Verification & Integrity Guarantee
+
+The complete takeover checkpoint is saved outside the repository at:
+`D:\Projest\checkpoint_p3_group3_recovery\`
+
+Contents of the checkpoint directory:
+1. `git_status.txt`: Full Git repository status and branch verification.
+2. `git_diff.patch`: Full unified patch of tracked changes against baseline `713ad06`.
+3. `file_inventory.txt`: Cryptographic inventory (SHA-256, lines, byte sizes) of all affected files.
+4. `backup_files/`: Direct pristine file backups of:
+   - `backup_files/forensics/schemas.py`
+   - `backup_files/forensics/onchain.py`
+   - `backup_files/forensics/onchain_ops.py`
+   - `backup_files/.cursor/commands/*`
+5. `P3_GROUP3_HANDOFF_RECOVERY.md`: This report.
+
+**Integrity Guarantee**:
+No production secrets, private keys, seed phrases, or `.env` credential values are stored in the checkpoint directory or repository working tree. All files are safely preserved for the implementation phase.

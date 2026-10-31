@@ -95,6 +95,87 @@ CREATE INDEX IF NOT EXISTS idx_alerts_time ON alerts(window_start);
 CREATE INDEX IF NOT EXISTS idx_exports_case ON evidence_exports(case_id);
 """
 
+GROUP3_SCHEMA = """
+CREATE TABLE IF NOT EXISTS anchor_links(
+  chain_id INTEGER NOT NULL,
+  contract_address TEXT NOT NULL,
+  manifest_sha256 TEXT NOT NULL,
+  evidence_id INTEGER NOT NULL,
+  tx_hash TEXT NOT NULL,
+  log_index INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  verified INTEGER NOT NULL DEFAULT 0,
+  recorded_at TEXT NOT NULL,
+  PRIMARY KEY(chain_id, contract_address, manifest_sha256)
+);
+
+CREATE TABLE IF NOT EXISTS onchain_operations(
+  operation_id TEXT PRIMARY KEY,
+  op_type TEXT NOT NULL,
+  fingerprint TEXT NOT NULL UNIQUE,
+  intent_canonical TEXT NOT NULL,
+  state TEXT NOT NULL,
+  chain_id INTEGER NOT NULL,
+  contract_address TEXT NOT NULL,
+  signer TEXT NOT NULL,
+  tx_hash TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS onchain_operation_events(
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  operation_id TEXT NOT NULL,
+  ts TEXT NOT NULL,
+  from_state TEXT,
+  to_state TEXT NOT NULL,
+  code TEXT NOT NULL
+);
+"""
+
+GROUP3_TABLES = ("anchor_links", "onchain_operations", "onchain_operation_events")
+
+
+def _table_columns(c, table):
+    return {row[1] for row in c.execute("PRAGMA table_info(" + table + ")").fetchall()}
+
+
+def migrate_group3(c):
+    """Additive Group 3 tables/columns. Safe on copies; does not rewrite custody history."""
+    c.executescript(GROUP3_SCHEMA)
+    cols = _table_columns(c, "custody_events")
+    if cols and "log_index" not in cols:
+        c.execute("ALTER TABLE custody_events ADD COLUMN log_index INTEGER")
+    if cols and "event_type" not in cols:
+        c.execute("ALTER TABLE custody_events ADD COLUMN event_type TEXT")
+    if cols:
+        c.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_custody_event_identity "
+            "ON custody_events(chain_id, contract_address, tx_hash, log_index)"
+        )
+
+
+def rollback_group3(c):
+    """Drop Group 3 additive objects only. Never deletes historical custody/export rows."""
+    c.execute("DROP INDEX IF EXISTS idx_custody_event_identity")
+    for table in ("onchain_operation_events", "onchain_operations", "anchor_links"):
+        c.execute("DROP TABLE IF EXISTS " + table)
+    cols = _table_columns(c, "custody_events")
+    for column in ("log_index", "event_type"):
+        if column in cols:
+            try:
+                c.execute("ALTER TABLE custody_events DROP COLUMN " + column)
+            except sqlite3.OperationalError:
+                log.info("Không DROP được cột custody_events.%s; giữ nguyên", column)
+
+
+def group3_schema_present(c):
+    names = {row[0] for row in c.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?,?,?)", GROUP3_TABLES
+    ).fetchall()}
+    return names == set(GROUP3_TABLES)
+
+
 def migrate_db(c):
     """Đảm bảo các DB cũ được nâng cấp lên schema đầy đủ mà không làm mất dữ liệu."""
     # 1. Thêm cột synthetic vào blocks nếu thiếu
@@ -105,6 +186,7 @@ def migrate_db(c):
 
     # 2. Tạo các bảng và index còn thiếu nếu chưa có
     c.executescript(SCHEMA)
+    migrate_group3(c)
 
 def init_db(path):
     """Khởi tạo hoặc kết nối DB, thực thi migration và trả về đối tượng kết nối sqlite3."""
