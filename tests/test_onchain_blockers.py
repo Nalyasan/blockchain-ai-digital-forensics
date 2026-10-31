@@ -633,3 +633,332 @@ class TestFinding3_PreSendNoAutoMigration:
         # Subsequent pre-send check succeeds
         pre_send_db_check(db_file, migrate=False)
 
+
+class TestFindingA_StorageUriStrictValidation:
+    """Finding A — G3-03 / G3-10: Event storage URI strict validation, decoding, and profile enforcement."""
+
+    def test_verify_receipt_rejects_single_byte_uri_mismatch(self):
+        """Mutating a single byte in storageUri (e.g. 'e' -> 'X') must be strictly rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        cd = "11" * 32
+        ms = "22" * 32
+        rec = _make_full_valid_receipt(contract, case_digest="0x" + cd, manifest_sha256="0x" + ms)
+
+        # Mutate the first byte of URI from 'e' to 'X'
+        valid_uri = f"evidence://sha256/{cd}/{ms}/manifest.json"
+        tampered_uri = "X" + valid_uri[1:]
+        raw_tampered = tampered_uri.encode("utf-8")
+        pad_len = (-len(raw_tampered)) % 32
+        actor = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        tampered_data = (
+            "0x"
+            + actor.lower().removeprefix("0x")[-40:].zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_tampered))[2:].zfill(64)
+            + raw_tampered.hex()
+            + "00" * pad_len
+        )
+        rec["logs"][0]["data"] = tampered_data
+
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED.*storageUri"):
+            verify_receipt_and_event(
+                rec,
+                EVENT_TYPE_EVIDENCE_REGISTERED,
+                contract,
+                expected_case_digest="0x" + cd,
+                expected_manifest_sha256="0x" + ms,
+            )
+
+    def test_verify_receipt_rejects_uri_manifest_mismatch(self):
+        """Storage URI pointing to a different manifest hash than indexed topic3 must fail."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        cd = "11" * 32
+        ms = "22" * 32
+        wrong_ms = "33" * 32
+        rec = _make_full_valid_receipt(contract, case_digest="0x" + cd, manifest_sha256="0x" + ms)
+
+        wrong_uri = f"evidence://sha256/{cd}/{wrong_ms}/manifest.json"
+        raw_wrong = wrong_uri.encode("utf-8")
+        pad_len = (-len(raw_wrong)) % 32
+        actor = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        rec["logs"][0]["data"] = (
+            "0x"
+            + actor.lower().removeprefix("0x")[-40:].zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_wrong))[2:].zfill(64)
+            + raw_wrong.hex()
+            + "00" * pad_len
+        )
+
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED.*(storageUri|manifestSha256)"):
+            verify_receipt_and_event(
+                rec,
+                EVENT_TYPE_EVIDENCE_REGISTERED,
+                contract,
+                expected_case_digest="0x" + cd,
+                expected_manifest_sha256="0x" + ms,
+            )
+
+    def test_verify_receipt_rejects_uri_case_digest_mismatch(self):
+        """Storage URI pointing to a different case digest than indexed topic2 must fail."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        cd = "11" * 32
+        ms = "22" * 32
+        wrong_cd = "44" * 32
+        rec = _make_full_valid_receipt(contract, case_digest="0x" + cd, manifest_sha256="0x" + ms)
+
+        wrong_uri = f"evidence://sha256/{wrong_cd}/{ms}/manifest.json"
+        raw_wrong = wrong_uri.encode("utf-8")
+        pad_len = (-len(raw_wrong)) % 32
+        actor = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        rec["logs"][0]["data"] = (
+            "0x"
+            + actor.lower().removeprefix("0x")[-40:].zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_wrong))[2:].zfill(64)
+            + raw_wrong.hex()
+            + "00" * pad_len
+        )
+
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED.*(storageUri|case_digest)"):
+            verify_receipt_and_event(
+                rec,
+                EVENT_TYPE_EVIDENCE_REGISTERED,
+                contract,
+                expected_case_digest="0x" + cd,
+                expected_manifest_sha256="0x" + ms,
+            )
+
+    def test_verify_receipt_rejects_nonzero_padding_in_uri(self):
+        """Non-zero byte in storageUri ABI padding area must be strictly rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        cd = "11" * 32
+        ms = "22" * 32
+        rec = _make_full_valid_receipt(contract, case_digest="0x" + cd, manifest_sha256="0x" + ms)
+
+        uri = f"evidence://sha256/{cd}/{ms}/manifest.json"
+        raw_uri = uri.encode("utf-8")
+        pad_len = (-len(raw_uri)) % 32
+        actor = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        # Corrupt the padding by placing 'ff' in it
+        corrupted_pad = "00" * (pad_len - 1) + "ff"
+        rec["logs"][0]["data"] = (
+            "0x"
+            + actor.lower().removeprefix("0x")[-40:].zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_uri))[2:].zfill(64)
+            + raw_uri.hex()
+            + corrupted_pad
+        )
+
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: non-zero padding in storageUri ABI data"):
+            verify_receipt_and_event(
+                rec,
+                EVENT_TYPE_EVIDENCE_REGISTERED,
+                contract,
+                expected_case_digest="0x" + cd,
+                expected_manifest_sha256="0x" + ms,
+            )
+
+    def test_verify_receipt_rejects_mixed_legacy_canonical_profiles(self):
+        """Mixed profile checks: legacy URI in canonical mode or canonical URI in legacy mode must be rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        case_raw = "CASE-LEGACY-01"
+        from forensics.evidence_identity import string_to_bytes32_hex
+        legacy_case_b32 = string_to_bytes32_hex(case_raw)
+        ms = "22" * 32
+
+        # 1. Canonical mode (legacy_case_encoding=False) receiving a legacy URI
+        legacy_uri = f"evidence://{case_raw}/manifest.json"
+        raw_leg = legacy_uri.encode("utf-8")
+        pad_leg = (-len(raw_leg)) % 32
+        actor = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        rec_legacy_payload = {
+            "status": 1,
+            "blockNumber": 100,
+            "blockHash": "0x" + "bb" * 32,
+            "transactionHash": "0x" + "aa" * 32,
+            "logs": [
+                {
+                    "address": contract,
+                    "logIndex": 0,
+                    "topics": [
+                        TOPIC_EVIDENCE_REGISTERED,
+                        "0x" + "01".zfill(64),
+                        legacy_case_b32,
+                        "0x" + ms,
+                    ],
+                    "data": (
+                        "0x"
+                        + actor.lower().removeprefix("0x")[-40:].zfill(64)
+                        + hex(64)[2:].zfill(64)
+                        + hex(len(raw_leg))[2:].zfill(64)
+                        + raw_leg.hex()
+                        + "00" * pad_leg
+                    ),
+                }
+            ],
+        }
+
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: legacy storageUri in canonical mode"):
+            verify_receipt_and_event(
+                rec_legacy_payload,
+                EVENT_TYPE_EVIDENCE_REGISTERED,
+                contract,
+                legacy_case_encoding=False,
+            )
+
+        # 2. Legacy mode (legacy_case_encoding=True) receiving a canonical URI
+        canonical_rec = _make_full_valid_receipt(contract, case_digest="0x" + "11" * 32, manifest_sha256="0x" + ms)
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: canonical storageUri in legacy mode"):
+            verify_receipt_and_event(
+                canonical_rec,
+                EVENT_TYPE_EVIDENCE_REGISTERED,
+                contract,
+                legacy_case_encoding=True,
+                expected_case_id=case_raw,
+            )
+
+    def test_reconcile_operation_preserves_unknown_on_uri_mismatch(self, tmp_path: Path):
+        """When on-chain event contains mismatched storageUri, reconcile returns false and keeps operation UNKNOWN."""
+        db_file = tmp_path / "reconcile_uri_mismatch.db"
+        conn = sqlite3.connect(str(db_file))
+        migrate_group3(conn)
+
+        op_id = "op_uri_test"
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        tx_hash = "0x" + "ee" * 32
+        cd = "11" * 32
+        ms = "22" * 32
+
+        from forensics.evidence_identity import canonical_storage_uri
+        expected_uri = canonical_storage_uri(cd, ms)
+
+        intent = {
+            "op_type": "REGISTER_EVIDENCE",
+            "chain_id": 31337,
+            "contract": contract,
+            "manifest_sha256": ms,
+            "case_digest": cd,
+            "storage_uri": expected_uri,
+            "signer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+        }
+
+        conn.execute(
+            "INSERT INTO onchain_operations(operation_id, op_type, fingerprint, intent_canonical, state, chain_id, contract_address, signer, tx_hash, created_at, updated_at) "
+            "VALUES(?, 'REGISTER_EVIDENCE', 'fp_uri_test', ?, 'UNKNOWN', 31337, ?, '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266', ?, 'now', 'now')",
+            (op_id, json.dumps(intent), contract, tx_hash),
+        )
+        conn.commit()
+        conn.close()
+
+        # Receipt with single byte altered in URI ("e" -> "X")
+        rec = _make_full_valid_receipt(contract, tx_hash=tx_hash, case_digest="0x" + cd, manifest_sha256="0x" + ms)
+        tampered_uri = "X" + expected_uri[1:]
+        raw_tampered = tampered_uri.encode("utf-8")
+        pad_len = (-len(raw_tampered)) % 32
+        actor = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        rec["logs"][0]["data"] = (
+            "0x"
+            + actor.lower().removeprefix("0x")[-40:].zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_tampered))[2:].zfill(64)
+            + raw_tampered.hex()
+            + "00" * pad_len
+        )
+
+        class MockRpcClient:
+            def eth_chainId(self):
+                return 31337
+            def eth_getTransactionReceipt(self, _tx):
+                return rec
+            def eth_getBlockByNumber(self, _bn, _full):
+                return {"hash": rec["blockHash"]}
+
+        res = reconcile_operation(db_file, op_id, MockRpcClient())
+        assert res["reconciled"] is False
+        assert "storageUri" in res.get("error", "")
+
+        # Crucial: operation state in DB must REMAIN UNKNOWN, never CONFIRMED!
+        op = load_operation(db_file, op_id)
+        assert op["state"] == "UNKNOWN"
+
+        # Crucial: anchor_links must contain ZERO rows
+        conn = sqlite3.connect(str(db_file))
+        assert conn.execute("SELECT COUNT(*) FROM anchor_links").fetchone()[0] == 0
+        conn.close()
+
+
+class TestFindingB_ExporterPreservesLegacySchema:
+    """Finding B — G3-04: Standard evidence export must never implicitly migrate legacy database."""
+
+    def test_export_evidence_on_legacy_db_preserves_schema_untouched(self, tmp_path: Path):
+        """Exporting evidence on a pre-existing legacy SQLite DB must succeed without creating Group 3 tables."""
+        from forensics.evidence import export_evidence
+        from test_evidence_p2 import populate_sample_db
+        from forensics.schemas import rollback_group3
+
+        legacy_db = tmp_path / "existing_legacy.db"
+        populate_sample_db(str(legacy_db), 3)
+
+        # Roll back Group 3 additions to produce an authentic Phase 2 legacy database with historical data
+        conn = sqlite3.connect(str(legacy_db))
+        rollback_group3(conn)
+        conn.commit()
+
+        # Verify initial legacy state: Group 3 schema is NOT present
+        assert not group3_schema_present(conn)
+        tables_before = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        for t in GROUP3_TABLES:
+            assert t not in tables_before
+        custody_cols_before = {row[1] for row in conn.execute("PRAGMA table_info(custody_events)").fetchall()}
+        assert "log_index" not in custody_cols_before
+        assert "event_type" not in custody_cols_before
+        conn.close()
+
+        # Perform standard evidence export
+        pkg_dir = tmp_path / "exported_legacy_pkg"
+        manifest = export_evidence("CASE-LEGACY-01", 0, 2, out_dir=str(pkg_dir), db_path=str(legacy_db), allow_gaps=True)
+        assert manifest["case_id"] == "CASE-LEGACY-01"
+
+        # Verify post-export state on legacy DB: MUST REMAIN UNMIGRATED
+        conn = sqlite3.connect(str(legacy_db))
+        assert not group3_schema_present(conn)
+        tables_after = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        for t in GROUP3_TABLES:
+            assert t not in tables_after, f"Group 3 table {t} was improperly created during export!"
+
+        custody_cols_after = {row[1] for row in conn.execute("PRAGMA table_info(custody_events)").fetchall()}
+        assert "log_index" not in custody_cols_after
+        assert "event_type" not in custody_cols_after
+
+        index_names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
+        assert "idx_custody_event_identity" not in index_names
+
+        # Verify export was properly recorded in evidence_exports table with canonical storage URI
+        export_row = conn.execute("SELECT case_id, storage_uri, manifest_sha256 FROM evidence_exports").fetchone()
+        assert export_row is not None
+        assert export_row[0] == "CASE-LEGACY-01"
+        assert export_row[1].startswith("evidence://sha256/")
+        conn.close()
+
+    def test_init_db_on_existing_db_preserves_legacy_schema(self, tmp_path: Path):
+        """init_db called on an existing legacy DB does not auto-migrate Group 3 unless explicitly requested."""
+        from forensics.schemas import init_db, SCHEMA
+        db_file = tmp_path / "legacy_existing_manual.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.executescript(SCHEMA)
+        conn.commit()
+        assert not group3_schema_present(conn)
+        conn.close()
+
+        # Opening existing DB with init_db() default preserves legacy schema
+        conn = init_db(str(db_file))
+        assert not group3_schema_present(conn)
+        conn.close()
+
+        # Opening with explicit migrate_group3_schema=True migrates
+        conn = init_db(str(db_file), migrate_group3_schema=True)
+        assert group3_schema_present(conn)
+        conn.close()
+

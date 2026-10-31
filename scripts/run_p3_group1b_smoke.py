@@ -266,6 +266,9 @@ def run_smoke():
                           '--from', owner, '--unlocked', '--rpc-url', url, '--chain', '31337', '--json'])
                 db = work / 'sample.db'
                 shutil.copy2(sample_db, db)
+                from forensics.schemas import migrate_group3
+                with contextlib.closing(sqlite3.connect(db)) as m_conn:
+                    migrate_group3(m_conn)
                 package = work / 'package'
                 from forensics.evidence import export_evidence
                 with contextlib.closing(sqlite3.connect(db)) as sample_conn:

@@ -190,7 +190,7 @@ def group3_schema_present(c):
     return names == set(GROUP3_TABLES)
 
 
-def migrate_db(c):
+def migrate_db(c, *, migrate_group3_schema: bool = True):
     """Đảm bảo các DB cũ được nâng cấp lên schema đầy đủ mà không làm mất dữ liệu."""
     # 1. Thêm cột synthetic vào blocks nếu thiếu
     cols = [r[1] for r in c.execute("PRAGMA table_info(blocks)").fetchall()]
@@ -200,12 +200,36 @@ def migrate_db(c):
 
     # 2. Tạo các bảng và index còn thiếu nếu chưa có
     c.executescript(SCHEMA)
-    migrate_group3(c)
+    if migrate_group3_schema:
+        migrate_group3(c)
 
-def init_db(path):
-    """Khởi tạo hoặc kết nối DB, thực thi migration và trả về đối tượng kết nối sqlite3."""
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    c = sqlite3.connect(path)
-    c.executescript(SCHEMA)
-    migrate_db(c)
+
+def init_db(path, *, migrate_group3_schema: bool | None = None):
+    """Khởi tạo hoặc kết nối DB, thực thi migration và trả về đối tượng kết nối sqlite3.
+
+    Phân biệt rõ giữa việc khởi tạo DB mới và mở DB legacy đã có dữ liệu:
+    - Nếu DB mới tạo (file chưa tồn tại hoặc rỗng): khởi tạo đầy đủ SCHEMA và Group 3 schema nếu migrate_group3_schema is not False.
+    - Nếu DB legacy đã có dữ liệu: KHÔNG tự ý chạy migrate_group3 trừ khi migrate_group3_schema=True được chỉ định tường minh.
+    """
+    path_str = str(path)
+    os.makedirs(os.path.dirname(path_str) or ".", exist_ok=True)
+    is_new = not os.path.exists(path_str) or os.path.getsize(path_str) == 0
+
+    c = sqlite3.connect(path_str)
+
+    if migrate_group3_schema is True:
+        should_migrate_g3 = True
+    elif migrate_group3_schema is False:
+        should_migrate_g3 = False
+    else:
+        # Default (None): migrate Group 3 on new DBs, but preserve legacy DBs intact
+        should_migrate_g3 = is_new
+
+    if is_new:
+        c.executescript(SCHEMA)
+        if should_migrate_g3:
+            migrate_group3(c)
+    else:
+        migrate_db(c, migrate_group3_schema=should_migrate_g3)
+
     return c

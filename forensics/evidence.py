@@ -178,10 +178,12 @@ def verify_derived_range(c: sqlite3.Connection, start_block: int, end_block: int
     }
 
 def export_evidence(case_id, start_block, end_block, out_dir=None, db_path=None,
-                    operator=None, allow_gaps=False, require_final=False, chain_id=None):
+                    operator=None, allow_gaps=False, require_final=False, chain_id=None,
+                    migrate_group3_schema=False):
     from forensics.exporter import export_package
     return export_package(case_id, start_block, end_block, out_dir, db_path,
-                          operator, allow_gaps, require_final, chain_id)
+                          operator, allow_gaps, require_final, chain_id,
+                          migrate_group3_schema=migrate_group3_schema)
 
 
 def verify_manifest(manifest_path_or_dir, db_path=None):

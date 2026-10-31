@@ -160,7 +160,8 @@ def _snapshot(conn, chain_id, start, end):
 
 
 def export_package(case_id, start_block, end_block, out_dir=None, db_path=None,
-                   operator=None, allow_gaps=False, require_final=False, chain_id=None):
+                   operator=None, allow_gaps=False, require_final=False, chain_id=None,
+                   migrate_group3_schema=False):
     from forensics import evidence as ev
     from forensics.schemas import init_db
     try:
@@ -271,10 +272,14 @@ def export_package(case_id, start_block, end_block, out_dir=None, db_path=None,
         export_id = f'exp-{case_id}-{manifest_hash[:12]}-{uuid.uuid4().hex[:12]}'
         case_dig = case_id_digest(case_id)
         storage_uri = canonical_storage_uri(case_dig, manifest_hash)
-        with contextlib.closing(init_db(str(db_file))) as conn:
-            with conn:
-                conn.execute('INSERT INTO evidence_exports(export_id,case_id,manifest_path,manifest_sha256,storage_uri,created_at,operator,onchain_evidence_id) VALUES(?,?,?,?,?,?,?,NULL)',
-                             (export_id, case_id, 'manifest.json', manifest_hash, storage_uri, m['exported_at'], m['operator']))
+        try:
+            conn = init_db(str(db_file), migrate_group3_schema=migrate_group3_schema)
+        except TypeError:
+            conn = init_db(str(db_file))
+        with contextlib.closing(conn) as conn_closed:
+            with conn_closed:
+                conn_closed.execute('INSERT INTO evidence_exports(export_id,case_id,manifest_path,manifest_sha256,storage_uri,created_at,operator,onchain_evidence_id) VALUES(?,?,?,?,?,?,?,NULL)',
+                                    (export_id, case_id, 'manifest.json', manifest_hash, storage_uri, m['exported_at'], m['operator']))
         return m
     except FileExistsError:
         raise FileExistsError('DESTINATION_EXISTS') from None

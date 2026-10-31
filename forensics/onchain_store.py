@@ -690,6 +690,7 @@ def verify_receipt_and_event(
     expected_note_hash: str | None = None,
     legacy_case_encoding: bool = False,
     expected_case_id: str | None = None,
+    expected_storage_uri: str | None = None,
 ) -> dict[str, Any]:
     """Strictly verify transaction receipt and event log before marking verified=1.
 
@@ -858,6 +859,71 @@ def verify_receipt_and_event(
         expected_min_hex = 194 + ((uri_len + 31) // 32) * 64
         if len(data_hex) < expected_min_hex:
             raise RuntimeError(f"VERIFICATION_FAILED: EvidenceRegistered data payload truncated for storageUri (expected at least {expected_min_hex} hex chars, got {len(data_hex)})")
+        if len(data_hex) != expected_min_hex:
+            raise RuntimeError(f"VERIFICATION_FAILED: EvidenceRegistered data payload ABI violation: unexpected trailing data (expected {expected_min_hex} hex chars, got {len(data_hex)})")
+
+        pad_hex = data_hex[194 + uri_len * 2 : expected_min_hex]
+        if any(c != "0" for c in pad_hex):
+            raise RuntimeError("VERIFICATION_FAILED: non-zero padding in storageUri ABI data")
+
+        raw_uri_bytes = bytes.fromhex(data_hex[194 : 194 + uri_len * 2])
+        try:
+            decoded_uri = raw_uri_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            raise RuntimeError("VERIFICATION_FAILED: storageUri is not valid UTF-8")
+
+        from forensics.evidence_identity import CANONICAL_URI_LENGTH, canonical_storage_uri, case_id_digest
+
+        if legacy_case_encoding:
+            if decoded_uri.startswith("evidence://sha256/"):
+                raise RuntimeError("VERIFICATION_FAILED: canonical storageUri in legacy mode (profile mismatch)")
+            if expected_case_id:
+                exp_legacy_uri = f"evidence://{expected_case_id}/manifest.json"
+                if decoded_uri != exp_legacy_uri:
+                    raise RuntimeError(
+                        f"VERIFICATION_FAILED: storageUri mismatch in EvidenceRegistered log (expected legacy {exp_legacy_uri}, got {decoded_uri})"
+                    )
+            elif expected_storage_uri:
+                if decoded_uri != expected_storage_uri:
+                    raise RuntimeError(
+                        f"VERIFICATION_FAILED: storageUri mismatch in EvidenceRegistered log (expected {expected_storage_uri}, got {decoded_uri})"
+                    )
+        else:
+            if not decoded_uri.startswith("evidence://sha256/"):
+                raise RuntimeError("VERIFICATION_FAILED: legacy storageUri in canonical mode (profile mismatch)")
+            if len(decoded_uri) != CANONICAL_URI_LENGTH:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: canonical storageUri length must be exactly {CANONICAL_URI_LENGTH}, got {len(decoded_uri)}"
+                )
+
+            eff_case_digest = expected_case_digest
+            if not eff_case_digest and expected_case_id:
+                try:
+                    eff_case_digest = case_id_digest(expected_case_id)
+                except ValueError:
+                    pass
+
+            exp_can_uri = None
+            if eff_case_digest and expected_manifest_sha256:
+                exp_can_uri = canonical_storage_uri(eff_case_digest, expected_manifest_sha256)
+            elif expected_storage_uri:
+                exp_can_uri = expected_storage_uri
+            else:
+                exp_can_uri = canonical_storage_uri(log_case, log_man)
+
+            if exp_can_uri and decoded_uri != exp_can_uri:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: storageUri mismatch in EvidenceRegistered log (expected {exp_can_uri}, got {decoded_uri})"
+                )
+
+            uri_parts = decoded_uri.split("/")
+            if len(uri_parts) == 6 and uri_parts[0] == "evidence:" and uri_parts[1] == "" and uri_parts[2] == "sha256" and uri_parts[5] == "manifest.json":
+                if uri_parts[3].lower() != log_case.lower():
+                    raise RuntimeError("VERIFICATION_FAILED: case_digest in storageUri does not match topic2 in EvidenceRegistered log")
+                if uri_parts[4].lower() != log_man.lower():
+                    raise RuntimeError("VERIFICATION_FAILED: manifestSha256 in storageUri does not match topic3 in EvidenceRegistered log")
+            else:
+                raise RuntimeError("VERIFICATION_FAILED: invalid canonical storageUri structure in EvidenceRegistered log")
 
         sub_hex = data_hex[2:66][-40:].zfill(40)
         if expected_actor:
@@ -1017,6 +1083,7 @@ def persist_verified_event(
         expected_note_hash=note_hash_val,
         legacy_case_encoding=bool(data.get("legacy_case_encoding", False)),
         expected_case_id=data.get("case_id"),
+        expected_storage_uri=data.get("storage_uri"),
     )
 
     # Derive verified execution coordinates directly from the verified receipt
@@ -1437,6 +1504,7 @@ def reconcile_operation(
                 expected_manifest_sha256=intent.get("manifest_sha256"),
                 legacy_case_encoding=bool(intent.get("legacy_case_encoding", False)),
                 expected_case_id=intent.get("case_id"),
+                expected_storage_uri=intent.get("storage_uri"),
             )
         else:
             matched_log = verify_receipt_and_event(
@@ -1511,6 +1579,9 @@ def reconcile_operation(
             artifact_sha256=manifest_sha256,
             manifest_sha256=manifest_sha256,
             case_digest=case_digest,
+            case_id=intent.get("case_id"),
+            storage_uri=intent.get("storage_uri"),
+            legacy_case_encoding=bool(intent.get("legacy_case_encoding", False)),
             tx_hash=tx,
             block_number=block_number,
             log_index=log_index,
