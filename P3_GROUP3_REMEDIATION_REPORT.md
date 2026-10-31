@@ -5,7 +5,7 @@
 **Repository:** `D:\Projest\Blockchain`  
 **Baseline P3:** `713ad068348cab75046e10d52332f0d850ef93f5`  
 **Candidate Audited:** `67bba6866a59f5c7549893eb68a8c06b5bade553`  
-**Final Verified Commit:** `c62f5bb4722d7bbcd7d239c3dc1a75fa7ec0cfa6` (parent: `244bc188bc827e8d6ee6ebaaebc25d81b8318d17`)  
+**Final Verified Commit:** `a79f24095bbce1922c1dbfc7dc3801fec4ae3195` (parent: `9d1fd8c1404e9c7ea01995a9d8c9735d64230ca1`)  
 **Governing Standard:** `P3_GROUP3_PLAN_v2.md`  
 **Final Status:** **ALL 17 ACCEPTANCE GATES PASS (17/17 — 100%)**
 
@@ -33,8 +33,8 @@ A surgical, controlled remediation was executed addressing these areas while pre
 | Metric | Result | Status |
 | :--- | :--- | :--- |
 | **Acceptance Gates (Plan v2)** | **17 / 17 Gates PASS** | **100% PASS** |
-| **Pytest Full Suite** | **557 / 557 Tests PASS** (0 failed, 0 skipped) | **PASS** |
-| **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 21.38ms) | **PASS** |
+| **Pytest Full Suite** | **565 / 565 Tests PASS** (0 failed, 0 skipped) | **PASS** |
+| **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 22.98ms) | **PASS** |
 | **Anvil Group 3 Smoke Suite** | **10 / 10 Real Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 1b Smoke Suite** | **55 / 55 Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 2b Smoke Suite** | **9 / 9 Checks PASS** (exit code 0) | **PASS** |
@@ -296,6 +296,30 @@ Following direct ZIP audit, two final narrow security findings were identified a
      - `export_package` and `export_evidence` pass `migrate_group3_schema=False`. Standard evidence export operations on pre-existing legacy databases create `evidence_exports` if needed, but preserve the historical schema completely untouched without creating `anchor_links`, `onchain_operations`, `onchain_operation_events`, or modifying `custody_events`.
      - Production database `data/forensics.db` is never modified.
      - Targeted tests in `tests/test_onchain_blockers.py::TestFindingB_ExporterPreservesLegacySchema` (2 tests).
+#### 2.7.5 Final Narrow Security Remediation (Finding C — Canonical Custody NoteHash Verification)
+
+Following independent audit of commit `c62f5bb`, one final narrow security finding was confirmed and resolved on commit `a79f240`:
+
+1. **Finding C — G3-03 / G3-05 / G3-07 / G3-10: Canonical Custody NoteHash Plaintext Verification:**
+   - *Vulnerability:* In `forensics/onchain_store.py::verify_receipt_and_event()`, `CustodyRecorded` verification accepted a zero-padded plaintext UTF-8 `noteHash` when `SHA256(stripped_plaintext)` matched the expected hash, even when `legacy_case_encoding=False` (canonical mode).
+   - *Remediation in `forensics/onchain_store.py`:*
+     - Enforced strict bytes32 equality (`log_nh == exp_nh`) between on-chain `noteHash` and expected SHA-256 hash in canonical mode (`legacy_case_encoding=False`).
+     - Completely eliminated implicit zero-padding or plaintext fallback from canonical verification. Any mismatch immediately raises `VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log`.
+     - Restricted legacy zero-padding plaintext verification strictly behind explicit, read-only `legacy_case_encoding=True`.
+     - In `reconcile_operation()`, forwarded `legacy_case_encoding=bool(intent.get("legacy_case_encoding", False))` for `CustodyRecorded`. On noteHash mismatch, reconcile preserves `UNKNOWN` state with `reconciled=False`, zero `CONFIRMED`, and zero `verified=1`.
+   - *Remediation in `forensics/onchain.py`:*
+     - Updated `verify_custody_receipt(..., legacy_case_encoding: bool = False)`: in canonical mode, raw note fallback is strictly disabled and requires `data[32:] == _bytes(note, 32)`.
+     - In `record_custody_action()` (new custody write path), explicitly set `raw_note=None` and `legacy_case_encoding=False`, strictly enforcing exact SHA-256 bytes32 equality in both `verify_custody_receipt` and `verify_receipt_and_event`.
+   - *Targeted Tests in `tests/test_onchain_blockers.py::TestFindingC_CanonicalCustodyNoteHash` (8 tests):*
+     - `test_canonical_verification_rejects_plaintext_padded_note_hash`: Asserts fail-closed on zero-padded plaintext in canonical mode.
+     - `test_canonical_verification_accepts_correct_sha256_note_hash`: Confirms exact SHA-256 acceptance.
+     - `test_canonical_verification_rejects_wrong_sha256_note_hash`: Confirms mismatch rejection.
+     - `test_persist_verified_event_refuses_verified_1_for_plaintext_padded_note_in_canonical_mode`: Proves zero `verified=1` written.
+     - `test_reconcile_custody_preserves_unknown_for_plaintext_padded_note_in_canonical_mode`: Proves operation in DB preserves `UNKNOWN`.
+     - `test_explicit_legacy_profile_accepts_plaintext_padded_note_when_sha256_matches`: Verifies legacy opt-in compatibility.
+     - `test_explicit_legacy_profile_rejects_plaintext_padded_note_when_sha256_mismatches`: Confirms legacy fail-closed on invalid data.
+     - `test_verify_custody_receipt_enforces_exact_equality_in_canonical_mode`: Confirms helper enforces exact equality.
+
 
 ---
 
@@ -305,17 +329,17 @@ Following direct ZIP audit, two final narrow security findings were identified a
 | :--- | :--- | :--- | :---: | :--- |
 | **G3-01** | Multi-Manifest Same Case Linkage | `test_onchain_store.py::TestGate3_01_*` (3 tests) + Smoke | **PASS** | `forensics/schemas.py:35-43`, composite PK `(chain_id, contract_address, manifest_sha256)` |
 | **G3-02** | Custody Event Identity & Collision | `test_onchain_store.py::TestGate3_02_*` (3 tests) | **PASS** | `forensics/schemas.py:53-56`, unique index `(chain_id, contract_address, tx_hash, log_index)` |
-| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests), `test_onchain_blockers.py::TestBlocker1_*` (7 tests), `test_onchain_blockers.py::TestFinding1_*` (9 tests), `test_onchain_blockers.py::TestFindingA_*` (5 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, 4 ABI topics check, blockHash/logIndex check, multi-coordinate cross-validation, strict ABI event data validation, 32-byte hex hash regex, full UTF-8 storageUri decoding, zero padding check, canonical URI matching |
+| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests), `test_onchain_blockers.py::TestBlocker1_*` (7 tests), `test_onchain_blockers.py::TestFinding1_*` (9 tests), `test_onchain_blockers.py::TestFindingA_*` (5 tests), `test_onchain_blockers.py::TestFindingC_*` (4 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, 4 ABI topics check, blockHash/logIndex check, multi-coordinate cross-validation, strict ABI event data validation, 32-byte hex hash regex, full UTF-8 storageUri decoding, zero padding check, canonical URI matching, exact bytes32 equality for custody noteHash |
 | **G3-04** | Fail-Fast DB Checks Before Send | `test_onchain_store.py::TestGate3_11_*` (3 tests), `TestGate3_14::test_package_retention_*`, `test_onchain_group3.py::TestRecoverySidecar` (2 tests), `test_onchain_blockers.py::TestFinding3_*` (4 tests), `test_onchain_blockers.py::TestFindingB_*` (2 tests) | **PASS** | `forensics/onchain_store.py:177-224`, `pre_send_db_check(migrate=False)` refuses missing/read-only/unmigrated DB before send, explicit `migrate-db` CLI command, exporter preserves legacy schema |
-| **G3-05** | Note SHA-256 & No File Probing | `test_evidence_identity.py::TestGate3_05_*` (9 tests) | **PASS** | `forensics/evidence_identity.py:85-110`, verbatim UTF-8 bytes hashed; non-empty validation; in-memory |
+| **G3-05** | Note SHA-256 & No File Probing | `test_evidence_identity.py::TestGate3_05_*` (9 tests), `test_onchain_blockers.py::TestFindingC_*` (2 tests) | **PASS** | `forensics/evidence_identity.py:85-110`, verbatim UTF-8 bytes hashed; non-empty validation; in-memory; exact bytes32 on-chain equality |
 | **G3-06** | Case ID SHA-256 & Zero Leakage | `test_evidence_identity.py::TestGate3_06_*` (4 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:38-73`, length 1..64, anchor `\A...\Z`, SHA-256 digest |
-| **G3-07** | Legacy Read-Only Compatibility | `test_evidence_identity.py::TestGate3_07_*` (9 tests), `test_onchain_guard.py` | **PASS** | `forensics/onchain.py:755-805`, zero silent downgrade; explicit `--legacy-case-encoding` returning `LEGACY_PUBLIC_CASE_ID`; mixed profiles rejected |
+| **G3-07** | Legacy Read-Only Compatibility | `test_evidence_identity.py::TestGate3_07_*` (9 tests), `test_onchain_guard.py`, `test_onchain_blockers.py::TestFindingC_*` (3 tests) | **PASS** | `forensics/onchain.py:755-805`, zero silent downgrade; explicit `--legacy-case-encoding` returning `LEGACY_PUBLIC_CASE_ID`; legacy zero-padded noteHash strictly gated behind explicit legacy profile |
 | **G3-08** | Canonical Immutable Intent | `test_onchain_group3.py::TestGate3_08_*` (4 tests) | **PASS** | `forensics/onchain_store.py:64-125`, deterministic JSON with sorted keys, deterministic SHA-256 |
 | **G3-09** | Operation Journal & State Transitions | `test_onchain_group3.py::TestGate3_09_*` (3 tests), `TestGate3_17_*` | **PASS** | `forensics/onchain_store.py:640-724`, `onchain_operation_events` tracks complete lifecycle |
-| **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests), `test_onchain_blockers.py` (6 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, chainId + canonical block lookup + hash check, complete storageUri cross-validation, raw receipt dict rejected, zero broadcast |
+| **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests), `test_onchain_blockers.py` (7 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, chainId + canonical block lookup + hash check, complete storageUri cross-validation, canonical custody noteHash cross-validation, raw receipt dict rejected, zero broadcast |
 | **G3-11** | SQLite Additive Migration Integrity | `test_onchain_store.py::TestGate3_11_*` (8 tests), `test_onchain_blockers.py::TestBlocker2_*` (3 tests) | **PASS** | `forensics/schemas.py:143-176`, native SAVEPOINT atomicity, no executescript, 100% snapshot preservation on diverse legacy rows |
 | **G3-12** | Canary Privacy & Secret Guardrails | `test_evidence_identity.py::TestGate3_12_*` (5 tests), `test_onchain_group3.py::TestRecoverySidecar` (3 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:244-307`, longest-match redaction, sidecar recursive secret rejection |
-| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 557 total pytest pass |
+| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 565 total pytest pass |
 | **G3-14** | Export No-Clobber & Canonical URI | `test_onchain_store.py::TestGate3_14_*` (7 tests), `forensics/exporter.py`, `test_onchain_blockers.py::TestFindingB_*` | **PASS** | `forensics/exporter.py:260-285`, canonical storage URI in DB metadata, no-clobber, dual-manifest distinction, retention on DB failure, zero implicit legacy schema migration |
 | **G3-15** | Canonical Storage URI Format | `test_evidence_identity.py::TestGate3_15_*` (8 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:110-155`, exact 161 printable ASCII bytes, self-referential cycle detection |
 | **G3-16** | Real Dual-Process Concurrency | `test_onchain_group3.py::TestGate3_16_*` (3 tests) + Smoke | **PASS** | `tests/test_onchain_group3.py:534-620`, multiprocessing spawn, atomic CAS `BEGIN IMMEDIATE` + conditional update, exactly 1 send on Anvil |
@@ -330,13 +354,13 @@ Following direct ZIP audit, two final narrow security findings were identified a
 - **Exit Code:** `0`
 - **Output:**
   ```text
-  557 passed in 417.50s (0:06:57)
+  565 passed in 429.51s (0:07:09)
   ```
 - **Breakdown of Passing Tests:**
   - `tests/test_evidence_identity.py`: 36 tests PASS
   - `tests/test_onchain_store.py`: 33 tests PASS
   - `tests/test_onchain_group3.py`: 26 tests PASS
-  - `tests/test_onchain_blockers.py`: 36 tests PASS (Blockers 1 & 2 + Findings 1, 2, 3 + Findings A & B targeted test suite)
+  - `tests/test_onchain_blockers.py`: 44 tests PASS (Blockers 1 & 2 + Findings 1, 2, 3 + Findings A, B, C targeted test suite)
   - `tests/test_onchain_group3_smoke.py`: 7 tests PASS
   - `tests/test_onchain_2b.py`: 73 tests PASS
   - `tests/test_onchain_guard.py`: 10 tests PASS
@@ -347,22 +371,7 @@ Following direct ZIP audit, two final narrow security findings were identified a
   - `tests/test_integrity_2a.py`: 48 tests PASS
   - `tests/test_provenance_2a.py`: 8 tests PASS
   - Pre-existing Phase 1 & 2 tests: 215 tests PASS
-  - **Total:** 557 / 557 PASS (100%)
-  - `tests/test_evidence_identity.py`: 36 tests PASS
-  - `tests/test_onchain_store.py`: 33 tests PASS
-  - `tests/test_onchain_group3.py`: 26 tests PASS
-  - `tests/test_onchain_blockers.py`: 28 tests PASS (Blockers 1 & 2 + Findings 1, 2, 3 targeted test suite)
-  - `tests/test_onchain_group3_smoke.py`: 7 tests PASS
-  - `tests/test_onchain_2b.py`: 73 tests PASS
-  - `tests/test_onchain_guard.py`: 10 tests PASS
-  - `tests/test_onchain_group1.py`: 51 tests PASS
-  - `tests/test_onchain_group1b.py`: 9 tests PASS
-  - `tests/test_onchain_d1.py`: 4 tests PASS
-  - `tests/test_group2b_smoke.py`: 1 test (9 Anvil checks) PASS
-  - `tests/test_integrity_2a.py`: 48 tests PASS
-  - `tests/test_provenance_2a.py`: 8 tests PASS
-  - Pre-existing Phase 1 & 2 tests: 215 tests PASS
-  - **Total:** 533 / 533 PASS (100%)
+  - **Total:** 565 / 565 PASS (100%)
 
 ### 4.2 Foundry Contract Suite Execution
 - **Command:** `forge test --root contracts`
