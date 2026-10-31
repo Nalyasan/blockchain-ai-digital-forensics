@@ -28,6 +28,10 @@ contract EvidenceRegistry {
     }
 
     uint256 public constant MAX_URI_BYTES = 256;
+    uint256 public constant MAX_PAGE_SIZE = 50;
+
+    bytes private constant EVIDENCE_PREFIX = "evidence://";
+    uint256 private constant PREFIX_LENGTH = 11;
 
     address public owner;
     address public pendingOwner;
@@ -49,6 +53,10 @@ contract EvidenceRegistry {
     error UriTooLong(uint256 length, uint256 maxLength);
     error WhitespaceUri();
     error NoPendingTransfer();
+    error InvalidUriPrefix();
+    error InvalidUriCharacter(uint256 index, bytes1 char);
+    error InvalidUriReference();
+    error PageSizeTooLarge(uint256 limit, uint256 maxLimit);
 
     event InvestigatorUpdated(address indexed account, bool authorized);
     event EvidenceRegistered(
@@ -157,6 +165,31 @@ contract EvidenceRegistry {
             revert WhitespaceUri();
         }
 
+        // Strict prefix validation: must start with "evidence://" (11 bytes)
+        if (uriBytes.length < PREFIX_LENGTH) {
+            revert InvalidUriPrefix();
+        }
+        for (uint256 i = 0; i < PREFIX_LENGTH; i++) {
+            if (uriBytes[i] != EVIDENCE_PREFIX[i]) {
+                revert InvalidUriPrefix();
+            }
+        }
+
+        // Strict printable ASCII validation (0x20 to 0x7E) and meaningful reference check
+        bool hasReferenceContent = false;
+        for (uint256 i = 0; i < uriBytes.length; i++) {
+            bytes1 char = uriBytes[i];
+            if (char < 0x20 || char > 0x7E) {
+                revert InvalidUriCharacter(i, char);
+            }
+            if (i >= PREFIX_LENGTH && char != 0x20) {
+                hasReferenceContent = true;
+            }
+        }
+        if (!hasReferenceContent) {
+            revert InvalidUriReference();
+        }
+
         uint256 existingId = hashToEvidenceId[manifestSha256];
         if (existingId != 0) {
             revert DuplicateManifestHash(manifestSha256, existingId);
@@ -233,5 +266,50 @@ contract EvidenceRegistry {
             revert EvidenceNotFound(evidenceId);
         }
         return _custodyHistory[evidenceId];
+    }
+
+    /// @notice Trả về tổng số lượng bản ghi custody của một evidenceId.
+    function getCustodyCount(uint256 evidenceId) external view returns (uint256) {
+        if (!_evidences[evidenceId].exists) {
+            revert EvidenceNotFound(evidenceId);
+        }
+        return _custodyHistory[evidenceId].length;
+    }
+
+    /// @notice Đọc lịch sử chain of custody có phân trang (bounded pagination).
+    /// @dev Hàm view, an toàn gas, không sửa trạng thái.
+    ///      Nếu limit == 0 hoặc offset >= total, trả về mảng rỗng cùng total.
+    ///      Nếu limit > MAX_PAGE_SIZE, revert PageSizeTooLarge.
+    function getCustodyHistory(
+        uint256 evidenceId,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (CustodyRecord[] memory records, uint256 total) {
+        if (!_evidences[evidenceId].exists) {
+            revert EvidenceNotFound(evidenceId);
+        }
+
+        total = _custodyHistory[evidenceId].length;
+
+        if (limit > MAX_PAGE_SIZE) {
+            revert PageSizeTooLarge(limit, MAX_PAGE_SIZE);
+        }
+
+        if (limit == 0 || offset >= total) {
+            return (new CustodyRecord[](0), total);
+        }
+
+        uint256 end = offset + limit;
+        if (end > total) {
+            end = total;
+        }
+
+        uint256 count = end - offset;
+        records = new CustodyRecord[](count);
+        for (uint256 i = 0; i < count; i++) {
+            records[i] = _custodyHistory[evidenceId][offset + i];
+        }
+
+        return (records, total);
     }
 }

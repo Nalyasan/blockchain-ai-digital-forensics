@@ -302,14 +302,18 @@ contract EvidenceRegistryTest {
 
     // ==================== 9. UriTooLong ====================
     function test_UriTooLongReverts() public {
+        bytes memory prefix = bytes("evidence://");
+
         bytes memory longBytes = new bytes(257);
-        for (uint256 i = 0; i < 257; i++) longBytes[i] = "a";
+        for (uint256 i = 0; i < prefix.length; i++) longBytes[i] = prefix[i];
+        for (uint256 i = prefix.length; i < 257; i++) longBytes[i] = "a";
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.UriTooLong.selector, 257, 256));
         registry.registerEvidence(CASE_001, MANIFEST_HASH_1, string(longBytes));
 
         // 256 bytes: OK
         bytes memory maxBytes = new bytes(256);
-        for (uint256 i = 0; i < 256; i++) maxBytes[i] = "b";
+        for (uint256 i = 0; i < prefix.length; i++) maxBytes[i] = prefix[i];
+        for (uint256 i = prefix.length; i < 256; i++) maxBytes[i] = "b";
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, string(maxBytes));
         assert(eid == 1);
     }
@@ -394,10 +398,12 @@ contract EvidenceRegistryTest {
     function testFuzz_RegisterEvidence(bytes32 caseId, bytes32 manifestSha256, uint8 rawLen) public {
         vm.assume(caseId != bytes32(0));
         vm.assume(manifestSha256 != bytes32(0));
-        // Đảm bảo length >= 1 và <= 256 byte
-        uint256 length = 1 + (uint256(rawLen) % 256);
+        // Đảm bảo URI hợp lệ với tiền tố evidence:// và length >= 12 và <= 256 byte
+        bytes memory prefix = bytes("evidence://");
+        uint256 length = 12 + (uint256(rawLen) % (256 - 11));
         bytes memory b = new bytes(length);
-        for (uint256 i = 0; i < length; i++) b[i] = bytes1(uint8(65 + (i % 26)));
+        for (uint256 i = 0; i < prefix.length; i++) b[i] = prefix[i];
+        for (uint256 i = prefix.length; i < length; i++) b[i] = bytes1(uint8(65 + (i % 26)));
 
         uint256 expectedId = registry.nextEvidenceId();
         uint256 eid = registry.registerEvidence(caseId, manifestSha256, string(b));
