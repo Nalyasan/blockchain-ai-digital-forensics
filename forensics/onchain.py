@@ -363,15 +363,18 @@ def extract_evidence_id_from_receipt(receipt, expected_case_id=None, expected_ma
     return eid
 
 
-def verify_custody_receipt(receipt, contract, signer, evidence_id, action, artifact, note, raw_note=None):
+def verify_custody_receipt(receipt, contract, signer, evidence_id, action, artifact, note, raw_note=None, legacy_case_encoding: bool = False):
     event = _event_logs(receipt, TOPIC_CUSTODY_RECORDED, contract)
     topics = event['topics']; data = _bytes(event.get('data'), 64)
     _require(int(topics[1], 16) == evidence_id and int(topics[2], 16) == action and action in range(4), 'CUSTODY_EVENT_MISMATCH')
     _require(_address_word(_bytes(topics[3], 32)) == signer, 'CUSTODY_ACTOR_MISMATCH')
     match_art = (data[:32] == _bytes(artifact, 32))
-    match_note = (data[32:] == _bytes(note, 32)) or (
-        raw_note is not None and len(raw_note.encode('utf-8')) <= 32 and data[32:] == _bytes(string_to_bytes32_hex(raw_note), 32)
-    )
+    if legacy_case_encoding:
+        match_note = (data[32:] == _bytes(note, 32)) or (
+            raw_note is not None and len(raw_note.encode('utf-8')) <= 32 and data[32:] == _bytes(string_to_bytes32_hex(raw_note), 32)
+        )
+    else:
+        match_note = (data[32:] == _bytes(note, 32))
     _require(match_art and match_note, 'CUSTODY_DATA_MISMATCH')
 
 def run_cast_send(args: list[str]) -> str:
@@ -618,11 +621,22 @@ def record_custody_action(
 
     receipt = get_transaction_receipt(tx_hash, url)
     actor = validate_write_receipt(receipt, tx_hash, contract_address, signer)
-    verify_custody_receipt(receipt, contract_address, signer, evidence_id, action, art_b32, note_b32, raw_note=note)
+    verify_custody_receipt(receipt, contract_address, signer, evidence_id, action, art_b32, note_b32, raw_note=None, legacy_case_encoding=False)
     _require(get_rpc_chain_id(url) == chain_id, 'CHAIN_UNSTABLE')
     check_receipt_block(url, receipt)
     block_num = _uint(receipt['blockNumber'])
-    event = ops.verify_receipt_and_event(receipt, 'CustodyRecorded', contract_address)
+    event = ops.verify_receipt_and_event(
+        receipt,
+        'CustodyRecorded',
+        expected_contract=contract_address,
+        expected_tx_hash=tx_hash,
+        expected_actor=actor,
+        expected_evidence_id=evidence_id,
+        expected_action=action,
+        expected_artifact_sha256=art_b32,
+        expected_note_hash=note_b32,
+        legacy_case_encoding=False,
+    )
     log_index = _uint(event.get('logIndex'))
 
     try:
@@ -640,7 +654,8 @@ def record_custody_action(
             block_number=block_num,
             log_index=log_index,
             event_type='CustodyRecorded',
-            receipt=receipt
+            receipt=receipt,
+            legacy_case_encoding=False,
         )
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         persist_conn = ops.open_existing_rw(db_file, migrate_before_send=False)

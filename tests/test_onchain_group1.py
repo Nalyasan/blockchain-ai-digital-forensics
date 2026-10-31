@@ -66,7 +66,7 @@ def write_flow(tmp_path, monkeypatch):
         if kind == 'anchor':
             return oc.anchor_evidence(str(manifest), allow_dirty=True, allow_unfinalized=True, reason='controlled-test', **options)
         receipt['logs'][0].update(topics=[oc.TOPIC_CUSTODY_RECORDED,f'0x{1:064x}',f'0x{1:064x}','0x'+'0'*24+SIGNER[2:]],
-                                  data='0x'+'a'*64+oc.string_to_bytes32_hex('note')[2:])
+                                  data='0x'+'a'*64+oc.note_hash_bytes32('note')[2:])
         return oc.record_custody_action(1, 1, '0x' + 'a' * 64, 'note', **options)
     return invoke, send, receipt, db
 

@@ -962,3 +962,317 @@ class TestFindingB_ExporterPreservesLegacySchema:
         assert group3_schema_present(conn)
         conn.close()
 
+
+class TestFindingC_CanonicalCustodyNoteHash:
+    """Finding C — G3-03 / G3-05 / G3-07 / G3-10: Canonical Custody NoteHash Verification.
+
+    Guarantees:
+    1. Canonical profile requires 100% exact bytes32 equality between on-chain noteHash and expected SHA-256.
+    2. Zero implicit plaintext/zero-padding fallback permitted in canonical mode.
+    3. Legacy profile (legacy_case_encoding=True) accepts valid UTF-8 zero-padded plaintext <= 32 bytes
+       matching expected SHA-256, but rejects if SHA-256 does not match.
+    4. persist_verified_event and reconcile_operation strictly fail-closed on plaintext-padded note in canonical mode.
+    5. verify_custody_receipt enforces exact equality when legacy_case_encoding=False.
+    """
+
+    CONTRACT = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    SIGNER = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+    PLAINTEXT_NOTE = "private-demo"
+
+    def _make_custody_receipt(
+        self,
+        note_hash_hex: str,
+        artifact_sha256_hex: str = "33" * 32,
+        action: int = 1,
+        evidence_id: int = 1,
+        tx_hash: str = "0x" + "aa" * 32,
+        block_hash: str = "0x" + "bb" * 32,
+        block_number: int = 100,
+        log_index: int = 0,
+    ) -> dict[str, Any]:
+        """Create an ABI-compliant CustodyRecorded receipt with specified note_hash in data."""
+        art_clean = artifact_sha256_hex.lower().removeprefix("0x")
+        nh_clean = note_hash_hex.lower().removeprefix("0x")
+        tx_norm = tx_hash if tx_hash.startswith("0x") else "0x" + tx_hash
+        bh_norm = block_hash if block_hash.startswith("0x") else "0x" + block_hash
+        return {
+            "status": 1,
+            "blockNumber": hex(block_number),
+            "blockHash": bh_norm,
+            "transactionHash": tx_norm,
+            "transactionIndex": 0,
+            "logs": [
+                {
+                    "address": self.CONTRACT,
+                    "logIndex": log_index,
+                    "transactionIndex": 0,
+                    "transactionHash": tx_norm,
+                    "blockNumber": hex(block_number),
+                    "blockHash": bh_norm,
+                    "topics": [
+                        TOPIC_CUSTODY_RECORDED,
+                        "0x" + hex(evidence_id)[2:].zfill(64),
+                        "0x" + hex(action)[2:].zfill(64),
+                        "0x" + self.SIGNER.lower().removeprefix("0x")[-40:].zfill(64),
+                    ],
+                    "data": "0x" + art_clean.zfill(64) + nh_clean.zfill(64),
+                }
+            ],
+        }
+
+    def test_canonical_verification_rejects_plaintext_padded_note_hash(self):
+        """Canonical verification (legacy_case_encoding=False) MUST reject zero-padded plaintext noteHash."""
+        from forensics.evidence_identity import string_to_bytes32_hex, sha256_utf8
+
+        # Note on-chain is zero-padded plaintext UTF-8 "private-demo"
+        padded_nh = string_to_bytes32_hex(self.PLAINTEXT_NOTE)
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+
+        receipt = self._make_custody_receipt(note_hash_hex=padded_nh)
+
+        # In canonical mode, must fail-closed with RuntimeError
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log"):
+            verify_receipt_and_event(
+                receipt,
+                expected_event_type=EVENT_TYPE_CUSTODY_RECORDED,
+                expected_contract=self.CONTRACT,
+                expected_actor=self.SIGNER,
+                expected_evidence_id=1,
+                expected_action=1,
+                expected_artifact_sha256="33" * 32,
+                expected_note_hash=expected_nh,
+                legacy_case_encoding=False,
+            )
+
+    def test_canonical_verification_accepts_correct_sha256_note_hash(self):
+        """Canonical verification MUST accept exact bytes32 SHA-256 noteHash."""
+        from forensics.evidence_identity import sha256_utf8
+
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        receipt = self._make_custody_receipt(note_hash_hex=expected_nh)
+
+        matched = verify_receipt_and_event(
+            receipt,
+            expected_event_type=EVENT_TYPE_CUSTODY_RECORDED,
+            expected_contract=self.CONTRACT,
+            expected_actor=self.SIGNER,
+            expected_evidence_id=1,
+            expected_action=1,
+            expected_artifact_sha256="33" * 32,
+            expected_note_hash=expected_nh,
+            legacy_case_encoding=False,
+        )
+        assert matched is not None
+        assert matched["topics"][0].lower() == TOPIC_CUSTODY_RECORDED.lower()
+
+    def test_canonical_verification_rejects_wrong_sha256_note_hash(self):
+        """Canonical verification MUST reject wrong SHA-256 noteHash."""
+        from forensics.evidence_identity import sha256_utf8
+
+        wrong_nh = sha256_utf8("completely-different-note")
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        receipt = self._make_custody_receipt(note_hash_hex=wrong_nh)
+
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log"):
+            verify_receipt_and_event(
+                receipt,
+                expected_event_type=EVENT_TYPE_CUSTODY_RECORDED,
+                expected_contract=self.CONTRACT,
+                expected_actor=self.SIGNER,
+                expected_evidence_id=1,
+                expected_action=1,
+                expected_artifact_sha256="33" * 32,
+                expected_note_hash=expected_nh,
+                legacy_case_encoding=False,
+            )
+
+    def test_persist_verified_event_refuses_verified_1_for_plaintext_padded_note_in_canonical_mode(self, tmp_path: Path):
+        """persist_verified_event must refuse to write verified=1 when noteHash is plaintext-padded in canonical mode."""
+        from forensics.evidence_identity import string_to_bytes32_hex, sha256_utf8
+        from forensics.schemas import init_db
+
+        db_file = tmp_path / "test_persist_custody.db"
+        init_db(str(db_file), migrate_group3_schema=True)
+
+        padded_nh = string_to_bytes32_hex(self.PLAINTEXT_NOTE)
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        tx_hash = "0x" + "aa" * 32
+        receipt = self._make_custody_receipt(note_hash_hex=padded_nh, tx_hash=tx_hash)
+
+        # Attempt to persist with canonical profile (legacy_case_encoding=False)
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log"):
+            persist_verified_event(
+                db_file,
+                operation_id="op-test-custody-1",
+                chain_id=31337,
+                contract=self.CONTRACT,
+                evidence_id=1,
+                action=1,
+                actor=self.SIGNER,
+                artifact_sha256="33" * 32,
+                note_hash=expected_nh,
+                tx_hash=tx_hash,
+                block_number=100,
+                log_index=0,
+                event_type=EVENT_TYPE_CUSTODY_RECORDED,
+                receipt=receipt,
+                legacy_case_encoding=False,
+            )
+
+        # Assert database contains ZERO verified custody records
+        conn = sqlite3.connect(str(db_file))
+        assert conn.execute("SELECT COUNT(*) FROM custody_events WHERE verified = 1").fetchone()[0] == 0
+        conn.close()
+
+    def test_reconcile_custody_preserves_unknown_for_plaintext_padded_note_in_canonical_mode(self, tmp_path: Path, monkeypatch):
+        """reconcile_operation for custody in canonical mode preserves UNKNOWN when on-chain noteHash is plaintext-padded."""
+        from forensics.evidence_identity import string_to_bytes32_hex, sha256_utf8
+        from forensics.schemas import init_db
+        from forensics.onchain_store import custody_intent, claim_send, mark_unknown
+
+        db_file = tmp_path / "test_reconcile_custody.db"
+        init_db(str(db_file), migrate_group3_schema=True)
+
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        tx_hash = "0x" + "aa" * 32
+        block_hash = "0x" + "bb" * 32
+        padded_nh = string_to_bytes32_hex(self.PLAINTEXT_NOTE)
+
+        intent = custody_intent(
+            chain_id=31337,
+            contract=self.CONTRACT,
+            evidence_id=1,
+            action=1,
+            artifact_sha256="33" * 32,
+            note_hash=expected_nh,
+            signer=self.SIGNER,
+        )
+        claim = claim_send(db_file, intent)
+        op_id = claim.operation_id
+        mark_unknown(db_file, op_id, "CRASH_BEFORE_CONFIRM")
+
+        receipt = self._make_custody_receipt(note_hash_hex=padded_nh, tx_hash=tx_hash, block_hash=block_hash)
+
+        class MockRpcClient:
+            def eth_chainId(self):
+                return 31337
+            def eth_getTransactionReceipt(self, _tx):
+                return receipt
+            def eth_getBlockByNumber(self, _bn, _full):
+                return {"hash": receipt["blockHash"]}
+
+        # Reconcile operation
+        res = reconcile_operation(
+            db_file,
+            op_id,
+            MockRpcClient(),
+            tx_hash=tx_hash,
+        )
+
+        # Must fail reconciliation
+        assert res["reconciled"] is False
+        assert res["state"] == "UNKNOWN"
+        assert "noteHash mismatch" in res.get("error", "")
+
+        # Crucial: operation in DB must REMAIN UNKNOWN
+        op = load_operation(db_file, op_id)
+        assert op["state"] == "UNKNOWN"
+
+        # Crucial: custody_events must have ZERO verified records
+        conn = sqlite3.connect(str(db_file))
+        assert conn.execute("SELECT COUNT(*) FROM custody_events WHERE verified = 1").fetchone()[0] == 0
+        conn.close()
+
+    def test_explicit_legacy_profile_accepts_plaintext_padded_note_when_sha256_matches(self):
+        """Explicit legacy profile (legacy_case_encoding=True) accepts zero-padded plaintext when SHA-256 matches."""
+        from forensics.evidence_identity import string_to_bytes32_hex, sha256_utf8
+
+        padded_nh = string_to_bytes32_hex(self.PLAINTEXT_NOTE)
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        receipt = self._make_custody_receipt(note_hash_hex=padded_nh)
+
+        matched = verify_receipt_and_event(
+            receipt,
+            expected_event_type=EVENT_TYPE_CUSTODY_RECORDED,
+            expected_contract=self.CONTRACT,
+            expected_actor=self.SIGNER,
+            expected_evidence_id=1,
+            expected_action=1,
+            expected_artifact_sha256="33" * 32,
+            expected_note_hash=expected_nh,
+            legacy_case_encoding=True,
+        )
+        assert matched is not None
+        assert matched["topics"][0].lower() == TOPIC_CUSTODY_RECORDED.lower()
+
+    def test_explicit_legacy_profile_rejects_plaintext_padded_note_when_sha256_mismatches(self):
+        """Explicit legacy profile (legacy_case_encoding=True) rejects zero-padded plaintext when SHA-256 mismatches."""
+        from forensics.evidence_identity import string_to_bytes32_hex, sha256_utf8
+
+        padded_nh = string_to_bytes32_hex("other-note")
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        receipt = self._make_custody_receipt(note_hash_hex=padded_nh)
+
+        with pytest.raises(RuntimeError, match=r"VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log \(legacy mode\)"):
+            verify_receipt_and_event(
+                receipt,
+                expected_event_type=EVENT_TYPE_CUSTODY_RECORDED,
+                expected_contract=self.CONTRACT,
+                expected_actor=self.SIGNER,
+                expected_evidence_id=1,
+                expected_action=1,
+                expected_artifact_sha256="33" * 32,
+                expected_note_hash=expected_nh,
+                legacy_case_encoding=True,
+            )
+
+    def test_verify_custody_receipt_enforces_exact_equality_in_canonical_mode(self):
+        """verify_custody_receipt enforces exact bytes32 equality in canonical mode even if raw_note is supplied."""
+        from forensics.evidence_identity import string_to_bytes32_hex, sha256_utf8
+        from forensics.onchain import verify_custody_receipt
+
+        padded_nh = string_to_bytes32_hex(self.PLAINTEXT_NOTE)
+        expected_nh = sha256_utf8(self.PLAINTEXT_NOTE)
+        receipt = self._make_custody_receipt(note_hash_hex=padded_nh)
+
+        # In canonical mode (legacy_case_encoding=False), raw_note fallback is disabled: must raise CUSTODY_DATA_MISMATCH
+        with pytest.raises(ValueError, match="CUSTODY_DATA_MISMATCH"):
+            verify_custody_receipt(
+                receipt,
+                contract=self.CONTRACT,
+                signer=self.SIGNER,
+                evidence_id=1,
+                action=1,
+                artifact="0x" + "33" * 32,
+                note="0x" + expected_nh,
+                raw_note=self.PLAINTEXT_NOTE,
+                legacy_case_encoding=False,
+            )
+
+        # In legacy mode (legacy_case_encoding=True), raw_note fallback is permitted
+        verify_custody_receipt(
+            receipt,
+            contract=self.CONTRACT,
+            signer=self.SIGNER,
+            evidence_id=1,
+            action=1,
+            artifact="0x" + "33" * 32,
+            note="0x" + expected_nh,
+            raw_note=self.PLAINTEXT_NOTE,
+            legacy_case_encoding=True,
+        )
+
+        # In canonical mode with exact SHA-256 on-chain: succeeds
+        exact_receipt = self._make_custody_receipt(note_hash_hex=expected_nh)
+        verify_custody_receipt(
+            exact_receipt,
+            contract=self.CONTRACT,
+            signer=self.SIGNER,
+            evidence_id=1,
+            action=1,
+            artifact="0x" + "33" * 32,
+            note="0x" + expected_nh,
+            legacy_case_encoding=False,
+        )
+
+

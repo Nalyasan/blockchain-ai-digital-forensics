@@ -987,15 +987,20 @@ def verify_receipt_and_event(
         if expected_note_hash and len(expected_note_hash.removeprefix("0x")) == 64:
             exp_nh = expected_note_hash.lower().removeprefix("0x")
             if log_nh != exp_nh:
-                is_legacy_padded = False
-                try:
-                    raw_bytes = bytes.fromhex(log_nh)
-                    stripped = raw_bytes.rstrip(b"\x00")
-                    if stripped and hashlib.sha256(stripped).hexdigest() == exp_nh:
-                        is_legacy_padded = True
-                except Exception:
-                    pass
-                if not is_legacy_padded:
+                if legacy_case_encoding:
+                    is_legacy_padded = False
+                    try:
+                        raw_bytes = bytes.fromhex(log_nh)
+                        stripped = raw_bytes.rstrip(b"\x00")
+                        if stripped and len(stripped) <= 32:
+                            stripped.decode("utf-8")
+                            if hashlib.sha256(stripped).hexdigest() == exp_nh:
+                                is_legacy_padded = True
+                    except Exception:
+                        pass
+                    if not is_legacy_padded:
+                        raise RuntimeError("VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log (legacy mode)")
+                else:
                     raise RuntimeError("VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log")
 
     return matched_log
@@ -1517,6 +1522,7 @@ def reconcile_operation(
                 expected_action=int(intent.get("action", 0)),
                 expected_artifact_sha256=intent.get("artifact_sha256"),
                 expected_note_hash=intent.get("note_hash"),
+                legacy_case_encoding=bool(intent.get("legacy_case_encoding", False)),
             )
     except RuntimeError as e:
         # Check if reverted
@@ -1604,6 +1610,7 @@ def reconcile_operation(
             actor=actor,
             artifact_sha256=artifact_sha256,
             note_hash=note_hash,
+            legacy_case_encoding=bool(intent.get("legacy_case_encoding", False)),
             tx_hash=tx,
             block_number=block_number,
             log_index=log_index,
