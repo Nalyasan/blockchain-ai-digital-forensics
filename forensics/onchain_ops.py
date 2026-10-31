@@ -223,8 +223,6 @@ def persist_verified_event(db_path, operation_id, *, chain_id, contract, evidenc
         case_digest=case_digest,
         receipt=receipt,
     )
-    finally:
-        conn.close()
 
 
 def load_operation(db_path, operation_id):

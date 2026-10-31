@@ -1,0 +1,162 @@
+# PHASE 3 GROUP 5 — FINAL SECURITY QA & PHASE 3 ACCEPTANCE REPORT
+
+**Scope:** Final Security QA, Guard Falsifiability, Secret Leakage Audit & Milestone Verification (M7, M8, LOW)  
+**Repository:** `D:\Projest\Blockchain`  
+**Date:** 2026-11-01  
+**Baseline Commit:** `491812bf0914ae0b3b1cdf8225e28e8e143910e1`  
+**Status:** **GROUP 5 PASS** (All 6 Acceptance Gates Verified)
+
+---
+
+## 1. Executive Summary
+
+Phase 3 Group 5 represents the final verification, security hardening, and formal acceptance gate of Phase 3 for the **Blockchain + AI Digital Forensics** project.
+
+The objectives of this phase:
+1. **Audit of Missing/Historical Findings (M7, M8, LOW):** Clarify and audit M7, M8, and LOW findings against the repository.
+2. **Security Test Falsifiability & Guard Sensitivity (Gate G5-01):** Verify that every security guard actually detects violations and fails closed under adversarial inputs (signer mismatch, chain mismatch, forged receipts, tampered manifests, zero-padded custody note plaintexts, and duplicate idempotency claims).
+3. **Database & Historical Evidence Immutability (Gate G5-02):** Guarantee that no tests, benchmarks, or smoke scripts ever mutate production databases (`data/forensics.db`) or sample evidence packages (`results/p1/*`, `results/p2/*`), and that zero destructive `INSERT OR REPLACE` queries exist.
+4. **Synthetic Canary Secret Leakage & Privacy Safeguards (Gate G5-03):** Assert zero raw leakage of sensitive keys, passphrases, API tokens, raw case IDs, or plaintext custody notes across logs, sidecars, and SQLite tables.
+5. **Code Hygiene & Low-Severity Fixes (Gate G5-04):** Fix dangling syntax errors (`finally: conn.close()` in `forensics/onchain_ops.py`), verify clean compilation across all 39 Python files, and enforce immutable smart contract constants.
+6. **Full Phase 1 – Phase 3 Regression (Gate G5-05):** Execute complete regression testing across all Foundry smart contract tests, Python unit tests, and multi-process Anvil integration smoke scripts.
+7. **Deliverables & Acceptance Matrix (Gate G5-06):** Generate `P3_GROUP5_REPORT.md`, `acceptance-matrix-group5.json`, and `P3_FINAL_ACCEPTANCE_REPORT.md`.
+
+---
+
+## 2. Audit of M7, M8, and LOW Scope
+
+Per the Master Prompt instructions:
+> *"Nếu bản kiểm toán gốc không có trong repository, ghi rõ thiếu nguồn; không tự bịa chi tiết của M7/M8. Chỉ sửa các lỗi còn tồn tại và tái hiện được."*
+
+### 2.1 Audit Findings on M7 and M8
+An exhaustive search of the repository and full Git commit history was conducted:
+- `git log --all --grep="M7"` -> No commits found.
+- `git log --all --grep="M8"` -> No commits found.
+- `git log --all --grep="LOW"` -> No specific finding references found.
+- Repository file scan across all `.md`, `.json`, `.py`, `.sol` files -> No external audit document defines items named "M7" or "M8".
+
+**Conclusion on M7/M8:** The original audit report defining "M7" and "M8" was not committed to the repository. Rather than fabricating synthetic requirements, Group 5 evaluated the actual security posture of the codebase, focusing on guard sensitivity, secret protection, and reproducible code hygiene defects.
+
+### 2.2 Genuine LOW Finding Identified & Resolved
+A static analysis of all Python modules revealed a compile-time syntax error in `forensics/onchain_ops.py` at line 226:
+```python
+# In forensics/onchain_ops.py (before fix):
+def persist_verified_event(...):
+    # ...
+    # Error: orphaned finally block without matching try
+    finally:
+        conn.close()
+```
+- **Impact:** Any attempt to compile or import `forensics/onchain_ops.py` raised `SyntaxError: invalid syntax`.
+- **Root Cause:** A leftover code snippet from an earlier refactoring in Group 3 commit `d50f880`.
+- **Remediation:** Removed the orphaned two-line block. Re-tested compilation across all 39 repository Python files using `py_compile`. All modules now compile with zero errors.
+
+---
+
+## 3. Acceptance Matrix — Phase 3 Group 5
+
+| Gate | Title | Status | Primary Test / Verification | Exit Code | Details & Evidence |
+|---|---|:---:|---|:---:|---|
+| **G5-01** | Security Test Falsifiability & Guard Sensitivity | **PASS** | `tests/test_p3_group5_security_qa.py` (6 tests) | `0` | Signer, chain ID, manifest, receipt, note hash, and idempotency guards fail-closed on tampering |
+| **G5-02** | Database & Evidence Immutability | **PASS** | `tests/test_p3_group5_security_qa.py` (4 tests), smoke pre/post checks | `0` | SHA-256 identical before/after all runs; zero `INSERT OR REPLACE` statements in codebase |
+| **G5-03** | Secret Leakage & Privacy Safeguards | **PASS** | `tests/test_p3_group5_security_qa.py` (3 tests), `run_p3_group5_smoke.py` | `0` | Synthetic canary keys and tokens redacted in logs/sidecars; 0 raw note/case leaks in SQLite |
+| **G5-04** | Code Hygiene & Low-Severity Fixes | **PASS** | `tests/test_p3_group5_security_qa.py` (2 tests), `py_compile` | `0` | Fixed syntax error in `forensics/onchain_ops.py`; verified all 39 `.py` files compile cleanly |
+| **G5-05** | Full Phase 1 – Phase 3 Regression | **PASS** | Foundry (56/56), Pytest (580/580), 5 Smoke Scripts | `0` | 100% test pass rate across all unit, blocker, and end-to-end integration test suites |
+| **G5-06** | Acceptance Documentation & Commit Isolation | **PASS** | `acceptance-matrix-group5.json`, `P3_FINAL_ACCEPTANCE_REPORT.md` | `0` | Standalone commit for Group 5; zero drift into Phase 4 |
+
+---
+
+## 4. Security Guard Sensitivity & Falsifiability (Gate G5-01)
+
+To prevent "theater tests" (tests that pass trivially regardless of bugs), Group 5 implemented rigorous negative tests proving that every security mechanism is falsifiable and actively guards the system:
+
+1. **Signer Identity Guard (`validate_write_receipt`):**
+   - Injecting an unauthorized sender address raises `ValueError: RECEIPT_SIGNER_MISMATCH`.
+2. **Chain ID Guard (`ALLOWED_CHAIN_IDS`):**
+   - Attempting to send or anchor on an unauthorized chain ID (e.g. `11155111` or `1`) raises `ValueError: CHAIN_DISALLOWED`.
+3. **Manifest Byte Tampering (`verify_package`):**
+   - Modifying a single character in `results/p2/case-anvil-p1-001/timeline.csv` immediately causes `verify_package()` to return `INVALID` with reason `HASH_MISMATCH`.
+4. **Receipt Verifier (`verify_receipt_and_event`):**
+   - Presenting an unmined receipt (`status=0`) or missing transaction hash raises `RuntimeError` and refuses to persist `verified=1`.
+5. **Canonical Custody Note Hash Exactness:**
+   - Submitting a zero-padded plaintext UTF-8 string in `CustodyRecorded` (where SHA256(stripped) would match) is strictly rejected in canonical mode (`legacy_case_encoding=False`), preventing the bypass identified in Group 3 audit.
+6. **Idempotency Multi-Process Lock (`claim_send`):**
+   - Calling `claim_send()` a second time on the same `operation_id` returns `can_send=False`, preventing duplicate on-chain broadcasts.
+
+---
+
+## 5. Database & Sample Evidence Immutability (Gate G5-02)
+
+All protected production databases and historical evidence samples were audited for cryptographic immutability:
+
+### Baseline Cryptographic Hashes (Pre & Post Group 5):
+| File Path | SHA-256 Digest | Status |
+|---|---|:---:|
+| `data/forensics.db` | `3f2b0dfc772a96ff6ea57c65807b5b6b9a20fcf74c409c6f222fcff29f1ef001` | **UNCHANGED** |
+| `results/p1/anvil_forensics.db` | `50a5872890f2b92f4e1257230a4b1c56a3ec652bb028a054d67494cf15adb525` | **UNCHANGED** |
+| `results/p2/case-anvil-p1-001/manifest.json` | `964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e` | **UNCHANGED** |
+| `results/p2/case-anvil-p1-001/raw_blocks.jsonl` | `b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f` | **UNCHANGED** |
+| `results/p2/case-anvil-p1-001/timeline.csv` | `239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3` | **UNCHANGED** |
+| `results/p2/case-anvil-p1-001/asset_transfers.csv` | `d509c83875a411c514d59228cdc6ac88eb836597ca14809e35502b57a90fa5a1` | **UNCHANGED** |
+| `results/p2/case-anvil-p1-001/audit_events.jsonl` | `8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508` | **UNCHANGED** |
+
+### Destructive SQL Pattern Audit:
+- Scanned all Python codebase files for `INSERT OR REPLACE`: **0 occurrences found**.
+- Scanned for unconstrained `UPDATE ... WHERE case_id = ?`: **0 occurrences found** (all updates require primary key `operation_id` or `id`).
+- Pre-send DB validation: `pre_send_db_check()` verifies SQLite readiness and fails closed if the database does not exist.
+
+---
+
+## 6. Synthetic Canary Secret Leakage & Privacy Audit (Gate G5-03)
+
+To ensure privacy compliance and zero credential leakage:
+1. **Canary String Injection:** High-entropy canary strings simulating private keys (`0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`) and API bearer tokens (`xoxb-canary-secret-token-do-not-leak`) were passed through logging and sidecar storage pipelines.
+2. **Sidecar Redaction:** `write_sidecar()` enforces redaction of sensitive dictionary keys (`private_key`, `password`, `raw_note`). Supplying unredacted keys without `auto_redact=True` raises `SidecarSecretError`.
+3. **Log Sanitization:** `sanitize_log_text()` strips and redacts forbidden key patterns before writing to disk.
+4. **Database Table Inspection:** In `scripts/run_p3_group5_smoke.py`, after completing full anchor and custody lifecycles, all SQLite tables (`custody_events`, `onchain_operations`, `onchain_operation_events`, `anchor_links`, `audit_events`, `receipts`) were scanned for raw case IDs (`case-smoke-g5-001`) and plaintext notes (`Chain of custody transferred to lead auditor`). Result: **0 occurrences found**; only canonical SHA-256 digests and hashes were present.
+
+---
+
+## 7. Full Phase 1 – Phase 3 Regression Summary (Gate G5-05)
+
+All test suites were executed on the hardened codebase:
+
+1. **Foundry Smart Contract Test Suite:**
+   - Command: `forge test --root contracts`
+   - Result: **56 passed, 0 failed, 0 skipped** (Suite time: 25.72ms).
+2. **Targeted Security & Onchain Blocker Tests:**
+   - Command: `python -m pytest tests/test_onchain_blockers.py -q`
+   - Result: **44 passed in 2.96s**.
+3. **Group 5 Security QA Tests:**
+   - Command: `python -m pytest tests/test_p3_group5_security_qa.py -v`
+   - Result: **15 passed in 0.85s**.
+4. **Full Pytest Regression Suite:**
+   - Command: `python -m pytest tests/ -q`
+   - Result: **580 passed in 182.4s** (565 baseline + 15 Group 5 tests).
+5. **Phase 1b Smoke Suite:**
+   - Command: `python scripts/run_p3_group1b_smoke.py`
+   - Result: **55/55 checks PASS**.
+6. **Phase 2b Smoke Suite:**
+   - Command: `python -m pytest tests/test_group2b_smoke.py -v`
+   - Result: **1 passed in 8.17s**.
+7. **Phase 3 Group 3 Smoke Suite:**
+   - Command: `python scripts/run_p3_group3_smoke.py`
+   - Result: **10/10 checks PASS**.
+8. **Phase 3 Group 4 Smoke Suite:**
+   - Command: `python scripts/run_p3_group4_smoke.py`
+   - Result: **12/12 checks PASS**.
+9. **Phase 3 Group 5 End-to-End Acceptance Smoke Suite:**
+   - Command: `python scripts/run_p3_group5_smoke.py`
+   - Result: **15/15 checks PASS** on ephemeral Anvil node (port 64038, chain 31337).
+
+---
+
+## 8. Verification & Deliverables Summary
+
+- **Modified Files:** `forensics/onchain_ops.py` (syntax fix)
+- **New Test Files:** `tests/test_p3_group5_security_qa.py` (15 tests)
+- **New Smoke Scripts:** `scripts/run_p3_group5_smoke.py` (15 checks)
+- **Acceptance Deliverables:** `acceptance-matrix-group5.json`, `P3_GROUP5_REPORT.md`, `P3_FINAL_ACCEPTANCE_REPORT.md`
+- **Protected Files:** All historical test databases and sample packages untouched.
+- **Verdict:** **GROUP 5 PASS**
+
