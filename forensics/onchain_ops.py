@@ -110,7 +110,7 @@ def claim_send(db_path, intent: dict) -> str:
     digest = fingerprint(intent)
     op_type = intent["op_type"]
     now = _now()
-    conn = open_existing_rw(db_path, migrate_before_send=True)
+    conn = open_existing_rw(db_path, migrate_before_send=False)
     try:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(

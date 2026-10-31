@@ -450,6 +450,17 @@ class TestGate3_09_OperationJournalAndStateTransitions:
         assert op["tx_hash"] == tx_hash.lower()
 
         # 4. Confirm event -> CONFIRMED
+        uri = "evidence://sha256/" + case_dig + "/" + manifest_sha + "/manifest.json"
+        raw_uri = uri.encode("utf-8")
+        pad_len = (-len(raw_uri)) % 32
+        ev_data = (
+            "0x"
+            + "f39fd6e51aad88f6f4ce6ab8827279cfffb92266".zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_uri))[2:].zfill(64)
+            + raw_uri.hex()
+            + "00" * pad_len
+        )
         mock_rc = {
             "status": 1,
             "blockNumber": hex(200),
@@ -463,7 +474,7 @@ class TestGate3_09_OperationJournalAndStateTransitions:
                     "0x" + case_dig,
                     "0x" + manifest_sha,
                 ],
-                "data": "0x",
+                "data": ev_data,
                 "logIndex": "0x0",
             }]
         }
@@ -619,6 +630,17 @@ class TestGate3_10_ReadOnlyReconcileMechanism:
         record_broadcast(test_db, op_id, tx_hash)
 
         # Mock read-only confirmed receipt via MockRpcClient
+        uri = "evidence://sha256/" + case_dig + "/" + manifest_sha + "/manifest.json"
+        raw_uri = uri.encode("utf-8")
+        pad_len = (-len(raw_uri)) % 32
+        ev_data = (
+            "0x"
+            + "f39fd6e51aad88f6f4ce6ab8827279cfffb92266".zfill(64)
+            + hex(64)[2:].zfill(64)
+            + hex(len(raw_uri))[2:].zfill(64)
+            + raw_uri.hex()
+            + "00" * pad_len
+        )
         receipt = {
             "status": 1,
             "blockNumber": 105,
@@ -633,7 +655,7 @@ class TestGate3_10_ReadOnlyReconcileMechanism:
                         "0x" + case_dig,
                         "0x" + manifest_sha,
                     ],
-                    "data": "0x" + "f39fd6e51aad88f6f4ce6ab8827279cfffb92266".zfill(64) + "00" * 32,
+                    "data": ev_data,
                     "logIndex": 0,
                 }
             ],

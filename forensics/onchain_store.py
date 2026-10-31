@@ -177,7 +177,7 @@ def open_existing_rw(
     db_path: Path | str,
     *,
     migrate_before_send: bool = False,
-    timeout: float = 30.0,
+    timeout: float = 5.0,
 ) -> sqlite3.Connection:
     """Open existing SQLite database in read-write mode with fail-fast validation.
 
@@ -190,7 +190,7 @@ def open_existing_rw(
     Args:
         db_path: Path to SQLite database file.
         migrate_before_send: If True, executes migrate_group3 prior to checking schema.
-        timeout: SQLite busy timeout in seconds (default: 30.0).
+        timeout: SQLite busy timeout in seconds (default: 5.0).
 
     Returns:
         sqlite3.Connection configured with autocommit (isolation_level=None).
@@ -223,7 +223,12 @@ def open_existing_rw(
         msg = str(e).lower()
         if "readonly" in msg or "attempt to write a readonly database" in msg:
             raise RuntimeError("DB_READONLY: Database is read-only") from None
-        raise
+        if "locked" in msg or "busy" in msg:
+            raise RuntimeError("DB_LOCKED: Database is locked or unavailable") from None
+        raise RuntimeError(f"DB_ERROR: {e}") from None
+    except sqlite3.Error as e:
+        conn.close()
+        raise RuntimeError(f"DB_ERROR: {e}") from None
 
     conn.isolation_level = None
     try:
@@ -231,6 +236,17 @@ def open_existing_rw(
             migrate_group3(conn)
         if not group3_schema_present(conn):
             raise RuntimeError("GROUP3_SCHEMA_MISSING: Group 3 schema is missing")
+    except sqlite3.OperationalError as e:
+        conn.close()
+        msg = str(e).lower()
+        if "readonly" in msg or "attempt to write a readonly database" in msg:
+            raise RuntimeError("DB_READONLY: Database is read-only") from None
+        if "locked" in msg or "busy" in msg:
+            raise RuntimeError("DB_LOCKED: Database is locked or unavailable") from None
+        raise RuntimeError(f"DB_ERROR: {e}") from None
+    except sqlite3.Error as e:
+        conn.close()
+        raise RuntimeError(f"DB_ERROR: {e}") from None
     except Exception:
         conn.close()
         raise
@@ -406,7 +422,7 @@ def _insert_ready_intent(db_path: Path | str, intent: Mapping[str, Any]) -> str:
     digest = fingerprint(intent)
     op_type = intent["op_type"]
     now = _now()
-    conn = open_existing_rw(db_path, migrate_before_send=True)
+    conn = open_existing_rw(db_path, migrate_before_send=False)
     try:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
@@ -486,7 +502,7 @@ def claim_send(db_path: Path | str, intent: Mapping[str, Any] | str) -> ClaimRes
     retry_delay = 0.05
 
     for attempt in range(max_retries):
-        conn = open_existing_rw(db_path, migrate_before_send=True)
+        conn = open_existing_rw(db_path, migrate_before_send=False)
         try:
             conn.execute("BEGIN IMMEDIATE")
 
@@ -733,19 +749,19 @@ def verify_receipt_and_event(
         except ValueError:
             raise RuntimeError(f"VERIFICATION_FAILED: invalid blockNumber format: {raw_block}")
 
-    # 3. Tx hash check (strictly mandatory)
+    # 3. Tx hash check (strictly mandatory, must be valid 32-byte hex)
     rec_tx = receipt.get("transactionHash")
-    if not rec_tx or not isinstance(rec_tx, str) or not rec_tx.startswith("0x"):
-        raise RuntimeError("VERIFICATION_FAILED: missing or invalid transactionHash in receipt")
+    if not rec_tx or not isinstance(rec_tx, str) or not re.match(r"^0x[0-9a-fA-F]{64}$", rec_tx):
+        raise RuntimeError("VERIFICATION_FAILED: missing or invalid transactionHash in receipt (must be 32-byte hex 0x...)")
     if expected_tx_hash and str(rec_tx).lower() != str(expected_tx_hash).lower():
         raise RuntimeError(
             f"VERIFICATION_FAILED: transactionHash mismatch between receipt ({rec_tx}) and expected ({expected_tx_hash})"
         )
 
-    # 4. Block hash check (strictly mandatory)
+    # 4. Block hash check (strictly mandatory, must be valid 32-byte hex)
     rec_bh = receipt.get("blockHash")
-    if not rec_bh or not isinstance(rec_bh, str) or not rec_bh.startswith("0x"):
-        raise RuntimeError("VERIFICATION_FAILED: missing or invalid blockHash in receipt")
+    if not rec_bh or not isinstance(rec_bh, str) or not re.match(r"^0x[0-9a-fA-F]{64}$", rec_bh):
+        raise RuntimeError("VERIFICATION_FAILED: missing or invalid blockHash in receipt (must be 32-byte hex 0x...)")
 
     # 5. Event topic check
     expected_topic = get_event_topic(expected_event_type).lower()
@@ -825,15 +841,31 @@ def verify_receipt_and_event(
             if log_man != exp_man:
                 raise RuntimeError("VERIFICATION_FAILED: manifestSha256 mismatch in EvidenceRegistered log")
 
+        # ABI data check: (address submitter, string storageUri)
+        raw_data = matched_log.get("data")
+        data_hex = str(raw_data).lower() if isinstance(raw_data, str) else ""
+        if not data_hex.startswith("0x") or len(data_hex) < 194 or len(data_hex) % 2 != 0:
+            raise RuntimeError("VERIFICATION_FAILED: EvidenceRegistered data payload ABI violation: expected at least 96 bytes (194 hex chars)")
+        try:
+            bytes.fromhex(data_hex[2:])
+        except ValueError:
+            raise RuntimeError("VERIFICATION_FAILED: EvidenceRegistered data payload contains invalid hex characters")
+
+        offset_uri = int(data_hex[66:130], 16)
+        if offset_uri != 64:
+            raise RuntimeError(f"VERIFICATION_FAILED: EvidenceRegistered data payload ABI violation: storageUri offset must be 64, got {offset_uri}")
+        uri_len = int(data_hex[130:194], 16)
+        expected_min_hex = 194 + ((uri_len + 31) // 32) * 64
+        if len(data_hex) < expected_min_hex:
+            raise RuntimeError(f"VERIFICATION_FAILED: EvidenceRegistered data payload truncated for storageUri (expected at least {expected_min_hex} hex chars, got {len(data_hex)})")
+
+        sub_hex = data_hex[2:66][-40:].zfill(40)
         if expected_actor:
-            data_hex = str(matched_log.get("data", "")).lower()
-            if len(data_hex) >= 66:
-                sub_hex = data_hex[2:66][-40:].zfill(40)
-                exp_actor = expected_actor.lower().removeprefix("0x")[-40:].zfill(40)
-                if sub_hex != exp_actor:
-                    raise RuntimeError(
-                        f"VERIFICATION_FAILED: actor mismatch in EvidenceRegistered log (expected {expected_actor}, got {sub_hex})"
-                    )
+            exp_actor = expected_actor.lower().removeprefix("0x")[-40:].zfill(40)
+            if sub_hex != exp_actor:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: actor mismatch in EvidenceRegistered log (expected {expected_actor}, got {sub_hex})"
+                )
 
     elif expected_event_type == EVENT_TYPE_CUSTODY_RECORDED:
         if len(topics) != 4:
@@ -869,27 +901,36 @@ def verify_receipt_and_event(
                     f"VERIFICATION_FAILED: actor mismatch in CustodyRecorded log (expected {expected_actor}, got {topic_actor_40})"
                 )
 
-        data_hex = str(matched_log.get("data", "")).lower()
-        if len(data_hex) >= 130:
-            if expected_artifact_sha256 and len(expected_artifact_sha256.removeprefix("0x")) == 64:
-                log_art = data_hex[2:66]
-                exp_art = expected_artifact_sha256.lower().removeprefix("0x")
-                if log_art != exp_art:
-                    raise RuntimeError("VERIFICATION_FAILED: artifactSha256 mismatch in CustodyRecorded log")
-            if expected_note_hash and len(expected_note_hash.removeprefix("0x")) == 64:
-                log_nh = data_hex[66:130]
-                exp_nh = expected_note_hash.lower().removeprefix("0x")
-                if log_nh != exp_nh:
-                    is_legacy_padded = False
-                    try:
-                        raw_bytes = bytes.fromhex(log_nh)
-                        stripped = raw_bytes.rstrip(b"\x00")
-                        if stripped and hashlib.sha256(stripped).hexdigest() == exp_nh:
-                            is_legacy_padded = True
-                    except Exception:
-                        pass
-                    if not is_legacy_padded:
-                        raise RuntimeError("VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log")
+        # ABI data check: (bytes32 artifactSha256, bytes32 noteHash) -> exactly 64 bytes = 128 hex chars (130 with "0x")
+        raw_data = matched_log.get("data")
+        data_hex = str(raw_data).lower() if isinstance(raw_data, str) else ""
+        if not data_hex.startswith("0x") or len(data_hex) != 130:
+            raise RuntimeError(f"VERIFICATION_FAILED: CustodyRecorded data payload ABI violation: expected exactly 64 bytes (130 hex chars), got {len(data_hex)}")
+        try:
+            bytes.fromhex(data_hex[2:])
+        except ValueError:
+            raise RuntimeError("VERIFICATION_FAILED: CustodyRecorded data payload contains invalid hex characters")
+
+        log_art = data_hex[2:66]
+        if expected_artifact_sha256 and len(expected_artifact_sha256.removeprefix("0x")) == 64:
+            exp_art = expected_artifact_sha256.lower().removeprefix("0x")
+            if log_art != exp_art:
+                raise RuntimeError("VERIFICATION_FAILED: artifactSha256 mismatch in CustodyRecorded log")
+
+        log_nh = data_hex[66:130]
+        if expected_note_hash and len(expected_note_hash.removeprefix("0x")) == 64:
+            exp_nh = expected_note_hash.lower().removeprefix("0x")
+            if log_nh != exp_nh:
+                is_legacy_padded = False
+                try:
+                    raw_bytes = bytes.fromhex(log_nh)
+                    stripped = raw_bytes.rstrip(b"\x00")
+                    if stripped and hashlib.sha256(stripped).hexdigest() == exp_nh:
+                        is_legacy_padded = True
+                except Exception:
+                    pass
+                if not is_legacy_padded:
+                    raise RuntimeError("VERIFICATION_FAILED: noteHash mismatch in CustodyRecorded log")
 
     return matched_log
 
@@ -1255,17 +1296,31 @@ def reconcile_operation(
             # 3. Canonicality check (reorg guard)
             rec_bn = receipt.get("blockNumber")
             rec_bh = receipt.get("blockHash")
-            if rec_bn and rec_bh:
-                block = _rpc("eth_getBlockByNumber", [rec_bn, False])
-                if block and block.get("hash"):
-                    if str(block["hash"]).lower() != str(rec_bh).lower():
-                        return {
-                            "operation_id": op_id,
-                            "state": current_state,
-                            "tx_hash": tx,
-                            "reconciled": False,
-                            "reason": "NON_CANONICAL_BLOCK_OR_REORG",
-                        }
+            if not rec_bn or not rec_bh:
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "RECEIPT_MISSING_BLOCK_COORDINATES",
+                }
+            block = _rpc("eth_getBlockByNumber", [rec_bn, False])
+            if block is None or not isinstance(block, Mapping):
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "CANONICAL_BLOCK_NOT_FOUND",
+                }
+            if not block.get("hash") or str(block["hash"]).lower() != str(rec_bh).lower():
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "NON_CANONICAL_BLOCK_OR_REORG",
+                }
         except Exception as e:
             return {
                 "operation_id": op_id,
@@ -1307,17 +1362,45 @@ def reconcile_operation(
 
             rec_bn = receipt.get("blockNumber")
             rec_bh = receipt.get("blockHash")
-            if rec_bn and rec_bh and hasattr(rpc_url_or_client, "eth_getBlockByNumber"):
+            if not rec_bn or not rec_bh:
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "RECEIPT_MISSING_BLOCK_COORDINATES",
+                }
+
+            if hasattr(rpc_url_or_client, "eth_getBlockByNumber"):
                 block = rpc_url_or_client.eth_getBlockByNumber(rec_bn, False)
-                if block and block.get("hash"):
-                    if str(block["hash"]).lower() != str(rec_bh).lower():
-                        return {
-                            "operation_id": op_id,
-                            "state": current_state,
-                            "tx_hash": tx,
-                            "reconciled": False,
-                            "reason": "NON_CANONICAL_BLOCK_OR_REORG",
-                        }
+            elif hasattr(rpc_url_or_client, "get_block_by_number"):
+                block = rpc_url_or_client.get_block_by_number(rec_bn, False)
+            else:
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "RPC_BLOCK_VERIFICATION_UNSUPPORTED",
+                }
+
+            if block is None or not isinstance(block, Mapping):
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "CANONICAL_BLOCK_NOT_FOUND",
+                }
+
+            if not block.get("hash") or str(block["hash"]).lower() != str(rec_bh).lower():
+                return {
+                    "operation_id": op_id,
+                    "state": current_state,
+                    "tx_hash": tx,
+                    "reconciled": False,
+                    "reason": "NON_CANONICAL_BLOCK_OR_REORG",
+                }
         except Exception as e:
             return {
                 "operation_id": op_id,

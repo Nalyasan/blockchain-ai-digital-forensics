@@ -464,6 +464,7 @@ def anchor_evidence(manifest_path_or_dir, contract_address, db_path=None, accoun
     storage_uri=canonical_storage_uri(case_digest,manifest_sha256)
     dirty_note='ALLOW_DIRTY_WARNING' if 'allow_dirty' in policy['applied_exceptions'] else 'CLEAN_TREE'
     db_file=db_path or os.environ.get('DB_PATH','data/forensics.db')
+    ops.pre_send_db_check(db_file, migrate=False)
     attempt=pre_send_audit(db_file,dict(policy,manifest_sha256=manifest_sha256,
         source_chain_id=result.context['chain_id'],anchor_chain_id=chain_id,contract=contract_address,
         signer=signer,export_commit=result.context['export_commit'],trusted_head=provenance['head'],
@@ -570,7 +571,7 @@ def record_custody_action(
     signer, chain_id = prepare_write(contract_address, url, account, password_file, from_addr)
 
     db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
-    ops.pre_send_db_check(db_file, migrate=True)
+    ops.pre_send_db_check(db_file, migrate=False)
     intent = ops.custody_intent(chain_id, contract_address, evidence_id, action, art_b32, note_b32, signer)
     claim = ops.claim_send(db_file, intent)
     _require(claim.can_send, 'IDEMPOTENCY_CLAIM_DENIED')

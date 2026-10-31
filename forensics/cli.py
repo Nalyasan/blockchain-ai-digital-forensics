@@ -189,6 +189,24 @@ def cli_reconcile(args):
         print(_safe_sanitize(f"LỖI reconcile: {e}"), file=sys.stderr)
         return 1
 
+def cli_migrate_db(args):
+    """Lệnh migration chủ động cho SQLite lên Group 3 schema."""
+    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    if not os.path.exists(db_file):
+        print(f"LỖI: Database không tồn tại: {db_file}", file=sys.stderr)
+        return 1
+    import sqlite3
+    from forensics.schemas import migrate_group3, group3_schema_present
+    try:
+        conn = sqlite3.connect(db_file)
+        migrate_group3(conn)
+        conn.close()
+        print(f"OK: Đã migrate thành công database '{db_file}' lên Group 3 schema.")
+        return 0
+    except Exception as e:
+        print(f"LỖI migrate-db: {e}", file=sys.stderr)
+        return 1
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="python -m forensics.cli",
@@ -282,6 +300,11 @@ def build_parser():
     prc.add_argument("--rpc-url", default=None, help="RPC URL")
     prc.add_argument("--tx-hash", default=None, help="Mã băm giao dịch (tx_hash) tùy chọn override")
     prc.set_defaults(func=cli_reconcile)
+
+    # 10. migrate-db
+    pmig = sub.add_parser("migrate-db", help="Thực hiện migration cơ sở dữ liệu SQLite lên schema Group 3 một cách chủ động")
+    pmig.add_argument("--db", default=None, help="Đường dẫn database SQLite cần migrate")
+    pmig.set_defaults(func=cli_migrate_db)
 
     return p
 
