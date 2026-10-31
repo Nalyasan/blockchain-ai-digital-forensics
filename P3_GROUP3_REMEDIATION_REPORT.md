@@ -5,6 +5,7 @@
 **Repository:** `D:\Projest\Blockchain`  
 **Baseline P3:** `713ad068348cab75046e10d52332f0d850ef93f5`  
 **Candidate Audited:** `67bba6866a59f5c7549893eb68a8c06b5bade553`  
+**Final Verified Commit:** `7e520c9971e4e239476eca57761d6d9d2194578f` (parent: `9c3bd12c15402689c249fec19fa91acaf2b0a5f3`)  
 **Governing Standard:** `P3_GROUP3_PLAN_v2.md`  
 **Final Status:** **ALL 17 ACCEPTANCE GATES PASS (17/17 — 100%)**
 
@@ -28,8 +29,8 @@ A surgical, controlled remediation was executed addressing these areas while pre
 | Metric | Result | Status |
 | :--- | :--- | :--- |
 | **Acceptance Gates (Plan v2)** | **17 / 17 Gates PASS** | **100% PASS** |
-| **Pytest Full Suite** | **521 / 521 Tests PASS** (0 failed, 0 skipped) | **PASS** |
-| **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 18.02ms) | **PASS** |
+| **Pytest Full Suite** | **533 / 533 Tests PASS** (0 failed, 0 skipped) | **PASS** |
+| **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 18.26ms) | **PASS** |
 | **Anvil Group 3 Smoke Suite** | **10 / 10 Real Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 1b Smoke Suite** | **55 / 55 Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 2b Smoke Suite** | **9 / 9 Checks PASS** (exit code 0) | **PASS** |
@@ -175,23 +176,86 @@ A surgical, controlled remediation was executed addressing these areas while pre
 
 ---
 
+### 2.7 Direct ZIP Audit Findings Remediation (Blocker 1 & Blocker 2)
+
+Following the independent direct audit of `p3_group3_remediation_handover.zip`, two critical blocking findings were analyzed, isolated with RED tests, and completely resolved:
+
+#### 2.7.1 BLOCKER 1 — G3-03 / G3-10: False Verified / Confirmed Elimination & RPC Mandate
+- **Deficiency Identified:**
+  1. `forensics/onchain_store.py:verify_receipt_and_event()` accepted receipts lacking `transactionHash`, `blockHash`, or `logIndex`. If indexed topics were omitted or fewer than required by the ABI, topic comparisons were silently bypassed due to `len(topics)` guard checks.
+  2. `reconcile_operation()` permitted callers to pass an arbitrary, unverified `Mapping` receipt dictionary rather than querying a trusted, independent read-only RPC provider.
+- **Remediation Applied in `forensics/onchain_store.py`:**
+  1. **Strict ABI Topic Validation:** Both `EvidenceRegistered` and `CustodyRecorded` strictly require `len(topics) == 4`. Fewer topics or missing event parameters fail immediately with `RuntimeError("VERIFICATION_FAILED: ABI violation: ... requires exactly 4 topics")`.
+  2. **Mandatory Receipt Identifiers:**
+     - `transactionHash`: Must be a non-empty string starting with `"0x"` (and must match `expected_tx_hash` if provided).
+     - `blockHash`: Must be a non-empty string starting with `"0x"`.
+     - `logIndex`: Must be present in log and parse to an integer.
+     - `address`: Contract emitter address must match expected contract address.
+  3. **Multi-Coordinate Cross-Validation:** Coordinates extracted from `op["intent_canonical"]` (`evidence_id`, `case_digest`, `manifest_sha256`, `action`, `actor`, `artifact_sha256`, `note_hash`) are strictly checked against receipt topics and unindexed log data.
+  4. **Strict Reconcile RPC Mandate:** `reconcile_operation()` strictly rejects raw `Mapping` receipt dictionaries (`raise ValueError("RECONCILE_FAILED: rpc_url_or_client cannot be a raw receipt dictionary; must be a valid RPC URL string or client instance")`).
+  5. **Chain Verification & Reorg Protection:**
+     - Enforces chain identity via `eth_chainId` matching the expected operation chain.
+     - Fetches transaction receipt via `eth_getTransactionReceipt`.
+     - Validates block canonicality via `eth_getBlockByNumber` to protect against chain reorgs.
+  6. **Unit Tests Added in `tests/test_onchain_blockers.py`:**
+     - `test_verify_receipt_rejects_missing_transaction_hash`
+     - `test_verify_receipt_rejects_missing_block_hash`
+     - `test_verify_receipt_evidence_registered_incomplete_topics`
+     - `test_verify_receipt_custody_recorded_incomplete_topics`
+     - `test_verify_receipt_rejects_missing_log_index`
+     - `test_verify_receipt_rejects_emitter_mismatch`
+     - `test_verify_receipt_rejects_payload_context_mismatch`
+     - `test_reconcile_operation_rejects_mapping_receipt`
+     - `test_reconcile_operation_rpc_error_handling`
+
+#### 2.7.2 BLOCKER 2 — G3-11: SQLite Migration Atomicity & Savepoint Transaction Boundary
+- **Deficiency Identified:**
+  - In Python's standard `sqlite3` library, invoking `conn.executescript(GROUP3_SCHEMA)` internally issues an implicit `COMMIT` before executing the script.
+  - As a result, any transaction boundary opened by the caller was broken. If an error occurred mid-migration (such as a unique index collision on duplicate legacy rows), SQLite could not roll back the DDL statements, leaving partial tables or altered schemas behind.
+- **Remediation Applied in `forensics/schemas.py`:**
+  1. **Native SQLite `SAVEPOINT` Implementation:**
+     ```python
+     def migrate_group3(c: sqlite3.Connection) -> None:
+         cur = c.cursor()
+         cur.execute("SAVEPOINT migrate_group3")
+         try:
+             # Add columns conditionally
+             ...
+             # Execute DDL statements individually
+             statements = [stmt.strip() for stmt in GROUP3_SCHEMA.strip().split(";") if stmt.strip()]
+             for stmt in statements:
+                 cur.execute(stmt)
+             cur.execute("RELEASE SAVEPOINT migrate_group3")
+         except Exception:
+             cur.execute("ROLLBACK TO SAVEPOINT migrate_group3")
+             cur.execute("RELEASE SAVEPOINT migrate_group3")
+             raise
+     ```
+  2. **Zero Half-Written State:** If any statement fails, the entire migration rolls back cleanly to the savepoint, leaving exactly 0 Group 3 tables/columns added and 100% of legacy rows untouched.
+  3. **AST Inspection & Atomicity Verification in `tests/test_onchain_blockers.py`:**
+     - `test_migrate_group3_does_not_use_executescript`: Inspects source code to ensure `.executescript(` is never called.
+     - `test_migrate_group3_atomic_rollback_on_unique_index_failure`: Verifies that unique index failure on duplicate rows leaves zero tables (`anchor_links`, `onchain_operations`, `onchain_operation_events`) created.
+     - `test_migrate_group3_wal_mode_and_rerun_idempotency`: Verifies migration in WAL mode and confirms rerun idempotency.
+
+---
+
 ## 3. Complete 17-Gate Acceptance Matrix
 
 | Gate ID | Original Requirement (Plan v2) | Test IDs | Status | Evidence Path |
 | :--- | :--- | :--- | :---: | :--- |
 | **G3-01** | Multi-Manifest Same Case Linkage | `test_onchain_store.py::TestGate3_01_*` (3 tests) + Smoke | **PASS** | `forensics/schemas.py:35-43`, composite PK `(chain_id, contract_address, manifest_sha256)` |
 | **G3-02** | Custody Event Identity & Collision | `test_onchain_store.py::TestGate3_02_*` (3 tests) | **PASS** | `forensics/schemas.py:53-56`, unique index `(chain_id, contract_address, tx_hash, log_index)` |
-| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, multi-coordinate cross-validation, zero INSERT OR REPLACE |
+| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests), `test_onchain_blockers.py::TestBlocker1_*` (7 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, 4 ABI topics check, blockHash/logIndex check, multi-coordinate cross-validation |
 | **G3-04** | Fail-Fast DB Checks Before Send | `test_onchain_store.py::TestGate3_11_*` (3 tests), `TestGate3_14::test_package_retention_*`, `test_onchain_group3.py::TestRecoverySidecar` (2 tests) | **PASS** | `forensics/onchain_store.py:177-224`, `pre_send_db_check` refuses missing/read-only/unmigrated DB |
 | **G3-05** | Note SHA-256 & No File Probing | `test_evidence_identity.py::TestGate3_05_*` (9 tests) | **PASS** | `forensics/evidence_identity.py:85-110`, verbatim UTF-8 bytes hashed; non-empty validation; in-memory |
 | **G3-06** | Case ID SHA-256 & Zero Leakage | `test_evidence_identity.py::TestGate3_06_*` (4 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:38-73`, length 1..64, anchor `\A...\Z`, SHA-256 digest |
 | **G3-07** | Legacy Read-Only Compatibility | `test_evidence_identity.py::TestGate3_07_*` (9 tests), `test_onchain_guard.py` | **PASS** | `forensics/onchain.py:755-805`, zero silent downgrade; explicit `--legacy-case-encoding` returning `LEGACY_PUBLIC_CASE_ID`; mixed profiles rejected |
 | **G3-08** | Canonical Immutable Intent | `test_onchain_group3.py::TestGate3_08_*` (4 tests) | **PASS** | `forensics/onchain_store.py:64-125`, deterministic JSON with sorted keys, deterministic SHA-256 |
 | **G3-09** | Operation Journal & State Transitions | `test_onchain_group3.py::TestGate3_09_*` (3 tests), `TestGate3_17_*` | **PASS** | `forensics/onchain_store.py:640-724`, `onchain_operation_events` tracks complete lifecycle |
-| **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, zero broadcast, idempotent updates |
-| **G3-11** | SQLite Additive Migration Integrity | `test_onchain_store.py::TestGate3_11_*` (8 tests) | **PASS** | `forensics/schemas.py:143-176`, 100% snapshot preservation on diverse legacy rows, rollback/rerun resilience |
+| **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests), `test_onchain_blockers.py` (2 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, chainId + block check, raw receipt dict rejected, zero broadcast |
+| **G3-11** | SQLite Additive Migration Integrity | `test_onchain_store.py::TestGate3_11_*` (8 tests), `test_onchain_blockers.py::TestBlocker2_*` (3 tests) | **PASS** | `forensics/schemas.py:143-176`, native SAVEPOINT atomicity, no executescript, 100% snapshot preservation on diverse legacy rows |
 | **G3-12** | Canary Privacy & Secret Guardrails | `test_evidence_identity.py::TestGate3_12_*` (5 tests), `test_onchain_group3.py::TestRecoverySidecar` (3 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:244-307`, longest-match redaction, sidecar recursive secret rejection |
-| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 521 total pytest pass |
+| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 533 total pytest pass |
 | **G3-14** | Export No-Clobber & Canonical URI | `test_onchain_store.py::TestGate3_14_*` (7 tests), `forensics/exporter.py` | **PASS** | `forensics/exporter.py:260-285`, canonical storage URI in DB metadata, no-clobber, dual-manifest distinction, retention on DB failure |
 | **G3-15** | Canonical Storage URI Format | `test_evidence_identity.py::TestGate3_15_*` (8 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:110-155`, exact 161 printable ASCII bytes, self-referential cycle detection |
 | **G3-16** | Real Dual-Process Concurrency | `test_onchain_group3.py::TestGate3_16_*` (3 tests) + Smoke | **PASS** | `tests/test_onchain_group3.py:534-620`, multiprocessing spawn, atomic CAS `BEGIN IMMEDIATE` + conditional update, exactly 1 send on Anvil |
@@ -206,23 +270,24 @@ A surgical, controlled remediation was executed addressing these areas while pre
 - **Exit Code:** `0`
 - **Output:**
   ```text
-  521 passed in 168.04s (0:02:48)
+  533 passed in 185.41s (0:03:05)
   ```
 - **Breakdown of Passing Tests:**
   - `tests/test_evidence_identity.py`: 36 tests PASS
   - `tests/test_onchain_store.py`: 33 tests PASS
   - `tests/test_onchain_group3.py`: 26 tests PASS
+  - `tests/test_onchain_blockers.py`: 12 tests PASS (Blocker 1 & Blocker 2 targeted test suite)
   - `tests/test_onchain_group3_smoke.py`: 7 tests PASS
   - `tests/test_onchain_2b.py`: 73 tests PASS
   - `tests/test_onchain_guard.py`: 10 tests PASS
-  - `tests/test_onchain_group1.py`: 43 tests PASS
+  - `tests/test_onchain_group1.py`: 51 tests PASS
   - `tests/test_onchain_group1b.py`: 9 tests PASS
   - `tests/test_onchain_d1.py`: 4 tests PASS
   - `tests/test_group2b_smoke.py`: 1 test (9 Anvil checks) PASS
   - `tests/test_integrity_2a.py`: 48 tests PASS
   - `tests/test_provenance_2a.py`: 8 tests PASS
-  - Pre-existing Phase 1 & 2 tests: 223 tests PASS
-  - **Total:** 521 / 521 PASS (100%)
+  - Pre-existing Phase 1 & 2 tests: 215 tests PASS
+  - **Total:** 533 / 533 PASS (100%)
 
 ### 4.2 Foundry Contract Suite Execution
 - **Command:** `forge test --root contracts`
