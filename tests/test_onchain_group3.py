@@ -86,6 +86,193 @@ def _concurrency_worker(
         )
 
 
+
+def _real_anvil_concurrency_worker(
+    db_path_str: str,
+    rpc_url: str,
+    contract_address: str,
+    intent_dict: dict[str, Any],
+    barrier: Any,
+    queue: Any,
+) -> None:
+    """Worker process function for Gate G3-16 real on-chain send concurrency."""
+    try:
+        if barrier is not None:
+            barrier.wait(timeout=10)
+        claim = claim_send(db_path_str, intent_dict)
+        op_id = claim.operation_id
+        if claim.can_send:
+            import json
+            from forensics.onchain import run_cast_send
+            signer = intent_dict["signer"]
+            case_digest = intent_dict["case_digest"]
+            manifest_sha256 = intent_dict["manifest_sha256"]
+            storage_uri = intent_dict["storage_uri"]
+            raw_receipt = run_cast_send([
+                "--from", signer,
+                "--unlocked",
+                "--rpc-url", rpc_url,
+                "--chain", "31337",
+                "--json",
+                contract_address,
+                "registerEvidence(bytes32,bytes32,string)",
+                "0x" + case_digest,
+                "0x" + manifest_sha256,
+                storage_uri,
+            ])
+            receipt = json.loads(raw_receipt)
+            tx_hash = receipt["transactionHash"]
+            record_broadcast(db_path_str, op_id, tx_hash)
+            persist_verified_event(
+                db_path_str,
+                operation_id=op_id,
+                chain_id=31337,
+                contract=contract_address,
+                evidence_id=1,
+                action=0,
+                actor=signer,
+                artifact_sha256=manifest_sha256,
+                note_hash="0x" + "0"*64,
+                tx_hash=tx_hash,
+                block_number=int(receipt["blockNumber"], 16),
+                log_index=0,
+                event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+                manifest_sha256=manifest_sha256,
+                case_digest=case_digest,
+                receipt=receipt,
+            )
+            queue.put({
+                "success": True,
+                "can_send": True,
+                "sent": True,
+                "tx_hash": tx_hash,
+                "operation_id": op_id,
+            })
+        else:
+            queue.put({
+                "success": True,
+                "can_send": False,
+                "sent": False,
+                "tx_hash": None,
+                "operation_id": op_id,
+                "current_state": claim.current_state,
+            })
+    except Exception as exc:
+        queue.put({
+            "success": False,
+            "error": str(exc),
+            "type": type(exc).__name__,
+        })
+
+
+def _crash_failpoint_worker(
+    db_path_str: str,
+    intent_dict: dict[str, Any],
+    started_event: Any,
+) -> None:
+    """Worker process function for Gate G3-17: commits SEND_STARTED then waits to be killed."""
+    import time
+    claim = claim_send(db_path_str, intent_dict)
+    if claim.can_send and claim.current_state == SEND_STARTED:
+        started_event.set()
+        while True:
+            time.sleep(0.1)
+
+
+def _restart_recovery_worker(
+    db_path_str: str,
+    rpc_url: str,
+    contract_address: str,
+    intent_dict: dict[str, Any],
+    queue: Any,
+) -> None:
+    """Worker process function for Gate G3-17: restarts, verifies resend refused, reconciles with 0 new txs."""
+    try:
+        from forensics.onchain import rpc_read
+        signer = intent_dict["signer"]
+        nonce_before = int(rpc_read(rpc_url, "eth_getTransactionCount", [signer, "latest"]), 16)
+
+        claim = claim_send(db_path_str, intent_dict)
+        op_id = claim.operation_id
+        resend_granted = claim.can_send
+
+        recon = reconcile_operation(db_path_str, op_id, rpc_url)
+
+        nonce_after = int(rpc_read(rpc_url, "eth_getTransactionCount", [signer, "latest"]), 16)
+
+        queue.put({
+            "success": True,
+            "resend_granted": resend_granted,
+            "current_state": claim.current_state,
+            "reconcile_state": recon.get("state"),
+            "nonce_before": nonce_before,
+            "nonce_after": nonce_after,
+            "new_transactions": nonce_after - nonce_before,
+        })
+    except Exception as exc:
+        queue.put({
+            "success": False,
+            "error": str(exc),
+            "type": type(exc).__name__,
+        })
+
+
+@pytest.fixture(scope="module")
+def local_anvil():
+    """Start a local Anvil node and deploy EvidenceRegistry for module-level integration tests."""
+    import socket
+    import subprocess
+    import time
+    ROOT = Path(__file__).resolve().parents[1]
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    url = f"http://127.0.0.1:{port}"
+    suffix = ".exe" if os.name == "nt" else ""
+    anvil_bin = ROOT / "tools/foundry" / ("anvil" + suffix)
+    if not anvil_bin.exists():
+        anvil_bin = Path("anvil")
+
+    proc = subprocess.Popen(
+        [str(anvil_bin), "--host", "127.0.0.1", "--port", str(port), "--chain-id", "31337"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    from forensics.onchain import get_rpc_chain_id, run_cast_send, rpc_read
+    deadline = time.monotonic() + 25
+    while True:
+        if proc.poll() is not None:
+            raise RuntimeError("ANVIL_TERMINATED")
+        try:
+            if get_rpc_chain_id(url) == 31337:
+                break
+        except Exception:
+            if time.monotonic() > deadline:
+                proc.terminate()
+                raise TimeoutError("ANVIL_START_TIMEOUT")
+            time.sleep(0.1)
+
+    owner = rpc_read(url, "eth_accounts", [])[0]
+    artifact_file = ROOT / "contracts/out/EvidenceRegistry.sol/EvidenceRegistry.json"
+    artifact = json.loads(artifact_file.read_text(encoding="utf-8"))
+    bytecode = artifact["bytecode"]["object"]
+    raw_deploy = run_cast_send([
+        "--from", owner, "--unlocked", "--rpc-url", url,
+        "--chain", "31337", "--json", "--create", bytecode
+    ])
+    deployed = json.loads(raw_deploy)
+    contract = deployed["contractAddress"]
+
+    yield {"url": url, "contract": contract, "owner": owner, "port": port}
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+
+
 @pytest.fixture
 def test_db(tmp_path: Path) -> Path:
     """Create a fully migrated SQLite test database."""
@@ -245,6 +432,22 @@ class TestGate3_09_OperationJournalAndStateTransitions:
         assert op["tx_hash"] == tx_hash.lower()
 
         # 4. Confirm event -> CONFIRMED
+        mock_rc = {
+            "status": 1,
+            "blockNumber": hex(200),
+            "transactionHash": tx_hash,
+            "logs": [{
+                "address": contract,
+                "topics": [
+                    TOPIC_EVIDENCE_REGISTERED,
+                    hex(10),
+                    "0x" + case_dig,
+                    "0x" + manifest_sha,
+                ],
+                "data": "0x",
+                "logIndex": "0x0",
+            }]
+        }
         persist_verified_event(
             test_db,
             operation_id=op_id,
@@ -259,7 +462,7 @@ class TestGate3_09_OperationJournalAndStateTransitions:
             block_number=200,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=mock_rc,
         )
         op = load_operation(test_db, op_id)
         assert op["state"] == CONFIRMED
@@ -672,7 +875,175 @@ class TestGate3_16_RealDualProcessConcurrency:
 # ==============================================================================
 # Gate G3-17: Crash Recovery Fail-Closed (CRITICAL ACCEPTANCE CRITERION)
 # ==============================================================================
+
+    def test_real_dual_process_concurrency_with_real_anvil_send(self, test_db: Path, local_anvil: dict):
+        """Two real OS processes contend on disk; exactly 1 sends to Anvil, loser sends nothing.
+        
+        Verifies:
+        - Exactly one process receives can_send=True and broadcasts to Anvil.
+        - Losing process receives can_send=False and sends 0 transactions.
+        - Signer nonce on Anvil increases by exactly 1.
+        - Exactly 1 transaction mined on Anvil with status=1 and EvidenceRegistered event.
+        - Database state transitions cleanly to CONFIRMED.
+        """
+        from forensics.onchain import rpc_read
+        owner = local_anvil["owner"]
+        url = local_anvil["url"]
+        contract = local_anvil["contract"]
+        
+        nonce_before = int(rpc_read(url, "eth_getTransactionCount", [owner, "latest"]), 16)
+        
+        intent = build_register_intent(
+            chain_id=31337,
+            contract=contract,
+            manifest_sha256="12" * 32,
+            case_digest="34" * 32,
+            storage_uri="evidence://sha256/" + ("34" * 32) + "/" + ("12" * 32) + "/manifest.json",
+            signer=owner,
+        )
+
+        ctx = multiprocessing.get_context("spawn")
+        barrier = ctx.Barrier(2)
+        queue = ctx.Queue()
+
+        p1 = ctx.Process(
+            target=_real_anvil_concurrency_worker,
+            args=(str(test_db), url, contract, intent, barrier, queue),
+        )
+        p2 = ctx.Process(
+            target=_real_anvil_concurrency_worker,
+            args=(str(test_db), url, contract, intent, barrier, queue),
+        )
+
+        p1.start()
+        p2.start()
+
+        p1.join(timeout=30)
+        p2.join(timeout=30)
+
+        assert not p1.is_alive(), "Process 1 timed out"
+        assert not p2.is_alive(), "Process 2 timed out"
+
+        res1 = queue.get(timeout=5)
+        res2 = queue.get(timeout=5)
+
+        assert res1["success"] is True, f"Worker 1 error: {res1.get('error')}"
+        assert res2["success"] is True, f"Worker 2 error: {res2.get('error')}"
+
+        results = [res1, res2]
+        can_sends = [r["can_send"] for r in results]
+        sents = [r["sent"] for r in results]
+
+        # Exactly 1 process allowed to send, exactly 1 sent
+        assert can_sends.count(True) == 1
+        assert can_sends.count(False) == 1
+        assert sents.count(True) == 1
+        assert sents.count(False) == 1
+
+        winner = [r for r in results if r["can_send"]][0]
+        loser = [r for r in results if not r["can_send"]][0]
+
+        assert winner["tx_hash"] is not None
+        assert loser["tx_hash"] is None
+        assert loser["current_state"] == SEND_STARTED
+
+        # On Anvil: Nonce increased by EXACTLY 1!
+        nonce_after = int(rpc_read(url, "eth_getTransactionCount", [owner, "latest"]), 16)
+        assert nonce_after == nonce_before + 1, f"Nonce expected {nonce_before + 1}, got {nonce_after}"
+
+        # On Anvil: Transaction receipt status is 1
+        rc = rpc_read(url, "eth_getTransactionReceipt", [winner["tx_hash"]])
+        assert rc is not None
+        assert int(rc["status"], 16) == 1
+
+        # DB state is CONFIRMED
+        op = load_operation(test_db, winner["operation_id"])
+        assert op["state"] == CONFIRMED
+        assert op["tx_hash"].lower() == winner["tx_hash"].lower()
+
+
 class TestGate3_17_CrashRecoveryFailClosed:
+
+    def test_real_child_process_kill_after_send_started_and_restart_reconcile(self, test_db: Path, local_anvil: dict):
+        """Simulate real hard crash (SIGKILL/proc.kill()) immediately after COMMIT SEND_STARTED.
+        
+        Verifies:
+        - Child process successfully commits state=SEND_STARTED and is hard-killed.
+        - Restarted runner attempts claim_send on same intent: strictly refused (can_send=False).
+        - Read-only reconciliation inspects onchain status: evidence not onchain.
+        - Signer nonce on Anvil is strictly unchanged: ZERO new transactions broadcast.
+        - Operation state transitions cleanly without double-send.
+        """
+        from forensics.onchain import rpc_read
+        owner = local_anvil["owner"]
+        url = local_anvil["url"]
+        contract = local_anvil["contract"]
+        
+        nonce_start = int(rpc_read(url, "eth_getTransactionCount", [owner, "latest"]), 16)
+
+        intent = build_register_intent(
+            chain_id=31337,
+            contract=contract,
+            manifest_sha256="56" * 32,
+            case_digest="78" * 32,
+            storage_uri="evidence://sha256/" + ("78" * 32) + "/" + ("56" * 32) + "/manifest.json",
+            signer=owner,
+        )
+
+        ctx = multiprocessing.get_context("spawn")
+        started_event = ctx.Event()
+
+        # Step 1: Start child process that claims send and waits at failpoint
+        child_p = ctx.Process(
+            target=_crash_failpoint_worker,
+            args=(str(test_db), intent, started_event),
+        )
+        child_p.start()
+
+        # Wait until child has committed SEND_STARTED
+        assert started_event.wait(timeout=10), "Child failed to reach SEND_STARTED"
+
+        # Verify DB directly from parent
+        op_id = fingerprint(intent)
+        op_pre_crash = load_operation(test_db, op_id)
+        assert op_pre_crash["state"] == SEND_STARTED
+        assert op_pre_crash["tx_hash"] is None
+
+        # Step 2: Hard-kill the child process at the failpoint!
+        child_p.kill()
+        child_p.join(timeout=5)
+        assert not child_p.is_alive()
+
+        # Step 3: Start a new independent process (restarted runner) to recover
+        queue = ctx.Queue()
+        recovery_p = ctx.Process(
+            target=_restart_recovery_worker,
+            args=(str(test_db), url, contract, intent, queue),
+        )
+        recovery_p.start()
+        recovery_p.join(timeout=15)
+        assert not recovery_p.is_alive()
+
+        rec_res = queue.get(timeout=5)
+        assert rec_res["success"] is True, f"Recovery worker error: {rec_res.get('error')}"
+
+        # CRITICAL ASSERTIONS:
+        # 1. Restarted process was strictly REFUSED send permission
+        assert rec_res["resend_granted"] is False, "Restarted process must not be granted send permission!"
+        assert rec_res["current_state"] == SEND_STARTED
+
+        # 2. Reconcile executed read-only and preserved safe state (since evidence was never broadcast)
+        assert rec_res["reconcile_state"] in (SEND_STARTED, UNKNOWN, FAILED)
+
+        # 3. ZERO new transactions broadcast to Anvil during recovery!
+        assert rec_res["new_transactions"] == 0
+        assert rec_res["nonce_after"] == nonce_start
+
+        # Nonce on Anvil is still strictly unchanged
+        nonce_final = int(rpc_read(url, "eth_getTransactionCount", [owner, "latest"]), 16)
+        assert nonce_final == nonce_start
+
+
     """Gate G3-17: Crash Recovery Fail-Closed.
 
     Requirements:

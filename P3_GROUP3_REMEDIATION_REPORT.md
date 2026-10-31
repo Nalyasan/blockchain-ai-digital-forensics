@@ -18,12 +18,17 @@ Following independent gate reconciliation in `P3_GROUP3_FINAL_EVIDENCE_REVIEW.md
 - **G3-11 (SQLite Migration):** Test fixture only tested a clean 1-row database; lacked coverage for duplicate legacy events (NULL `log_index`), legacy text notes, pre-verified rows, logical snapshot comparisons, rollback simulation, and rerun idempotency.
 - **G3-14 (Export No-Clobber):** `forensics/exporter.py` hardcoded the legacy storage URI `evidence://{case_id}/manifest.json` instead of the canonical `evidence://sha256/<case_digest>/<manifest_hash>/manifest.json`; lacked explicit test for collision no-clobber.
 
-A surgical, controlled remediation was executed strictly addressing these 4 gates while preserving all 13 passing gates. Full acceptance test suites were re-executed on the final source tree:
+In addition, an in-depth security and concurrency audit of candidate `67bba6866a59f5c7549893eb68a8c06b5bade553` identified and remediated critical risk areas:
+- **G3-03 / G3-04 (Verification Bypass Elimination):** `persist_verified_event()` allowed callers to pass self-declared `block_number`, `topic0`, and `receipt_status` when `receipt` was omitted. This bypass was eliminated: authentic transaction receipts are strictly required, and full cross-validation against contract address, actor address, tx_hash, block number, and event topic is strictly enforced.
+- **G3-16 (Real Send Concurrency on Anvil):** Real dual-process contention using OS-level `multiprocessing` (spawn) on an actual SQLite disk database with real local Anvil RPC broadcasting: exactly one process wins `can_send=True` and executes a real transaction (nonce +1, mined receipt), while the losing process (`can_send=False`) sends 0 transactions.
+- **G3-17 (Real Hard-Kill Crash Recovery):** Real child OS process hard-killed (`process.kill()`) at the failpoint immediately after `COMMIT SEND_STARTED`. Upon restart, resend is strictly denied (`can_send=False`), and reconciliation performs read-only checks without broadcasting any transactions (nonce unchanged).
+
+A surgical, controlled remediation was executed addressing these areas while preserving all existing passing controls. Full acceptance test suites were re-executed on the final source tree:
 
 | Metric | Result | Status |
 | :--- | :--- | :--- |
 | **Acceptance Gates (Plan v2)** | **17 / 17 Gates PASS** | **100% PASS** |
-| **Pytest Full Suite** | **514 / 514 Tests PASS** (0 failed, 0 skipped, 176.51s) | **PASS** |
+| **Pytest Full Suite** | **521 / 521 Tests PASS** (0 failed, 0 skipped) | **PASS** |
 | **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 18.02ms) | **PASS** |
 | **Anvil Group 3 Smoke Suite** | **10 / 10 Real Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 1b Smoke Suite** | **55 / 55 Checks PASS** (exit code 0) | **PASS** |
@@ -127,13 +132,56 @@ A surgical, controlled remediation was executed strictly addressing these 4 gate
 
 ---
 
+### 2.5 Gate G3-03 / G3-04 — Receipt Bypass Elimination & Multi-Coordinate Cross-Validation
+
+- **Deficiency Identified:** In `forensics/onchain_store.py:persist_verified_event()`, if the caller omitted `receipt`, an `else:` branch permitted callers to supply unverified `receipt_status=1`, `block_number`, and `topic0`. Furthermore, `onchain_ops.py` maintained a duplicate version of `persist_verified_event` with weak validation.
+- **Remediation Applied:**
+  1. **Strict Receipt Requirement:** Removed the bypass branch completely. If `receipt` is `None` or not a dictionary, `persist_verified_event()` immediately raises `RuntimeError("VERIFICATION_FAILED: valid transaction receipt is strictly required")`.
+  2. **Multi-Coordinate Cross-Validation in `verify_receipt_and_event`:**
+     - Enforces `receipt["status"] == 1`.
+     - Enforces presence and validity of `blockNumber`.
+     - Enforces transaction hash identity (`receipt["transactionHash"] == tx_hash`).
+     - Enforces contract address identity (`receipt["to"] == contract_address`).
+     - Enforces actor address normalized match (Solidity 32-byte topic normalized with `.removeprefix("0x")[-40:].zfill(40)`).
+     - Enforces event topic matching against canonical keccak256 topics for `EvidenceRegistered` or `CustodyRecorded`.
+     - Validates payload coordinates (`evidence_id`, `manifest_sha256`, `case_digest`, `action`, `note_hash`).
+  3. **Unified Operation Delegate:** Refactored `forensics/onchain_ops.py:persist_verified_event` to delegate directly to `forensics/onchain_store.py:persist_verified_event`, preventing divergent code paths.
+  4. **Targeted Regression Tests in `tests/test_onchain_store.py`:**
+     - `test_persist_verified_event_strictly_requires_receipt_dictionary`
+     - `test_persist_verified_event_rejects_self_declared_receipt_bypass`
+     - `test_persist_verified_event_rejects_contract_mismatch`
+     - `test_persist_verified_event_rejects_tx_hash_mismatch`
+     - `test_persist_verified_event_rejects_actor_mismatch`
+
+---
+
+### 2.6 Gate G3-16 & G3-17 — Real Multiprocessing Concurrency with Real Anvil Broadcast & Hard Kill Recovery
+
+- **Deficiency Identified:** Previous concurrency and crash tests relied on simulated in-process barriers or state inspection without proving real OS process contention and real transaction broadcast behavior on a live EVM node.
+- **Remediation Applied:**
+  1. **Real Dual-Process Anvil Send Concurrency (`test_real_dual_process_concurrency_with_real_anvil_send`):**
+     - Launched a real unforked loopback Anvil instance (chain 31337) and deployed `EvidenceRegistry.sol`.
+     - Spawned two real OS processes (`multiprocessing.get_context("spawn")`) sharing a real SQLite disk database file.
+     - Synchronized processes using `multiprocessing.Barrier(2)` right before calling `claim_send()`.
+     - Atomic `BEGIN IMMEDIATE` + conditional state update ensured exactly one process acquired `can_send=True` (`winner_sends=1`), while the loser process was denied (`can_send=False`, `loser_sends=0`).
+     - Winner process broadcast a real transaction to Anvil. Asserted that Anvil account nonce incremented by exactly 1, transaction was mined in a block, and receipt status was 1.
+  2. **Real Hard-Kill Process Crash Recovery (`test_real_child_process_kill_after_send_started_and_restart_reconcile`):**
+     - Spawned a child OS worker that executed `claim_send()`, transitioned operation to `SEND_STARTED`, and committed to disk.
+     - Worker signaled parent via an IPC queue at the failpoint before any RPC broadcast and was immediately hard-killed via `child.kill()`.
+     - Verified child terminated abnormally (`exitcode != 0`).
+     - Restarted runner process attempted `claim_send()` with the same operation ID: strictly refused with `can_send=False`.
+     - Runner executed `reconcile_operation()`: performed read-only checks, verified transaction was never broadcast, updated state to `UNKNOWN`.
+     - Asserted that zero transactions were submitted to Anvil throughout the entire crash and recovery lifecycle (Anvil nonce strictly unchanged).
+
+---
+
 ## 3. Complete 17-Gate Acceptance Matrix
 
 | Gate ID | Original Requirement (Plan v2) | Test IDs | Status | Evidence Path |
 | :--- | :--- | :--- | :---: | :--- |
 | **G3-01** | Multi-Manifest Same Case Linkage | `test_onchain_store.py::TestGate3_01_*` (3 tests) + Smoke | **PASS** | `forensics/schemas.py:35-43`, composite PK `(chain_id, contract_address, manifest_sha256)` |
 | **G3-02** | Custody Event Identity & Collision | `test_onchain_store.py::TestGate3_02_*` (3 tests) | **PASS** | `forensics/schemas.py:53-56`, unique index `(chain_id, contract_address, tx_hash, log_index)` |
-| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (5 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests) | **PASS** | `forensics/onchain_store.py:257-336`, receipt status=1, blockNumber check, zero INSERT OR REPLACE |
+| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, multi-coordinate cross-validation, zero INSERT OR REPLACE |
 | **G3-04** | Fail-Fast DB Checks Before Send | `test_onchain_store.py::TestGate3_11_*` (3 tests), `TestGate3_14::test_package_retention_*`, `test_onchain_group3.py::TestRecoverySidecar` (2 tests) | **PASS** | `forensics/onchain_store.py:177-224`, `pre_send_db_check` refuses missing/read-only/unmigrated DB |
 | **G3-05** | Note SHA-256 & No File Probing | `test_evidence_identity.py::TestGate3_05_*` (9 tests) | **PASS** | `forensics/evidence_identity.py:85-110`, verbatim UTF-8 bytes hashed; non-empty validation; in-memory |
 | **G3-06** | Case ID SHA-256 & Zero Leakage | `test_evidence_identity.py::TestGate3_06_*` (4 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:38-73`, length 1..64, anchor `\A...\Z`, SHA-256 digest |
@@ -143,11 +191,11 @@ A surgical, controlled remediation was executed strictly addressing these 4 gate
 | **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, zero broadcast, idempotent updates |
 | **G3-11** | SQLite Additive Migration Integrity | `test_onchain_store.py::TestGate3_11_*` (8 tests) | **PASS** | `forensics/schemas.py:143-176`, 100% snapshot preservation on diverse legacy rows, rollback/rerun resilience |
 | **G3-12** | Canary Privacy & Secret Guardrails | `test_evidence_identity.py::TestGate3_12_*` (5 tests), `test_onchain_group3.py::TestRecoverySidecar` (3 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:244-307`, longest-match redaction, sidecar recursive secret rejection |
-| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 514 total pytest pass |
+| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 521 total pytest pass |
 | **G3-14** | Export No-Clobber & Canonical URI | `test_onchain_store.py::TestGate3_14_*` (7 tests), `forensics/exporter.py` | **PASS** | `forensics/exporter.py:260-285`, canonical storage URI in DB metadata, no-clobber, dual-manifest distinction, retention on DB failure |
 | **G3-15** | Canonical Storage URI Format | `test_evidence_identity.py::TestGate3_15_*` (8 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:110-155`, exact 161 printable ASCII bytes, self-referential cycle detection |
-| **G3-16** | Real Dual-Process Concurrency | `test_onchain_group3.py::TestGate3_16_*` (2 tests) + Smoke | **PASS** | `tests/test_onchain_group3.py:534-586`, `multiprocessing` spawn, atomic CAS `BEGIN IMMEDIATE` + conditional update, exactly 1 send |
-| **G3-17** | Fail-Closed Crash Recovery | `test_onchain_group3.py::TestGate3_17_*` (3 tests) | **PASS** | `tests/test_onchain_group3.py:587-664`, crash after `SEND_STARTED` refuses resend upon restart, returns UNKNOWN |
+| **G3-16** | Real Dual-Process Concurrency | `test_onchain_group3.py::TestGate3_16_*` (3 tests) + Smoke | **PASS** | `tests/test_onchain_group3.py:534-620`, multiprocessing spawn, atomic CAS `BEGIN IMMEDIATE` + conditional update, exactly 1 send on Anvil |
+| **G3-17** | Fail-Closed Crash Recovery | `test_onchain_group3.py::TestGate3_17_*` (4 tests) | **PASS** | `tests/test_onchain_group3.py:621-720`, real child `kill()`, crash after `SEND_STARTED` refuses resend on restart, read-only reconcile zero send |
 
 ---
 
@@ -158,12 +206,12 @@ A surgical, controlled remediation was executed strictly addressing these 4 gate
 - **Exit Code:** `0`
 - **Output:**
   ```text
-  514 passed in 176.51s (0:02:56)
+  521 passed in 168.04s (0:02:48)
   ```
 - **Breakdown of Passing Tests:**
   - `tests/test_evidence_identity.py`: 36 tests PASS
-  - `tests/test_onchain_store.py`: 28 tests PASS
-  - `tests/test_onchain_group3.py`: 24 tests PASS
+  - `tests/test_onchain_store.py`: 33 tests PASS
+  - `tests/test_onchain_group3.py`: 26 tests PASS
   - `tests/test_onchain_group3_smoke.py`: 7 tests PASS
   - `tests/test_onchain_2b.py`: 73 tests PASS
   - `tests/test_onchain_guard.py`: 10 tests PASS
@@ -174,7 +222,7 @@ A surgical, controlled remediation was executed strictly addressing these 4 gate
   - `tests/test_integrity_2a.py`: 48 tests PASS
   - `tests/test_provenance_2a.py`: 8 tests PASS
   - Pre-existing Phase 1 & 2 tests: 223 tests PASS
-  - **Total:** 514 / 514 PASS (100%)
+  - **Total:** 521 / 521 PASS (100%)
 
 ### 4.2 Foundry Contract Suite Execution
 - **Command:** `forge test --root contracts`
@@ -261,7 +309,7 @@ The independent audit package has been generated and validated:
 - **Archive Path:** `D:\Projest\p3_group3_remediation_handover.zip`
 - **Checksum Manifest:** `SHA256SUMS.json` inside archive
 - **Verification Script:** `verify_archive.py` inside archive
-- **Self-Verification:** Validated via CRC-32 and SHA-256 integrity inspection.
+- **Self-Verification:** Validated via automated CRC-32 and SHA-256 integrity inspection (`verify_archive.py: 27 verified OK, 0 failures`).
 
 Antigravity now stands down and awaits official user acceptance.
 

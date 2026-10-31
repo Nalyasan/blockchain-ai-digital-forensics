@@ -66,6 +66,50 @@ def test_db(tmp_path: Path) -> Path:
     conn.close()
     return db_file
 
+def make_mock_receipt(
+    contract: str,
+    tx_hash: str,
+    block_number: int | str,
+    event_type: str,
+    log_index: int = 0,
+    evidence_id: int = 1,
+    actor: str = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    action: int = 0,
+    case_digest: str | None = None,
+    manifest_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Helper to construct authentic mock transaction receipts for onchain store tests."""
+    topic0 = get_event_topic(event_type)
+    topics = [topic0]
+    blk_num_hex = hex(block_number) if isinstance(block_number, int) else str(block_number)
+    if event_type == EVENT_TYPE_EVIDENCE_REGISTERED:
+        c_hash = "0x" + (case_digest or ("11" * 32)).lower().removeprefix("0x").zfill(64)
+        m_hash = "0x" + (manifest_sha256 or ("22" * 32)).lower().removeprefix("0x").zfill(64)
+        topics.extend([
+            "0x" + hex(evidence_id)[2:].zfill(64),
+            c_hash,
+            m_hash,
+        ])
+        data = "0x" + actor.lower().removeprefix("0x").zfill(64) + "00" * 32
+    else:
+        topics.extend([
+            "0x" + hex(evidence_id)[2:].zfill(64),
+            "0x" + hex(action)[2:].zfill(64),
+            "0x" + actor.lower().removeprefix("0x").zfill(64),
+        ])
+        data = "0x" + ("33" * 32) + ("44" * 32)
+    return {
+        "status": 1,
+        "blockNumber": blk_num_hex,
+        "transactionHash": tx_hash,
+        "logs": [{
+            "address": contract,
+            "topics": topics,
+            "data": data,
+            "logIndex": hex(log_index) if isinstance(log_index, int) else log_index,
+        }]
+    }
+
 
 @pytest.fixture
 def legacy_db(tmp_path: Path) -> Path:
@@ -212,6 +256,7 @@ class TestGate3_01_MultiManifestLinkage:
         assert manifest_1_sha != manifest_2_sha
 
         # Persist manifest 1
+        rc1 = make_mock_receipt(contract, "0x1111111111111111111111111111111111111111111111111111111111111111", 101, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=1, case_digest=case_digest, manifest_sha256=manifest_1_sha)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -226,10 +271,11 @@ class TestGate3_01_MultiManifestLinkage:
             block_number=101,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc1,
         )
 
         # Persist manifest 2 for the same case
+        rc2 = make_mock_receipt(contract, "0x2222222222222222222222222222222222222222222222222222222222222222", 102, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=2, case_digest=case_digest, manifest_sha256=manifest_2_sha)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -244,7 +290,7 @@ class TestGate3_01_MultiManifestLinkage:
             block_number=102,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc2,
         )
 
         conn = sqlite3.connect(str(test_db))
@@ -280,6 +326,7 @@ class TestGate3_01_MultiManifestLinkage:
         m1_sha = hashlib.sha256(b"manifest_alpha").hexdigest()
         m2_sha = hashlib.sha256(b"manifest_beta").hexdigest()
 
+        rc1 = make_mock_receipt(contract, "0xaaaa", 1, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=10, manifest_sha256=m1_sha)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -290,8 +337,9 @@ class TestGate3_01_MultiManifestLinkage:
             block_number=1,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc1,
         )
+        rc2 = make_mock_receipt(contract, "0xbbbb", 2, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=20, manifest_sha256=m2_sha)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -302,7 +350,7 @@ class TestGate3_01_MultiManifestLinkage:
             block_number=2,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc2,
         )
 
         conn = sqlite3.connect(str(test_db))
@@ -325,29 +373,32 @@ class TestGate3_01_MultiManifestLinkage:
         """Same manifest anchored across different chains or contracts does not collide."""
         manifest_sha = hashlib.sha256(b"cross_chain_manifest").hexdigest()
 
+        c_addr = "0x1111111111111111111111111111111111111111"
+        rc1 = make_mock_receipt(c_addr, "0xtx1", 1, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=1, manifest_sha256=manifest_sha)
         persist_verified_event(
             test_db,
             chain_id=31337,
-            contract="0x1111111111111111111111111111111111111111",
+            contract=c_addr,
             evidence_id=1,
             manifest_sha256=manifest_sha,
             tx_hash="0xtx1",
             block_number=1,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc1,
         )
+        rc2 = make_mock_receipt(c_addr, "0xtx2", 5000, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=100, manifest_sha256=manifest_sha)
         persist_verified_event(
             test_db,
             chain_id=11155111,
-            contract="0x1111111111111111111111111111111111111111",
+            contract=c_addr,
             evidence_id=100,
             manifest_sha256=manifest_sha,
             tx_hash="0xtx2",
             block_number=5000,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc2,
         )
 
         conn = sqlite3.connect(str(test_db))
@@ -375,7 +426,8 @@ class TestGate3_02_EventIdentityAndCollision:
         contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
         tx_hash = "0xdeadbeef1111222233334444555566667777888899990000aaaabbbbccccdddd"
 
-        # Action 0 (COLLECTED) at log_index 0
+        # Action 0 (COLLECTED) in tx at log_index 0
+        rc1 = make_mock_receipt(contract, tx_hash, 100, EVENT_TYPE_CUSTODY_RECORDED, 0, evidence_id=1, action=0)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -389,10 +441,11 @@ class TestGate3_02_EventIdentityAndCollision:
             block_number=100,
             log_index=0,
             event_type=EVENT_TYPE_CUSTODY_RECORDED,
-            receipt_status=1,
+            receipt=rc1,
         )
 
         # Action 1 (ANALYZED) in same tx at log_index 1
+        rc2 = make_mock_receipt(contract, tx_hash, 100, EVENT_TYPE_CUSTODY_RECORDED, 1, evidence_id=1, action=1)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -406,7 +459,7 @@ class TestGate3_02_EventIdentityAndCollision:
             block_number=100,
             log_index=1,
             event_type=EVENT_TYPE_CUSTODY_RECORDED,
-            receipt_status=1,
+            receipt=rc2,
         )
 
         conn = sqlite3.connect(str(test_db))
@@ -430,6 +483,7 @@ class TestGate3_02_EventIdentityAndCollision:
         log_index = 0
 
         # Initial event insert
+        rc1 = make_mock_receipt(contract, tx_hash, 50, EVENT_TYPE_CUSTODY_RECORDED, log_index, evidence_id=5, action=0, actor="0xactor1")
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -443,10 +497,11 @@ class TestGate3_02_EventIdentityAndCollision:
             block_number=50,
             log_index=log_index,
             event_type=EVENT_TYPE_CUSTODY_RECORDED,
-            receipt_status=1,
+            receipt=rc1,
         )
 
         # Attempt to insert identical event tuple with different payload
+        rc2 = make_mock_receipt(contract, tx_hash, 50, EVENT_TYPE_CUSTODY_RECORDED, log_index, evidence_id=5, action=1, actor="0xactor2")
         with pytest.raises(sqlite3.IntegrityError):
             persist_verified_event(
                 test_db,
@@ -461,7 +516,7 @@ class TestGate3_02_EventIdentityAndCollision:
                 block_number=50,
                 log_index=log_index,
                 event_type=EVENT_TYPE_CUSTODY_RECORDED,
-                receipt_status=1,
+                receipt=rc2,
             )
 
         # Verify only original event remains
@@ -515,6 +570,7 @@ class TestGate3_03_NoInsertOrReplace:
         contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
         tx_hash = "0ximmutabletx"
 
+        rc1 = make_mock_receipt(contract, tx_hash, 10, EVENT_TYPE_CUSTODY_RECORDED, 0, evidence_id=1, action=0, actor="0xoriginalactor")
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -528,10 +584,11 @@ class TestGate3_03_NoInsertOrReplace:
             block_number=10,
             log_index=0,
             event_type=EVENT_TYPE_CUSTODY_RECORDED,
-            receipt_status=1,
+            receipt=rc1,
         )
 
         # Attempt to insert conflicting data on same event tuple
+        rc2 = make_mock_receipt(contract, tx_hash, 10, EVENT_TYPE_CUSTODY_RECORDED, 0, evidence_id=1, action=0, actor="0xmutatedactor")
         with pytest.raises(sqlite3.IntegrityError):
             persist_verified_event(
                 test_db,
@@ -546,7 +603,7 @@ class TestGate3_03_NoInsertOrReplace:
                 block_number=10,
                 log_index=0,
                 event_type=EVENT_TYPE_CUSTODY_RECORDED,
-                receipt_status=1,
+                receipt=rc2,
             )
 
         # Historical record must still have original values
@@ -572,18 +629,15 @@ class TestGate3_04_StrictVerification:
         contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
         tx_hash = "0xvalidafterverify"
 
-        receipt = {
-            "status": 1,
-            "blockNumber": "0x64",  # 100
-            "logs": [
-                {
-                    "address": contract,
-                    "topics": [TOPIC_EVIDENCE_REGISTERED, "0x1", "0x2", "0x3"],
-                    "data": "0x",
-                    "logIndex": "0x0",
-                }
-            ],
-        }
+        manifest_sha = hashlib.sha256(b"man1").hexdigest()
+        receipt = make_mock_receipt(
+            contract=contract,
+            tx_hash=tx_hash,
+            block_number=100,
+            event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+            evidence_id=1,
+            manifest_sha256=manifest_sha,
+        )
 
         persist_verified_event(
             test_db,
@@ -737,6 +791,99 @@ class TestGate3_04_StrictVerification:
 # ==============================================================================
 # Gate G3-11: Additive Migration Integrity & Pre-Send DB Check
 # ==============================================================================
+
+    def test_persist_verified_event_missing_receipt_strictly_rejected(self, test_db: Path):
+        """Bypass attempt: calling persist_verified_event without receipt is strictly blocked."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: valid transaction receipt is strictly required"):
+            persist_verified_event(
+                test_db,
+                chain_id=31337,
+                contract=contract,
+                evidence_id=1,
+                tx_hash="0xbypasstx",
+                block_number=100,
+                log_index=0,
+                event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+                receipt=None,
+            )
+
+    def test_persist_verified_event_self_declared_block_and_status_without_receipt_rejected(self, test_db: Path):
+        """Bypass attempt: passing self-declared blockNumber, topic0 and receipt_status without receipt is rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: valid transaction receipt is strictly required"):
+            persist_verified_event(
+                test_db,
+                chain_id=31337,
+                contract=contract,
+                evidence_id=1,
+                tx_hash="0xbypasstx2",
+                block_number=100,
+                log_index=0,
+                event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+                receipt_status=1,
+                topic0=TOPIC_EVIDENCE_REGISTERED,
+            )
+
+    def test_persist_verified_event_contract_mismatch_rejected(self, test_db: Path):
+        """Receipt from a different contract address is rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        wrong_contract = "0x9999999999999999999999999999999999999999"
+        tx_hash = "0xcontractmismatch"
+        receipt = make_mock_receipt(wrong_contract, tx_hash, 100, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=1)
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: contract address mismatch"):
+            persist_verified_event(
+                test_db,
+                chain_id=31337,
+                contract=contract,
+                evidence_id=1,
+                tx_hash=tx_hash,
+                block_number=100,
+                log_index=0,
+                event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+                receipt=receipt,
+            )
+
+    def test_persist_verified_event_tx_hash_mismatch_rejected(self, test_db: Path):
+        """Receipt transactionHash differing from claimed tx_hash is rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        receipt = make_mock_receipt(contract, "0xactual_tx_hash", 100, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=1)
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: transactionHash mismatch"):
+            persist_verified_event(
+                test_db,
+                chain_id=31337,
+                contract=contract,
+                evidence_id=1,
+                tx_hash="0xclaimed_tx_hash",
+                block_number=100,
+                log_index=0,
+                event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
+                receipt=receipt,
+            )
+
+    def test_persist_verified_event_actor_mismatch_rejected(self, test_db: Path):
+        """Receipt actor differing from claimed actor in CustodyRecorded is rejected."""
+        contract = "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+        tx_hash = "0xactormismatch"
+        receipt = make_mock_receipt(
+            contract, tx_hash, 100, EVENT_TYPE_CUSTODY_RECORDED, 0, evidence_id=1,
+            actor="0x1111111111111111111111111111111111111111"
+        )
+        with pytest.raises(RuntimeError, match="VERIFICATION_FAILED: actor mismatch"):
+            persist_verified_event(
+                test_db,
+                chain_id=31337,
+                contract=contract,
+                evidence_id=1,
+                tx_hash=tx_hash,
+                block_number=100,
+                log_index=0,
+                event_type=EVENT_TYPE_CUSTODY_RECORDED,
+                actor="0x2222222222222222222222222222222222222222",
+                receipt=receipt,
+            )
+
+
 class TestGate3_11_DatabaseReadinessAndMigration:
     """Gate G3-11: Additive SQLite migrations preserve historical data;
 
@@ -1083,20 +1230,23 @@ class TestGate3_14_EventDistinctionAndRetention:
         chain_id = 31337
 
         # 1. Register event
+        m1 = hashlib.sha256(b"manifest1").hexdigest()
+        rc1 = make_mock_receipt(contract, "0xregtx", 10, EVENT_TYPE_EVIDENCE_REGISTERED, 0, evidence_id=1, manifest_sha256=m1)
         persist_verified_event(
             test_db,
             chain_id=chain_id,
             contract=contract,
             evidence_id=1,
-            manifest_sha256=hashlib.sha256(b"manifest1").hexdigest(),
+            manifest_sha256=m1,
             tx_hash="0xregtx",
             block_number=10,
             log_index=0,
             event_type=EVENT_TYPE_EVIDENCE_REGISTERED,
-            receipt_status=1,
+            receipt=rc1,
         )
 
         # 2. Custody event
+        rc2 = make_mock_receipt(contract, "0xcusttx", 11, EVENT_TYPE_CUSTODY_RECORDED, 0, evidence_id=1, action=2, actor="0xactor")
         persist_verified_event(
             test_db,
             chain_id=chain_id,
@@ -1110,7 +1260,7 @@ class TestGate3_14_EventDistinctionAndRetention:
             block_number=11,
             log_index=0,
             event_type=EVENT_TYPE_CUSTODY_RECORDED,
-            receipt_status=1,
+            receipt=rc2,
         )
 
         conn = sqlite3.connect(str(test_db))

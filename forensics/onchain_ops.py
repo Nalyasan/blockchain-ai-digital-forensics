@@ -203,46 +203,26 @@ def mark_unknown(db_path, operation_id, code):
 
 def persist_verified_event(db_path, operation_id, *, chain_id, contract, evidence_id, action,
                            actor, artifact_sha256, note_hash, tx_hash, block_number, log_index,
-                           event_type, manifest_sha256=None, case_digest=None):
-    conn = open_existing_rw(db_path, migrate_before_send=False)
-    now = _now()
-    event_id = f"{int(chain_id)}:{contract.lower()}:{tx_hash.lower()}:{int(log_index)}"
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
-            "INSERT INTO custody_events(event_id,evidence_id,case_id,action,actor_address,"
-            "artifact_sha256,note_hash,chain_id,contract_address,tx_hash,block_number,"
-            "recorded_at,verified,log_index,event_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)",
-            (event_id, evidence_id, case_digest, action, actor.lower(),
-             artifact_sha256.lower() if artifact_sha256 else None,
-             note_hash.lower() if note_hash else None,
-             int(chain_id), contract.lower(), tx_hash.lower(), int(block_number),
-             now, int(log_index), event_type),
-        )
-        if event_type == "EvidenceRegistered":
-            if not manifest_sha256:
-                raise RuntimeError("POST_SEND_DB_FAILED")
-            conn.execute(
-                "INSERT INTO anchor_links(chain_id,contract_address,manifest_sha256,evidence_id,"
-                "tx_hash,log_index,event_type,verified,recorded_at) VALUES(?,?,?,?,?,?,?,1,?)",
-                (int(chain_id), contract.lower(), manifest_sha256.lower(), int(evidence_id),
-                 tx_hash.lower(), int(log_index), event_type, now),
-            )
-        cur = conn.execute(
-            "UPDATE onchain_operations SET state=?, updated_at=? WHERE operation_id=? AND state=?",
-            (CONFIRMED, now, operation_id, BROADCAST),
-        )
-        if cur.rowcount != 1:
-            conn.rollback()
-            raise RuntimeError("POST_SEND_DB_FAILED")
-        _append_event(conn, operation_id, BROADCAST, CONFIRMED, event_type)
-        conn.commit()
-    except sqlite3.Error:
-        try:
-            conn.rollback()
-        except sqlite3.Error:
-            pass
-        raise RuntimeError("POST_SEND_DB_FAILED") from None
+                           event_type, manifest_sha256=None, case_digest=None, receipt=None):
+    from forensics import onchain_store as ops
+    return ops.persist_verified_event(
+        db_path,
+        operation_id=operation_id,
+        chain_id=chain_id,
+        contract=contract,
+        evidence_id=evidence_id,
+        action=action,
+        actor=actor,
+        artifact_sha256=artifact_sha256,
+        note_hash=note_hash,
+        tx_hash=tx_hash,
+        block_number=block_number,
+        log_index=log_index,
+        event_type=event_type,
+        manifest_sha256=manifest_sha256,
+        case_digest=case_digest,
+        receipt=receipt,
+    )
     finally:
         conn.close()
 

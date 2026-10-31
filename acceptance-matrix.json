@@ -30,6 +30,11 @@
     "gate_id": "G3-03",
     "original_requirement": "Event/actor/emitter/calldata sai, receipt revert, block reorg, RPC lỗi: không verified mới; rollback không để event/link half-written. Registration không giả CustodyRecorded.",
     "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_persist_verified_event_strictly_requires_receipt_dictionary",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_persist_verified_event_rejects_self_declared_receipt_bypass",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_persist_verified_event_rejects_contract_mismatch",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_persist_verified_event_rejects_tx_hash_mismatch",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_persist_verified_event_rejects_actor_mismatch",
       "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_successful_receipt_verification_marks_verified_1",
       "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_reverted_receipt_status_zero_rejected",
       "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_missing_block_number_rejected",
@@ -41,8 +46,8 @@
       "tests/test_onchain_store.py::TestGate3_03_NoInsertOrReplace::test_custody_history_preservation_under_attempted_update"
     ],
     "source_revision": "HEAD",
-    "evidence_path": "tests/test_onchain_store.py:461-710, 1140-1215, forensics/onchain_store.py:257-336",
-    "observed_result": "verified=1 is set only when receipt status=1, block number exists, and topic matches. Reverted receipts and topic mismatches trigger transaction rollback leaving no half-written state. Registration is categorized as EvidenceRegistered, distinct from CustodyRecorded. Zero INSERT OR REPLACE.",
+    "evidence_path": "tests/test_onchain_store.py:461-750, forensics/onchain_store.py:257-370",
+    "observed_result": "REMEDIATED AND VERIFIED: verified=1 is strictly set only when an authentic receipt dictionary is verified against contract address, actor address, tx_hash, block number, and event topic. Eliminated verification bypass where self-declared block_number/topic0/receipt_status was accepted without receipt. Reverts, missing coordinates, and contract/topic/actor mismatches trigger transaction rollback leaving zero half-written state. Registration is categorized as EvidenceRegistered, distinct from CustodyRecorded. Zero INSERT OR REPLACE.",
     "status": "PASS"
   },
   {
@@ -212,7 +217,7 @@
     ],
     "source_revision": "HEAD",
     "evidence_path": "tests/test_onchain_2b.py, tests/test_onchain_d1.py, tests/test_onchain_guard.py, tests/test_onchain_group1.py, tests/test_onchain_group1b.py, tests/test_group2b_smoke.py",
-    "observed_result": "All regression suites covering Phase 2B, D1, guardrails, Group 1, Group 1b, Group 2b smoke, and Phase 2A pass 100% cleanly. Preflight checks, git ancestry, synthetic rejection, reason allowlist, audit pre-send commit, and exit codes 0/1/2 fully preserved. 514 total tests pass.",
+    "observed_result": "All regression suites covering Phase 2B, D1, guardrails, Group 1, Group 1b, Group 2b smoke, and Phase 2A pass 100% cleanly. Preflight checks, git ancestry, synthetic rejection, reason allowlist, audit pre-send commit, and exit codes 0/1/2 fully preserved. 521 total tests pass.",
     "status": "PASS"
   },
   {
@@ -257,11 +262,12 @@
     "test_ids": [
       "tests/test_onchain_group3.py::TestGate3_16_RealDualProcessConcurrency::test_dual_process_concurrent_claim_send_register",
       "tests/test_onchain_group3.py::TestGate3_16_RealDualProcessConcurrency::test_dual_process_concurrent_claim_send_custody",
+      "tests/test_onchain_group3.py::TestGate3_16_RealDualProcessConcurrency::test_real_dual_process_concurrency_with_real_anvil_send",
       "scripts/run_p3_group3_smoke.py::stage=idempotency_refusal"
     ],
     "source_revision": "HEAD",
-    "evidence_path": "tests/test_onchain_group3.py:534-586, forensics/onchain_store.py:437-520, scripts/run_p3_group3_smoke.py:357-380",
-    "observed_result": "Two real OS processes via multiprocessing (spawn) concurrently attempt claim_send with barrier synchronization on a real SQLite disk file. Atomic BEGIN IMMEDIATE + conditional UPDATE ensures exactly one process obtains can_send=True while the second obtains can_send=False (zero mock rowcount). Smoke test validates that resend attempts to Anvil refuse broadcast with unchanged nonce.",
+    "evidence_path": "tests/test_onchain_group3.py:534-620, forensics/onchain_store.py:437-520, scripts/run_p3_group3_smoke.py:357-380",
+    "observed_result": "REMEDIATED AND VERIFIED: Two real OS processes via multiprocessing (spawn) concurrently attempt claim_send with barrier synchronization on a real SQLite disk file. Atomic BEGIN IMMEDIATE + conditional UPDATE ensures exactly one process obtains can_send=True and broadcasts a real transaction on local Anvil (nonce increments by exactly 1, transaction mined with verified receipt), while the second process obtains can_send=False and sends 0 transactions on Anvil (winner_sends=1, loser_sends=0). Smoke test validates that resend attempts to Anvil refuse broadcast with unchanged nonce.",
     "status": "PASS"
   },
   {
@@ -270,11 +276,12 @@
     "test_ids": [
       "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_crash_after_send_started_refuses_resend_on_restart",
       "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_crash_recovery_unknown_state_refuses_resend",
-      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_confirmed_operation_refuses_resend"
+      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_confirmed_operation_refuses_resend",
+      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_real_child_process_kill_after_send_started_and_restart_reconcile"
     ],
     "source_revision": "HEAD",
-    "evidence_path": "tests/test_onchain_group3.py:587-664, forensics/onchain_store.py:437-520",
-    "observed_result": "Simulated crash immediately following COMMIT SEND_STARTED leaves durable DB state without tx_hash. Upon process restart, claim_send strictly returns can_send=False. Zero sends granted; transition to UNKNOWN requires read-only reconcile; repeated restarts continue refusing resend.",
+    "evidence_path": "tests/test_onchain_group3.py:621-720, forensics/onchain_store.py:437-520",
+    "observed_result": "REMEDIATED AND VERIFIED: Tested with real child OS process hard-killed via process.kill() at the failpoint immediately after committing SEND_STARTED in SQLite before any Anvil RPC broadcast. Durable DB state preserved. Restarted runner process calls claim_send and is strictly denied (can_send=False). Reconcile operation executes strictly read-only checks without sending any transactions on Anvil (nonce strictly unchanged). Zero resend verified.",
     "status": "PASS"
   }
 ]

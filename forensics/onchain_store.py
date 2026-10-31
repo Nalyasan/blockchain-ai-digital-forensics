@@ -664,19 +664,33 @@ def verify_receipt_and_event(
     receipt: Mapping[str, Any],
     expected_event_type: str,
     expected_contract: str | None = None,
+    expected_tx_hash: str | None = None,
+    expected_actor: str | None = None,
+    expected_evidence_id: int | None = None,
+    expected_action: int | None = None,
+    expected_manifest_sha256: str | None = None,
+    expected_case_digest: str | None = None,
 ) -> dict[str, Any]:
     """Strictly verify transaction receipt and event log before marking verified=1.
 
-    Requirements (Gate G3-04):
+    Requirements (Gates G3-03, G3-04):
     1. receipt status must equal 1 (success).
     2. blockNumber must exist and be non-null.
-    3. Event topic0 in logs must match expected_event_type.
-    4. Contract address must match if expected_contract is provided.
+    3. transactionHash must match expected_tx_hash if specified.
+    4. Event topic0 in logs must match expected_event_type.
+    5. Contract address must match if expected_contract is provided.
+    6. Actor, evidenceId, and action/case/manifest must match event data if provided.
 
     Args:
         receipt: Receipt dictionary from eth_getTransactionReceipt or cast.
         expected_event_type: 'EvidenceRegistered' or 'CustodyRecorded'.
         expected_contract: Expected contract address (optional).
+        expected_tx_hash: Expected transaction hash (optional).
+        expected_actor: Expected actor address (optional).
+        expected_evidence_id: Expected evidence ID (optional).
+        expected_action: Expected custody action (optional).
+        expected_manifest_sha256: Expected manifest SHA256 (optional).
+        expected_case_digest: Expected case digest (optional).
 
     Returns:
         Matched event log dictionary.
@@ -708,7 +722,15 @@ def verify_receipt_and_event(
         except ValueError:
             raise RuntimeError(f"VERIFICATION_FAILED: invalid blockNumber format: {raw_block}")
 
-    # 3. Event topic check
+    # 3. Tx hash check
+    if expected_tx_hash:
+        rec_tx = receipt.get("transactionHash")
+        if rec_tx and str(rec_tx).lower() != str(expected_tx_hash).lower():
+            raise RuntimeError(
+                f"VERIFICATION_FAILED: transactionHash mismatch between receipt ({rec_tx}) and expected ({expected_tx_hash})"
+            )
+
+    # 4. Event topic check
     expected_topic = get_event_topic(expected_event_type).lower()
     logs = receipt.get("logs", [])
     matched_log = None
@@ -739,6 +761,52 @@ def verify_receipt_and_event(
         raise RuntimeError(
             f"VERIFICATION_FAILED: no matching {expected_event_type} event found in receipt logs (topic mismatch)"
         )
+
+    # 5. Semantic validation of event topics
+    topics = matched_log.get("topics", [])
+    if expected_evidence_id is not None and expected_evidence_id > 0 and len(topics) > 1:
+        try:
+            ev_id_in_log = int(topics[1], 16 if str(topics[1]).startswith("0x") else 10)
+            if ev_id_in_log != expected_evidence_id:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: evidenceId mismatch in {expected_event_type} log (expected {expected_evidence_id}, got {ev_id_in_log})"
+                )
+        except ValueError:
+            pass
+
+    if expected_event_type == EVENT_TYPE_CUSTODY_RECORDED:
+        if expected_action is not None and len(topics) > 2:
+            try:
+                act_in_log = int(topics[2], 16 if str(topics[2]).startswith("0x") else 10)
+                if act_in_log != expected_action:
+                    raise RuntimeError(
+                        f"VERIFICATION_FAILED: action mismatch in CustodyRecorded log (expected {expected_action}, got {act_in_log})"
+                    )
+            except ValueError:
+                pass
+        if expected_actor and len(topics) > 3:
+            raw_actor_topic = str(topics[3]).lower()
+            topic_actor_40 = raw_actor_topic.removeprefix("0x")[-40:].zfill(40)
+            expected_actor_40 = str(expected_actor).lower().removeprefix("0x")[-40:].zfill(40)
+            if topic_actor_40 != expected_actor_40:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: actor mismatch in CustodyRecorded log (expected {expected_actor}, got {topic_actor_40})"
+                )
+    elif expected_event_type == EVENT_TYPE_EVIDENCE_REGISTERED:
+        if expected_case_digest and len(topics) > 2:
+            log_case = str(topics[2]).lower().removeprefix("0x").zfill(64)
+            exp_case = expected_case_digest.lower().removeprefix("0x").zfill(64)
+            if log_case != exp_case:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: case_digest mismatch in EvidenceRegistered log"
+                )
+        if expected_manifest_sha256 and len(topics) > 3:
+            log_man = str(topics[3]).lower().removeprefix("0x").zfill(64)
+            exp_man = expected_manifest_sha256.lower().removeprefix("0x").zfill(64)
+            if log_man != exp_man:
+                raise RuntimeError(
+                    f"VERIFICATION_FAILED: manifestSha256 mismatch in EvidenceRegistered log"
+                )
 
     return matched_log
 
@@ -788,31 +856,6 @@ def persist_verified_event(
     if not event_type:
         raise ValueError("event_type is required")
 
-    # Strict Verification Before verified=1 (Gate G3-04)
-    # Check if receipt is provided
-    if "receipt" in data and data["receipt"] is not None:
-        verify_receipt_and_event(data["receipt"], event_type, contract)
-    else:
-        # Check explicit status if provided
-        status_val = data.get("receipt_status", data.get("status"))
-        if status_val is not None:
-            if status_val in (1, "1", "0x1", True):
-                pass
-            else:
-                raise RuntimeError("VERIFICATION_FAILED: receipt status is not 1 (transaction reverted or failed)")
-
-        # Check block_number presence
-        if block_number is None:
-            raise RuntimeError("VERIFICATION_FAILED: missing block number (unconfirmed or pending transaction)")
-
-        # Check topic if provided
-        topic_val = data.get("topic", data.get("topic0"))
-        if topic_val is not None:
-            expected_t = get_event_topic(event_type)
-            if str(topic_val).lower() != expected_t.lower():
-                raise RuntimeError(f"VERIFICATION_FAILED: event topic mismatch for {event_type}")
-
-    block_num_int = int(block_number) if block_number is not None else 0
     actor = str(data.get("actor") or data.get("actor_address") or contract).lower()
     artifact_sha256 = data.get("artifact_sha256")
     artifact_sha256_val = str(artifact_sha256).lower() if artifact_sha256 else None
@@ -823,6 +866,50 @@ def persist_verified_event(
     case_digest = data.get("case_digest", data.get("case_id"))
     case_digest_val = str(case_digest).lower() if case_digest else None
     action_val = int(data.get("action", 0))
+
+    # Strict Verification Before verified=1 (Gate G3-04 & G3-03)
+    # A valid transaction receipt is strictly mandatory.
+    # Self-declared block_number or topic0 is strictly rejected.
+    receipt = data.get("receipt")
+    if receipt is None or not isinstance(receipt, Mapping):
+        raise RuntimeError(
+            "VERIFICATION_FAILED: valid transaction receipt is strictly required to persist verified=1. "
+            "Self-declared block_number or topic0 is rejected."
+        )
+
+    matched_event = verify_receipt_and_event(
+        receipt,
+        event_type,
+        expected_contract=contract,
+        expected_tx_hash=tx_hash,
+        expected_actor=actor,
+        expected_evidence_id=evidence_id,
+        expected_action=action_val,
+        expected_manifest_sha256=manifest_sha256_val,
+        expected_case_digest=case_digest_val,
+    )
+
+    # Derive verified execution coordinates directly from the verified receipt
+    receipt_block = receipt.get("blockNumber")
+    if receipt_block is not None:
+        if isinstance(receipt_block, int):
+            block_num_int = receipt_block
+        else:
+            s_block = str(receipt_block)
+            block_num_int = int(s_block, 16 if s_block.startswith("0x") else 10)
+    else:
+        block_num_int = int(block_number or 0)
+
+    receipt_tx = str(receipt.get("transactionHash", tx_hash)).lower()
+    tx_hash = receipt_tx
+
+    if "logIndex" in matched_event and matched_event["logIndex"] is not None:
+        raw_idx = matched_event["logIndex"]
+        if isinstance(raw_idx, int):
+            log_index = raw_idx
+        else:
+            s_idx = str(raw_idx)
+            log_index = int(s_idx, 16 if s_idx.startswith("0x") else 10)
 
     event_id = make_event_id(chain_id, contract, tx_hash, log_index)
     now = _now()
