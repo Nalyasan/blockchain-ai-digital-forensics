@@ -5,7 +5,7 @@
 **Repository:** `D:\Projest\Blockchain`  
 **Baseline P3:** `713ad068348cab75046e10d52332f0d850ef93f5`  
 **Candidate Audited:** `67bba6866a59f5c7549893eb68a8c06b5bade553`  
-**Final Verified Commit:** `7e520c9971e4e239476eca57761d6d9d2194578f` (parent: `9c3bd12c15402689c249fec19fa91acaf2b0a5f3`)  
+**Final Verified Commit:** `d50f880c4635e790f952f2dada5afc8a9526f74f` (parent: `3239705b2259eb26f3702a0a2df25f0e342a78ec`)  
 **Governing Standard:** `P3_GROUP3_PLAN_v2.md`  
 **Final Status:** **ALL 17 ACCEPTANCE GATES PASS (17/17 — 100%)**
 
@@ -29,8 +29,8 @@ A surgical, controlled remediation was executed addressing these areas while pre
 | Metric | Result | Status |
 | :--- | :--- | :--- |
 | **Acceptance Gates (Plan v2)** | **17 / 17 Gates PASS** | **100% PASS** |
-| **Pytest Full Suite** | **533 / 533 Tests PASS** (0 failed, 0 skipped) | **PASS** |
-| **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 18.26ms) | **PASS** |
+| **Pytest Full Suite** | **549 / 549 Tests PASS** (0 failed, 0 skipped) | **PASS** |
+| **Foundry Contract Suite** | **31 / 31 Tests PASS** (0 failed, 21.14ms) | **PASS** |
 | **Anvil Group 3 Smoke Suite** | **10 / 10 Real Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 1b Smoke Suite** | **55 / 55 Checks PASS** (exit code 0) | **PASS** |
 | **Anvil Group 2b Smoke Suite** | **9 / 9 Checks PASS** (exit code 0) | **PASS** |
@@ -237,6 +237,37 @@ Following the independent direct audit of `p3_group3_remediation_handover.zip`, 
      - `test_migrate_group3_atomic_rollback_on_unique_index_failure`: Verifies that unique index failure on duplicate rows leaves zero tables (`anchor_links`, `onchain_operations`, `onchain_operation_events`) created.
      - `test_migrate_group3_wal_mode_and_rerun_idempotency`: Verifies migration in WAL mode and confirms rerun idempotency.
 
+#### 2.7.3 Final Targeted Security Audit Findings (Findings 1, 2, 3)
+
+Following independent audit of commit `7e520c9`, three targeted findings were identified and resolved on commit `d50f880`:
+
+1. **Finding 1 — G3-03: Incomplete ABI Event Data Accepted:**
+   - *Vulnerability:* In `verify_receipt_and_event()`, `EvidenceRegistered` verified actor only if `len(data_hex) >= 66`, and `CustodyRecorded` verified artifact/note only if `len(data_hex) >= 130`. If `data="0x"`, checks were skipped, permitting false `verified=1`. In addition, `transactionHash` and `blockHash` only checked `.startswith("0x")` rather than verifying authentic 32-byte EVM hex.
+   - *Remediation in `forensics/onchain_store.py`:*
+     - Enforce `BYTES32_HEX_REGEX = re.compile(r"^0x[0-9a-fA-F]{64}$")` for mandatory 32-byte hex validation of `transactionHash` and `blockHash`.
+     - Strictly validate ABI unindexed payload structure and length:
+       - `EvidenceRegistered`: Unindexed data encodes `(address submitter, string storageUri)`, strictly requiring minimum 96 bytes (`>= 194` hex chars), offset == 64, URI length consistency, and submitter address matching `expected_actor`. Empty data `"0x"` or truncated payloads fail closed immediately.
+       - `CustodyRecorded`: Unindexed data encodes `(bytes32 artifactSha256, bytes32 noteHash)`, strictly requiring exactly 64 bytes (`== 130` hex chars).
+     - Unit tests in `tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation` prove that `verified=1` can never be written when event data is empty or invalid.
+
+2. **Finding 2 — G3-10: Missing Canonical Block Accepted in Reconcile:**
+   - *Vulnerability:* In `reconcile_operation()`, if `eth_getBlockByNumber` returned `None` or RPC client lacked block verification methods, canonicality could be bypassed, resulting in false `CONFIRMED` and `verified=1`.
+   - *Remediation in `forensics/onchain_store.py`:*
+     - Reconcile queries `eth_getBlockByNumber` and strictly asserts `block is not None` and is a mapping (`CANONICAL_BLOCK_NOT_FOUND`).
+     - Require `block["hash"]` to match receipt `blockHash` (`NON_CANONICAL_BLOCK_OR_REORG`).
+     - If RPC client lacks block verification methods, reject with `RPC_BLOCK_VERIFICATION_UNSUPPORTED`.
+     - In all non-canonical, missing, or error cases, reconcile preserves `UNKNOWN` without broadcasting any transactions or mutating DB.
+     - Unit tests in `tests/test_onchain_blockers.py::TestFinding2_ReconcileCanonicalBlock` verify all rejection paths.
+
+3. **Finding 3 — G3-04: Unauthorized Automatic Migration:**
+   - *Vulnerability:* In `forensics/onchain.py`, `record_custody_action` called `ops.pre_send_db_check(db_file, migrate=True)`.
+   - *Remediation in `forensics/onchain.py`, `forensics/onchain_ops.py`, `forensics/onchain_store.py`, `forensics/cli.py`:*
+     - Eliminated `migrate=True` from all write flows; changed `migrate_before_send=False` across `claim_send` and pre-send checks.
+     - Placed `ops.pre_send_db_check(db_file, migrate=False)` in `anchor_evidence` and `record_custody_action` before any transaction preparation or network calls.
+     - If DB is unmigrated, write flows fail fast with `GROUP3_SCHEMA_MISSING` with zero send and zero schema modification.
+     - Added explicit operator CLI command: `python -m forensics.cli migrate-db --db <path>`. Production database is never automatically migrated.
+     - Unit tests in `tests/test_onchain_blockers.py::TestFinding3_PreSendNoAutoMigration` verify fail-closed behavior and explicit CLI migration.
+
 ---
 
 ## 3. Complete 17-Gate Acceptance Matrix
@@ -245,17 +276,17 @@ Following the independent direct audit of `p3_group3_remediation_handover.zip`, 
 | :--- | :--- | :--- | :---: | :--- |
 | **G3-01** | Multi-Manifest Same Case Linkage | `test_onchain_store.py::TestGate3_01_*` (3 tests) + Smoke | **PASS** | `forensics/schemas.py:35-43`, composite PK `(chain_id, contract_address, manifest_sha256)` |
 | **G3-02** | Custody Event Identity & Collision | `test_onchain_store.py::TestGate3_02_*` (3 tests) | **PASS** | `forensics/schemas.py:53-56`, unique index `(chain_id, contract_address, tx_hash, log_index)` |
-| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests), `test_onchain_blockers.py::TestBlocker1_*` (7 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, 4 ABI topics check, blockHash/logIndex check, multi-coordinate cross-validation |
-| **G3-04** | Fail-Fast DB Checks Before Send | `test_onchain_store.py::TestGate3_11_*` (3 tests), `TestGate3_14::test_package_retention_*`, `test_onchain_group3.py::TestRecoverySidecar` (2 tests) | **PASS** | `forensics/onchain_store.py:177-224`, `pre_send_db_check` refuses missing/read-only/unmigrated DB |
+| **G3-03** | Strict Verification Before verified=1 | `test_onchain_store.py::TestGate3_04_*` (10 tests), `TestGate3_03_*` (2 tests), `TestGate3_14_*` (2 tests), `test_onchain_blockers.py::TestBlocker1_*` (7 tests), `test_onchain_blockers.py::TestFinding1_*` (9 tests) | **PASS** | `forensics/onchain_store.py:257-370`, authentic receipt strictly required, 4 ABI topics check, blockHash/logIndex check, multi-coordinate cross-validation, strict ABI event data validation, 32-byte hex hash regex |
+| **G3-04** | Fail-Fast DB Checks Before Send | `test_onchain_store.py::TestGate3_11_*` (3 tests), `TestGate3_14::test_package_retention_*`, `test_onchain_group3.py::TestRecoverySidecar` (2 tests), `test_onchain_blockers.py::TestFinding3_*` (4 tests) | **PASS** | `forensics/onchain_store.py:177-224`, `pre_send_db_check(migrate=False)` refuses missing/read-only/unmigrated DB before send, explicit `migrate-db` CLI command |
 | **G3-05** | Note SHA-256 & No File Probing | `test_evidence_identity.py::TestGate3_05_*` (9 tests) | **PASS** | `forensics/evidence_identity.py:85-110`, verbatim UTF-8 bytes hashed; non-empty validation; in-memory |
 | **G3-06** | Case ID SHA-256 & Zero Leakage | `test_evidence_identity.py::TestGate3_06_*` (4 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:38-73`, length 1..64, anchor `\A...\Z`, SHA-256 digest |
 | **G3-07** | Legacy Read-Only Compatibility | `test_evidence_identity.py::TestGate3_07_*` (9 tests), `test_onchain_guard.py` | **PASS** | `forensics/onchain.py:755-805`, zero silent downgrade; explicit `--legacy-case-encoding` returning `LEGACY_PUBLIC_CASE_ID`; mixed profiles rejected |
 | **G3-08** | Canonical Immutable Intent | `test_onchain_group3.py::TestGate3_08_*` (4 tests) | **PASS** | `forensics/onchain_store.py:64-125`, deterministic JSON with sorted keys, deterministic SHA-256 |
 | **G3-09** | Operation Journal & State Transitions | `test_onchain_group3.py::TestGate3_09_*` (3 tests), `TestGate3_17_*` | **PASS** | `forensics/onchain_store.py:640-724`, `onchain_operation_events` tracks complete lifecycle |
-| **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests), `test_onchain_blockers.py` (2 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, chainId + block check, raw receipt dict rejected, zero broadcast |
+| **G3-10** | Read-Only Reconcile Mechanism | `test_onchain_group3.py::TestGate3_10_*` (5 tests), `test_onchain_blockers.py` (5 tests) + Smoke | **PASS** | `forensics/onchain_store.py:840-970`, read-only RPC, chainId + canonical block lookup + hash check, raw receipt dict rejected, zero broadcast |
 | **G3-11** | SQLite Additive Migration Integrity | `test_onchain_store.py::TestGate3_11_*` (8 tests), `test_onchain_blockers.py::TestBlocker2_*` (3 tests) | **PASS** | `forensics/schemas.py:143-176`, native SAVEPOINT atomicity, no executescript, 100% snapshot preservation on diverse legacy rows |
 | **G3-12** | Canary Privacy & Secret Guardrails | `test_evidence_identity.py::TestGate3_12_*` (5 tests), `test_onchain_group3.py::TestRecoverySidecar` (3 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:244-307`, longest-match redaction, sidecar recursive secret rejection |
-| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 533 total pytest pass |
+| **G3-13** | Regression Preservation (1b/2A/2B/D1) | 221 regression tests across 8 test suites | **PASS** | Full regression suites pass 100% without weakening existing controls; 549 total pytest pass |
 | **G3-14** | Export No-Clobber & Canonical URI | `test_onchain_store.py::TestGate3_14_*` (7 tests), `forensics/exporter.py` | **PASS** | `forensics/exporter.py:260-285`, canonical storage URI in DB metadata, no-clobber, dual-manifest distinction, retention on DB failure |
 | **G3-15** | Canonical Storage URI Format | `test_evidence_identity.py::TestGate3_15_*` (8 tests) + Smoke | **PASS** | `forensics/evidence_identity.py:110-155`, exact 161 printable ASCII bytes, self-referential cycle detection |
 | **G3-16** | Real Dual-Process Concurrency | `test_onchain_group3.py::TestGate3_16_*` (3 tests) + Smoke | **PASS** | `tests/test_onchain_group3.py:534-620`, multiprocessing spawn, atomic CAS `BEGIN IMMEDIATE` + conditional update, exactly 1 send on Anvil |
@@ -270,13 +301,13 @@ Following the independent direct audit of `p3_group3_remediation_handover.zip`, 
 - **Exit Code:** `0`
 - **Output:**
   ```text
-  533 passed in 185.41s (0:03:05)
+  549 passed in 414.65s (0:06:54)
   ```
 - **Breakdown of Passing Tests:**
   - `tests/test_evidence_identity.py`: 36 tests PASS
   - `tests/test_onchain_store.py`: 33 tests PASS
   - `tests/test_onchain_group3.py`: 26 tests PASS
-  - `tests/test_onchain_blockers.py`: 12 tests PASS (Blocker 1 & Blocker 2 targeted test suite)
+  - `tests/test_onchain_blockers.py`: 28 tests PASS (Blockers 1 & 2 + Findings 1, 2, 3 targeted test suite)
   - `tests/test_onchain_group3_smoke.py`: 7 tests PASS
   - `tests/test_onchain_2b.py`: 73 tests PASS
   - `tests/test_onchain_guard.py`: 10 tests PASS

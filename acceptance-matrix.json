@@ -8,7 +8,7 @@
       "tests/test_onchain_store.py::TestGate3_01_MultiManifestLinkage::test_multi_chain_multi_contract_linkage",
       "scripts/run_p3_group3_smoke.py::stage=anchor_evidence_2_multi_manifest"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_store.py:180-340, scripts/run_p3_group3_smoke.py:244-273",
     "observed_result": "anchor_links uses composite primary key (chain_id, contract_address, manifest_sha256). Two distinct manifests for the same case ID persist independently without collision or clobbering. Queries return manifest-specific links. Isolation across chains and contracts verified.",
     "status": "PASS"
@@ -21,7 +21,7 @@
       "tests/test_onchain_store.py::TestGate3_02_EventIdentityAndCollision::test_duplicate_event_tuple_rejected_by_unique_index",
       "tests/test_onchain_store.py::TestGate3_02_EventIdentityAndCollision::test_canonical_event_id_construction"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_store.py:341-460, forensics/schemas.py:53-56",
     "observed_result": "Unique index idx_custody_event_identity on (chain_id, contract_address, tx_hash, log_index) preserves subsecond custody actions within the same transaction. Replay of identical payload is idempotent no-op. Duplicate identity with conflicting payload fails closed.",
     "status": "PASS"
@@ -50,11 +50,20 @@
       "tests/test_onchain_blockers.py::TestBlocker1_ReceiptValidationHardening::test_verify_receipt_custody_recorded_incomplete_topics",
       "tests/test_onchain_blockers.py::TestBlocker1_ReceiptValidationHardening::test_verify_receipt_rejects_missing_log_index",
       "tests/test_onchain_blockers.py::TestBlocker1_ReceiptValidationHardening::test_verify_receipt_rejects_emitter_mismatch",
-      "tests/test_onchain_blockers.py::TestBlocker1_ReceiptValidationHardening::test_verify_receipt_rejects_payload_context_mismatch"
+      "tests/test_onchain_blockers.py::TestBlocker1_ReceiptValidationHardening::test_verify_receipt_rejects_payload_context_mismatch",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_non_32byte_tx_hash",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_non_hex_tx_hash",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_non_32byte_block_hash",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_evidence_registered_empty_data",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_evidence_registered_short_data",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_custody_recorded_empty_data",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_verify_receipt_rejects_custody_recorded_wrong_data_length",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_persist_verified_event_refuses_verified_1_when_evidence_data_empty",
+      "tests/test_onchain_blockers.py::TestFinding1_EventDataAndHashValidation::test_persist_verified_event_refuses_verified_1_when_custody_data_empty"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_store.py:461-750, tests/test_onchain_blockers.py:34-162, forensics/onchain_store.py:257-370",
-    "observed_result": "REMEDIATED AND VERIFIED (AUDIT BLOCKER 1 RESOLVED): verified=1 is strictly set only when an authentic receipt dictionary is verified against contract address, actor address, tx_hash, block number, block hash, log index, and exact ABI event topics (4 topics for EvidenceRegistered, 4 topics for CustodyRecorded). Rejects incomplete topics, missing transactionHash/blockHash/logIndex, emitter mismatch, or context mismatches with transaction rollback leaving zero half-written state. Registration is categorized as EvidenceRegistered, distinct from CustodyRecorded. Zero INSERT OR REPLACE.",
+    "observed_result": "REMEDIATED AND VERIFIED (AUDIT BLOCKER 1 RESOLVED): verified=1 is strictly set only when an authentic receipt dictionary is verified against contract address, actor address, tx_hash, block number, block hash, log index, and exact ABI event topics (4 topics for EvidenceRegistered, 4 topics for CustodyRecorded). Rejects incomplete topics, missing transactionHash/blockHash/logIndex, emitter mismatch, or context mismatches with transaction rollback leaving zero half-written state. Registration is categorized as EvidenceRegistered, distinct from CustodyRecorded. Zero INSERT OR REPLACE. FINDING 1 RESOLVED: ABI event data structure and length strictly validated for both EvidenceRegistered (>= 96 bytes, offset 64, URI match) and CustodyRecorded (exactly 64 bytes). Empty or truncated data strictly rejected. transactionHash and blockHash verified as authentic 32-byte hex (0x[0-9a-fA-F]{64}). Zero verified=1 recorded on invalid data.",
     "status": "PASS"
   },
   {
@@ -66,11 +75,15 @@
       "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_fail_fast_on_missing_schema",
       "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_package_retention_on_database_failure",
       "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_appends_valid_jsonl",
-      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_rejects_unredacted_secrets"
+      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_rejects_unredacted_secrets",
+      "tests/test_onchain_blockers.py::TestFinding3_PreSendNoAutoMigration::test_pre_send_unmigrated_db_fails_closed_without_modifying_schema",
+      "tests/test_onchain_blockers.py::TestFinding3_PreSendNoAutoMigration::test_record_custody_action_fails_closed_on_unmigrated_db",
+      "tests/test_onchain_blockers.py::TestFinding3_PreSendNoAutoMigration::test_anchor_evidence_fails_closed_on_unmigrated_db",
+      "tests/test_onchain_blockers.py::TestFinding3_PreSendNoAutoMigration::test_cli_migrate_db_explicitly_migrates_database"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_store.py:711-765, 1216-1250, forensics/onchain_store.py:177-224, 725-780",
-    "observed_result": "Pre-send check verifies DB existence, write permissions, and Group 3 schema presence before any RPC execution, failing fast with zero send. Post-send DB failure creates a sanitized recovery sidecar and does not automatically retry.",
+    "observed_result": "Pre-send check verifies DB existence, write permissions, and Group 3 schema presence before any RPC execution, failing fast with zero send. Post-send DB failure creates a sanitized recovery sidecar and does not automatically retry. FINDING 3 RESOLVED: Write flows (anchor_evidence, record_custody_action, claim_send) execute pre_send_db_check(migrate=False) before network calls and fail-fast with GROUP3_SCHEMA_MISSING if database is unmigrated, resulting in zero send and zero schema modification. Explicit CLI command migrate-db added for operator-controlled migrations.",
     "status": "PASS"
   },
   {
@@ -87,7 +100,7 @@
       "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_empty_or_whitespace_rejected",
       "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_non_string_rejected"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_evidence_identity.py:41-160, forensics/evidence_identity.py:85-110, forensics/onchain.py:561-570",
     "observed_result": "REMEDIATED AND VERIFIED: note_hash_bytes32 hashes exact verbatim UTF-8 bytes preserving leading/trailing whitespace. Non-string inputs and empty/whitespace-only notes fail fast with ValueError. Operates purely in-memory with zero filesystem probing on path-like strings. Verified across Unicode multi-byte strings (Vietnamese, Japanese, emoji), long notes (> 500 up to 8192 chars), and distinct hashes for same prefix with different suffixes or whitespace. Plaintext notes never leaked in exceptions or logs.",
     "status": "PASS"
@@ -102,7 +115,7 @@
       "tests/test_evidence_identity.py::TestGate3_06_CaseIdHashAndZeroLeakage::test_case_id_trailing_newline_rejected_zero_leakage",
       "scripts/run_p3_group3_smoke.py::stage=zero_leak_scan"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_evidence_identity.py:161-215, forensics/evidence_identity.py:38-73, scripts/run_p3_group3_smoke.py:384-414",
     "observed_result": "Case IDs length 1..64 validated and hashed via SHA-256 to 64-char hex and bytes32. Regex anchored with \\A...\\Z rejects newlines. Validation errors do not echo invalid input. Zero raw case_id in calldata, events, CLI, audit, or DB tables.",
     "status": "PASS"
@@ -122,7 +135,7 @@
       "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_extract_evidence_id_no_silent_downgrade",
       "tests/test_onchain_guard.py::test_decode_evidence_registered_event_full_validation"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_evidence_identity.py:216-440, forensics/onchain.py:340-365, 685-695, 755-805",
     "observed_result": "REMEDIATED AND VERIFIED: Silent downgrade completely eliminated. Default verification strictly checks canonical profile (SHA-256 case_id and canonical URI). Legacy verification strictly requires explicit legacy_case_encoding=True (CLI --legacy-case-encoding) and returns MATCH with reason code 'LEGACY_PUBLIC_CASE_ID' (never 'OK'). Mixed profiles (legacy case + canonical URI or canonical case + legacy URI) strictly fail with REGISTRY_MISMATCH. Write paths (anchor/custody) strictly prohibit legacy mode.",
     "status": "PASS"
@@ -136,7 +149,7 @@
       "tests/test_onchain_group3.py::TestGate3_08_CanonicalImmutableIntent::test_distinct_custody_intents_produce_distinct_fingerprints",
       "tests/test_onchain_group3.py::TestGate3_08_CanonicalImmutableIntent::test_fingerprint_format_and_hex_length"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_group3.py:108-164, forensics/onchain_store.py:64-125, 437-520",
     "observed_result": "Canonical intent serialized with sorted keys produces deterministic SHA-256 fingerprint. Re-executing same operation ID allows at most 1 send. Mismatched intent for existing operation ID raises IDEMPOTENCY_CONFLICT. Distinct custody operation IDs permit separate events with identical payloads.",
     "status": "PASS"
@@ -150,7 +163,7 @@
       "tests/test_onchain_group3.py::TestGate3_09_OperationJournalAndStateTransitions::test_journal_logs_transition_to_unknown_from_broadcast",
       "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_crash_recovery_unknown_state_refuses_resend"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_group3.py:165-242, 608-644, forensics/onchain_store.py:640-724",
     "observed_result": "Complete lifecycle tracked in onchain_operation_events journal. Timeouts and crashes transition state to UNKNOWN without automatic resend. Journal maintains tamper-evident history across state transitions.",
     "status": "PASS"
@@ -166,11 +179,14 @@
       "tests/test_onchain_group3.py::TestGate3_10_ReadOnlyReconcileMechanism::test_zero_send_calls_in_reconcile",
       "tests/test_onchain_blockers.py::TestBlocker1_ReconcileRpcEnforcement::test_reconcile_operation_rejects_mapping_receipt",
       "tests/test_onchain_blockers.py::TestBlocker1_ReconcileRpcEnforcement::test_reconcile_operation_rpc_error_handling",
-      "scripts/run_p3_group3_smoke.py::stage=reconcile"
+      "scripts/run_p3_group3_smoke.py::stage=reconcile",
+      "tests/test_onchain_blockers.py::TestFinding2_ReconcileCanonicalBlock::test_reconcile_operation_rejects_null_block_lookup",
+      "tests/test_onchain_blockers.py::TestFinding2_ReconcileCanonicalBlock::test_reconcile_operation_rejects_rpc_client_missing_block_method",
+      "tests/test_onchain_blockers.py::TestFinding2_ReconcileCanonicalBlock::test_reconcile_operation_rejects_reorg_block_hash_mismatch"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_group3.py:243-375, tests/test_onchain_blockers.py:163-207, forensics/onchain_store.py:840-970, scripts/run_p3_group3_smoke.py:338-356",
-    "observed_result": "REMEDIATED AND VERIFIED (AUDIT BLOCKER 1 RESOLVED): Reconcile strictly requires an authentic read-only RPC provider (eth_chainId, eth_getTransactionReceipt, and eth_getBlockByNumber) and strictly rejects self-provided Mapping receipt dictionaries. Validates chain identity and verifies block inclusion to protect against chain reorgs. Cross-validates all multi-coordinate fields derived from intent_canonical. RPC errors or pending transactions remain UNKNOWN without false confirmations or broadcast retries. Repeated reconcile calls are idempotent no-ops.",
+    "observed_result": "REMEDIATED AND VERIFIED (AUDIT BLOCKER 1 RESOLVED): Reconcile strictly requires an authentic read-only RPC provider (eth_chainId, eth_getTransactionReceipt, and eth_getBlockByNumber) and strictly rejects self-provided Mapping receipt dictionaries. Validates chain identity and verifies block inclusion to protect against chain reorgs. Cross-validates all multi-coordinate fields derived from intent_canonical. RPC errors or pending transactions remain UNKNOWN without false confirmations or broadcast retries. Repeated reconcile calls are idempotent no-ops. FINDING 2 RESOLVED: Reconcile strictly requires canonical block lookup (eth_getBlockByNumber) to return a valid block and verifies block hash against receipt blockHash. Missing block, RPC failure, or client lacking block lookup remains UNKNOWN without false CONFIRMED or broadcast retries.",
     "status": "PASS"
   },
   {
@@ -189,7 +205,7 @@
       "tests/test_onchain_blockers.py::TestBlocker2_MigrationAtomicity::test_migrate_group3_atomic_rollback_on_unique_index_failure",
       "tests/test_onchain_blockers.py::TestBlocker2_MigrationAtomicity::test_migrate_group3_wal_mode_and_rerun_idempotency"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_store.py:766-1070, tests/test_onchain_blockers.py:209-270, forensics/schemas.py:143-176",
     "observed_result": "REMEDIATED AND VERIFIED (AUDIT BLOCKER 2 RESOLVED): Completely eliminated conn.executescript(GROUP3_SCHEMA) which caused implicit COMMITs in Python sqlite3. Implemented native SQLite SAVEPOINT migrate_group3 with statement-by-statement DDL execution, ensuring true atomic rollback if any statement or unique index creation fails. Tested on legacy DB containing duplicate tx_hashes, raw text notes, and verified rows. Logical snapshots confirm 100% byte-for-byte data preservation. Rollback on simulated index conflict leaves 0 Group 3 tables/columns and 100% intact legacy rows. Idempotent rerun and WAL mode verified.",
     "status": "PASS"
@@ -208,7 +224,7 @@
       "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_auto_redact_compound_and_nested",
       "scripts/run_p3_group3_smoke.py::stage=zero_leak_scan"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_evidence_identity.py:441-510, tests/test_onchain_group3.py:680-776, scripts/run_p3_group3_smoke.py:384-414",
     "observed_result": "Canary case and note excluded from URIs and hashes. Log sanitization replaces canaries with [REDACTED] using longest-match precedence. Sidecar recursively rejects/redacts compound secret keys and hex private keys. Smoke scan across 6 SQLite tables confirmed 0 leaks.",
     "status": "PASS"
@@ -227,7 +243,7 @@
       "tests/test_provenance_2a.py (8 tests)",
       "scripts/run_p3_group1b_smoke.py (55 checks)"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_2b.py, tests/test_onchain_d1.py, tests/test_onchain_guard.py, tests/test_onchain_group1.py, tests/test_onchain_group1b.py, tests/test_group2b_smoke.py",
     "observed_result": "All regression suites covering Phase 2B, D1, guardrails, Group 1, Group 1b, Group 2b smoke, and Phase 2A pass 100% cleanly. Preflight checks, git ancestry, synthetic rejection, reason allowlist, audit pre-send commit, and exit codes 0/1/2 fully preserved. 521 total tests pass.",
     "status": "PASS"
@@ -244,7 +260,7 @@
       "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_export_evidence_two_manifests_distinct_canonical_uris",
       "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_export_evidence_db_failure_retains_published_package"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_store.py:1071-1290, forensics/exporter.py:24-37, 260-285",
     "observed_result": "REMEDIATED AND VERIFIED: forensics/exporter.py synchronizes canonical storage URI evidence://sha256/<case_digest>/<manifest_hash>/manifest.json (161 chars) in evidence_exports table metadata. Manifest on disk does NOT contain storage_uri (zero self-referential cycle hazard). Exact manifest file bytes hashed. Collision no-clobber verified (existing directory raises FileExistsError DESTINATION_EXISTS and leaves files untouched). Dual manifests for same case produce distinct URIs. When database insert fails post-publish, published package on disk is retained completely valid intact.",
     "status": "PASS"
@@ -263,7 +279,7 @@
       "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_manifest_hash_cycle_invalid_inputs",
       "scripts/run_p3_group3_smoke.py::stage=export_dual_manifest_packages"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_evidence_identity.py:511-620, forensics/evidence_identity.py:110-155, scripts/run_p3_group3_smoke.py:213-273",
     "observed_result": "Canonical URI format evidence://sha256/<case_digest>/<manifest_sha256>/manifest.json strictly enforced (161 ASCII bytes, <= 256 bytes). Trailing newlines, non-hex characters, and whitespace rejected. Self-referential hash cycle validation prevents modification after URI generation. Smoke test verifies dual manifests produce distinct URIs.",
     "status": "PASS"
@@ -277,7 +293,7 @@
       "tests/test_onchain_group3.py::TestGate3_16_RealDualProcessConcurrency::test_real_dual_process_concurrency_with_real_anvil_send",
       "scripts/run_p3_group3_smoke.py::stage=idempotency_refusal"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_group3.py:534-620, forensics/onchain_store.py:437-520, scripts/run_p3_group3_smoke.py:357-380",
     "observed_result": "REMEDIATED AND VERIFIED: Two real OS processes via multiprocessing (spawn) concurrently attempt claim_send with barrier synchronization on a real SQLite disk file. Atomic BEGIN IMMEDIATE + conditional UPDATE ensures exactly one process obtains can_send=True and broadcasts a real transaction on local Anvil (nonce increments by exactly 1, transaction mined with verified receipt), while the second process obtains can_send=False and sends 0 transactions on Anvil (winner_sends=1, loser_sends=0). Smoke test validates that resend attempts to Anvil refuse broadcast with unchanged nonce.",
     "status": "PASS"
@@ -291,7 +307,7 @@
       "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_confirmed_operation_refuses_resend",
       "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_real_child_process_kill_after_send_started_and_restart_reconcile"
     ],
-    "source_revision": "7e520c9971e4e239476eca57761d6d9d2194578f",
+    "source_revision": "d50f880c4635e790f952f2dada5afc8a9526f74f",
     "evidence_path": "tests/test_onchain_group3.py:621-720, forensics/onchain_store.py:437-520",
     "observed_result": "REMEDIATED AND VERIFIED: Tested with real child OS process hard-killed via process.kill() at the failpoint immediately after committing SEND_STARTED in SQLite before any Anvil RPC broadcast. Durable DB state preserved. Restarted runner process calls claim_send and is strictly denied (can_send=False). Reconcile operation executes strictly read-only checks without sending any transactions on Anvil (nonce strictly unchanged). Zero resend verified.",
     "status": "PASS"
