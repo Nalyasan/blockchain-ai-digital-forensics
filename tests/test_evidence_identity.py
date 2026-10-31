@@ -30,6 +30,11 @@ from forensics.evidence_identity import (
     string_to_bytes32_hex,
     validate_manifest_hash_cycle,
 )
+from forensics.onchain import (
+    TOPIC_EVIDENCE_REGISTERED,
+    check_registered_state,
+    extract_evidence_id_from_receipt,
+)
 
 
 # ==============================================================================
@@ -49,16 +54,64 @@ class TestGate3_05_NoteHashAndNoProbing:
         assert result[2:] == expected_digest
         assert result[2:].islower()
 
-    def test_note_hash_whitespace_stripping(self):
-        """Leading and trailing whitespace must be stripped before hashing."""
+    def test_note_hash_whitespace_verbatim_preservation(self):
+        """Leading and trailing whitespace must be preserved verbatim in hash computation."""
         base_note = "Custody transfer to secure storage vault"
         padded_note = f"   \t\n  {base_note}  \r\n\t  "
 
         hash_base = note_hash_bytes32(base_note)
         hash_padded = note_hash_bytes32(padded_note)
 
-        assert hash_base == hash_padded
-        assert hash_padded == "0x" + hashlib.sha256(base_note.encode("utf-8")).hexdigest()
+        # Hashes must differ because raw UTF-8 bytes differ
+        assert hash_base != hash_padded
+        assert hash_base == "0x" + hashlib.sha256(base_note.encode("utf-8")).hexdigest()
+        assert hash_padded == "0x" + hashlib.sha256(padded_note.encode("utf-8")).hexdigest()
+
+    def test_note_hash_unicode_multibyte(self):
+        """Multi-byte Unicode characters must be hashed verbatim without loss or conversion."""
+        unicode_notes = [
+            "Thu thập ổ cứng NVMe tại hiện trường phòng lab #4 - niêm phong số 892",
+            "証拠物件の押収およびハッシュ値検証記録",
+            "Evidence collected 🔒📦 #case-99 with accents: é, à, ç, ñ, ö, ü",
+            "Complex symbols: ∑∏∆∇∈∉⊆⊇ ⨁⨂ 0xDEADBEEF",
+        ]
+        for u_note in unicode_notes:
+            result = note_hash_bytes32(u_note)
+            expected = "0x" + hashlib.sha256(u_note.encode("utf-8")).hexdigest()
+            assert result == expected
+            assert len(result) == 66
+            assert result[2:].islower()
+
+    def test_note_hash_long_content(self):
+        """Long custody notes must hash accurately according to SHA-256 over verbatim bytes."""
+        for length in [512, 1024, 2048, 8192]:
+            long_note = "A" * (length - 10) + " - END_NOTE"
+            result = note_hash_bytes32(long_note)
+            expected = "0x" + hashlib.sha256(long_note.encode("utf-8")).hexdigest()
+            assert result == expected
+
+    def test_note_hash_same_prefix_different_suffix(self):
+        """Notes sharing identical prefixes but differing in suffixes or whitespace must yield distinct hashes."""
+        n1 = "Custody transfer operation: Node Alpha"
+        n2 = "Custody transfer operation: Node Alpha Prime"
+        n3 = "Custody transfer operation: Node Alpha "  # Trailing space
+        n4 = " Custody transfer operation: Node Alpha"  # Leading space
+
+        h1 = note_hash_bytes32(n1)
+        h2 = note_hash_bytes32(n2)
+        h3 = note_hash_bytes32(n3)
+        h4 = note_hash_bytes32(n4)
+
+        assert len({h1, h2, h3, h4}) == 4  # All 4 hashes must be strictly distinct
+
+    def test_note_hash_zero_leakage_in_exceptions(self):
+        """Plaintext note content must NEVER leak into exceptions or logs."""
+        secret_canary = "SUPER_SECRET_CANARY_NOTE_CONTENT_12345"
+        # Whitespace-only notes that trigger validation errors
+        with pytest.raises(ValueError) as excinfo:
+            note_hash_bytes32("   \t\n  ")
+        assert "cannot be empty or whitespace-only" in str(excinfo.value)
+        assert secret_canary not in str(excinfo.value)
 
     def test_note_hash_no_filesystem_probing(self):
         """Note hash must NEVER attempt to probe or read the filesystem.
@@ -280,6 +333,119 @@ class TestGate3_07_LegacyReadOnlyCompatibility:
 
             with pytest.raises(ValueError, match="Invalid case_id format"):
                 identity_for_verify(bad, manifest_hash, legacy_case_encoding=True)
+
+    def test_check_registered_state_no_silent_downgrade(self):
+        """check_registered_state must fail when checking legacy state with canonical parameters."""
+        case_id = "CASE-LEGACY-01"
+        manifest_hash = "ab" * 32
+        submitter = "0x" + "1" * 40
+        legacy_case = string_to_bytes32_hex(case_id).lower()
+        legacy_uri = f"evidence://{case_id}/manifest.json"
+
+        legacy_state = {
+            "exists": True,
+            "id": 1,
+            "case": legacy_case,
+            "hash": "0x" + manifest_hash,
+            "submitter": submitter,
+            "uri": legacy_uri,
+            "registered_at": 1700000000,
+        }
+
+        # Canonical parameters
+        can_case_hash = case_id_hash_bytes32(case_id).lower()
+        can_uri = canonical_storage_uri(case_id_digest(case_id), manifest_hash)
+
+        # Checking legacy state with canonical parameters MUST fail with REGISTRY_MISMATCH
+        with pytest.raises((ValueError, RuntimeError), match="REGISTRY_MISMATCH"):
+            check_registered_state(legacy_state, 1, can_case_hash, "0x" + manifest_hash, submitter, can_uri)
+
+        # Checking legacy state with explicit legacy parameters MUST pass
+        check_registered_state(legacy_state, 1, legacy_case, "0x" + manifest_hash, submitter, legacy_uri)
+
+    def test_mixed_profile_strictly_rejected(self):
+        """Mixed profiles (legacy case + canonical URI or canonical case + legacy URI) are strictly rejected."""
+        case_id = "CASE-MIXED-01"
+        manifest_hash = "cd" * 32
+        submitter = "0x" + "2" * 40
+        legacy_case = string_to_bytes32_hex(case_id).lower()
+        legacy_uri = f"evidence://{case_id}/manifest.json"
+        can_case_hash = case_id_hash_bytes32(case_id).lower()
+        can_uri = canonical_storage_uri(case_id_digest(case_id), manifest_hash)
+
+        # Mixed 1: Legacy case, Canonical URI
+        mixed_state_1 = {
+            "exists": True, "id": 2, "case": legacy_case,
+            "hash": "0x" + manifest_hash, "submitter": submitter, "uri": can_uri,
+        }
+        with pytest.raises((ValueError, RuntimeError), match="REGISTRY_MISMATCH"):
+            check_registered_state(mixed_state_1, 2, can_case_hash, "0x" + manifest_hash, submitter, can_uri)
+        with pytest.raises((ValueError, RuntimeError), match="REGISTRY_MISMATCH"):
+            check_registered_state(mixed_state_1, 2, legacy_case, "0x" + manifest_hash, submitter, legacy_uri)
+
+        # Mixed 2: Canonical case, Legacy URI
+        mixed_state_2 = {
+            "exists": True, "id": 3, "case": can_case_hash,
+            "hash": "0x" + manifest_hash, "submitter": submitter, "uri": legacy_uri,
+        }
+        with pytest.raises((ValueError, RuntimeError), match="REGISTRY_MISMATCH"):
+            check_registered_state(mixed_state_2, 3, can_case_hash, "0x" + manifest_hash, submitter, can_uri)
+        with pytest.raises((ValueError, RuntimeError), match="REGISTRY_MISMATCH"):
+            check_registered_state(mixed_state_2, 3, legacy_case, "0x" + manifest_hash, submitter, legacy_uri)
+
+    def test_extract_evidence_id_no_silent_downgrade(self):
+        """extract_evidence_id_from_receipt must strictly enforce matching profile."""
+        case_id = "CASE-LEGACY-02"
+        manifest_hash = "ef" * 32
+        submitter = "0x" + "3" * 40
+        leg_case = string_to_bytes32_hex(case_id).lower()
+        can_case = case_id_hash_bytes32(case_id).lower()
+        leg_uri = f"evidence://{case_id}/manifest.json"
+        can_uri = canonical_storage_uri(case_id_digest(case_id), manifest_hash)
+
+        def make_receipt(topic2, uri_val):
+            raw_uri = uri_val.encode()
+            abi_data = (
+                "0x" + "0" * 24 + submitter[2:] + f"{64:064x}" +
+                f"{len(raw_uri):064x}" + raw_uri.hex() + ("00" * ((-len(raw_uri)) % 32))
+            )
+            return {
+                "status": "0x1",
+                "logs": [{
+                    "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+                    "topics": [TOPIC_EVIDENCE_REGISTERED, f"0x{1:064x}", topic2, "0x" + manifest_hash],
+                    "data": abi_data,
+                }]
+            }
+
+        leg_receipt = make_receipt(leg_case, leg_uri)
+        can_receipt = make_receipt(can_case, can_uri)
+
+        # Default (legacy_case_encoding=False): legacy receipt MUST fail
+        with pytest.raises(ValueError, match="Event caseId mismatch"):
+            extract_evidence_id_from_receipt(
+                leg_receipt, expected_case_id=case_id, expected_manifest_sha256=manifest_hash,
+                expected_uri=can_uri, legacy_case_encoding=False
+            )
+
+        # Canonical receipt succeeds with legacy_case_encoding=False
+        assert extract_evidence_id_from_receipt(
+            can_receipt, expected_case_id=case_id, expected_manifest_sha256=manifest_hash,
+            expected_uri=can_uri, legacy_case_encoding=False
+        ) == 1
+
+        # Explicit legacy mode (legacy_case_encoding=True): canonical receipt MUST fail
+        with pytest.raises(ValueError, match="Event caseId mismatch"):
+            extract_evidence_id_from_receipt(
+                can_receipt, expected_case_id=case_id, expected_manifest_sha256=manifest_hash,
+                expected_uri=leg_uri, legacy_case_encoding=True
+            )
+
+        # Legacy receipt succeeds with legacy_case_encoding=True
+        assert extract_evidence_id_from_receipt(
+            leg_receipt, expected_case_id=case_id, expected_manifest_sha256=manifest_hash,
+            expected_uri=leg_uri, legacy_case_encoding=True
+        ) == 1
 
 
 

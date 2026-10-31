@@ -344,12 +344,12 @@ def extract_evidence_id_from_receipt(receipt, expected_case_id=None, expected_ma
     eid = int(topics[1], 16)
     _require(eid > 0, 'EVENT_ID_INVALID')
     if expected_case_id is not None:
-        can_topic = case_id_hash_bytes32(expected_case_id).lower()
-        leg_topic = string_to_bytes32_hex(expected_case_id).lower()
         if legacy_case_encoding:
+            leg_topic = string_to_bytes32_hex(expected_case_id).lower()
             _require(topics[2].lower() == leg_topic, 'Event caseId mismatch')
         else:
-            _require(topics[2].lower() in (can_topic, leg_topic), 'Event caseId mismatch')
+            can_topic = case_id_hash_bytes32(expected_case_id).lower()
+            _require(topics[2].lower() == can_topic, 'Event caseId mismatch')
     if expected_manifest_sha256 is not None:
         expected = '0x' + expected_manifest_sha256.removeprefix('0x')
         _require(_bytes(topics[3], 32) == _bytes(expected, 32), 'Event manifestSha256 mismatch')
@@ -359,8 +359,7 @@ def extract_evidence_id_from_receipt(receipt, expected_case_id=None, expected_ma
     if expected_submitter is not None:
         _require(submitter == normalize_address(expected_submitter), 'EVENT_SUBMITTER_MISMATCH')
     if expected_uri is not None:
-        legacy_uri_alias = f"evidence://{expected_case_id}/manifest.json" if expected_case_id else None
-        _require(uri == expected_uri or (legacy_uri_alias is not None and uri == legacy_uri_alias), 'EVENT_URI_MISMATCH')
+        _require(uri == expected_uri, 'EVENT_URI_MISMATCH')
     return eid
 
 
@@ -562,10 +561,9 @@ def record_custody_action(
     if not re.match(r"^0x[0-9a-fA-F]{40}$", contract_address):
         raise ValueError(f"Địa chỉ contract không hợp lệ: {contract_address}")
 
-    clean_note = note.strip()
-    if not clean_note:
+    if not isinstance(note, str) or not note.strip():
         raise ValueError("note không được để trống!")
-    note_b32 = note_hash_bytes32(clean_note)
+    note_b32 = note_hash_bytes32(note)
     art_b32 = "0x" + artifact_sha256.removeprefix("0x")
 
     url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
@@ -619,7 +617,7 @@ def record_custody_action(
 
     receipt = get_transaction_receipt(tx_hash, url)
     actor = validate_write_receipt(receipt, tx_hash, contract_address, signer)
-    verify_custody_receipt(receipt, contract_address, signer, evidence_id, action, art_b32, note_b32, raw_note=clean_note)
+    verify_custody_receipt(receipt, contract_address, signer, evidence_id, action, art_b32, note_b32, raw_note=note)
     _require(get_rpc_chain_id(url) == chain_id, 'CHAIN_UNSTABLE')
     check_receipt_block(url, receipt)
     block_num = _uint(receipt['blockNumber'])
@@ -687,12 +685,11 @@ def read_registered_state(url, contract, evidence_id, block='latest'):
 
 
 def check_registered_state(state,eid,case_hash,manifest_hash,submitter,uri,case_id=None):
-    legacy_case = string_to_bytes32_hex(case_id).lower() if case_id else None
-    legacy_uri = f"evidence://{case_id}/manifest.json" if case_id else None
-    case_ok = (state['case'] == case_hash.lower()) or (legacy_case is not None and state['case'] == legacy_case)
-    uri_ok = (state['uri'] == uri) or (legacy_uri is not None and state['uri'] == legacy_uri)
-    _require(state['exists'] and state['id']==eid and case_ok and
-        state['hash']==manifest_hash.lower() and state['submitter']==submitter and uri_ok,
+    _require(state['exists'] and state['id']==eid and
+        state['case'].lower()==case_hash.lower() and
+        state['hash'].lower()==manifest_hash.lower() and
+        state['submitter'].lower()==submitter.lower() and
+        state['uri']==uri,
         'REGISTRY_MISMATCH')
 
 
@@ -759,9 +756,6 @@ def verify_onchain_evidence(manifest_path_or_dir, contract_address, evidence_id=
         # DB is never authoritative for ID; this read path neither opens a wallet nor writes DB.
         state=read_registered_state(url,contract,eid)
         case_hash, uri = identity_for_verify(result.context['case_id'], digest, legacy_case_encoding=legacy_case_encoding)
-        if not legacy_case_encoding and state['case'] == string_to_bytes32_hex(result.context['case_id']).lower():
-            case_hash, uri = identity_for_verify(result.context['case_id'], digest, legacy_case_encoding=True)
-            legacy_case_encoding = True
         check_registered_state(state,eid,case_hash,'0x'+digest,state['submitter'],uri,case_id=result.context['case_id'])
         response=_bytes(rpc_read(url,'eth_call',[{'to':contract,'data':'0x9fcc7309'+_word(eid)+digest},'latest']),96)
         _require(int.from_bytes(response[:32],'big') in (0,1),'ABI_INVALID')
@@ -797,7 +791,8 @@ def verify_onchain_evidence(manifest_path_or_dir, contract_address, evidence_id=
         if final!=result:raise RuntimeError('PACKAGE_UNSTABLE')
         if inspect_commit_provenance(result.context['export_commit'])!=provenance:raise RuntimeError('GIT_UNSTABLE')
         details.update(evidence_id=eid,manifest_sha256=digest,registry_match=True,submitter=state['submitter'],tx_hash=tx_hash,legacy_case_encoding=legacy_case_encoding)
-        return OnchainVerification('MATCH','OK',details)
+        reason_code = 'LEGACY_PUBLIC_CASE_ID' if legacy_case_encoding else 'OK'
+        return OnchainVerification('MATCH',reason_code,details)
     except (RuntimeError,OSError,sqlite3.Error) as exc:
         code=str(exc)
         return OnchainVerification('ERROR',code if re.fullmatch(r'[A-Z_]+',code) else 'OPERATION_FAILED',details)

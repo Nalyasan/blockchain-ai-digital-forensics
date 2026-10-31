@@ -90,7 +90,7 @@ def run_smoke():
                         return receipt
                     stage = 'eth_erc20_transactions'
                     eth = send([recipient, '--value', '1000000000000000000'])
-                    artifact = json.loads((ROOT/'contracts/out/MockToken.sol/MockERC20.json').read_text())
+                    artifact = json.loads((ROOT/'contracts/out/MockToken.sol/MockERC20.json').read_text(encoding='utf-8'))
                     deployed = send(['--create', artifact['bytecode']['object'] + format(10**24, '064x')])
                     token = deployed['contractAddress']
                     token_tx = send([token, 'transfer(address,uint256)', recipient, '12345'])
@@ -102,7 +102,13 @@ def run_smoke():
                     require(fail_data.returncode == 0, 'ENCODE_FAILED')
                     reverted_hash = rpc_read(url, 'eth_sendTransaction', [{
                         'from': owner, 'to': token, 'data': fail_data.stdout.decode().strip(), 'gas': '0x493e0'}])
-                    reverted = rpc_read(url, 'eth_getTransactionReceipt', [reverted_hash])
+                    deadline = time.monotonic() + 10.0
+                    reverted = None
+                    while time.monotonic() < deadline:
+                        reverted = rpc_read(url, 'eth_getTransactionReceipt', [reverted_hash])
+                        if reverted is not None:
+                            break
+                        time.sleep(0.05)
                     require(reverted is not None and int(reverted['status'],16) == 0, 'EXPECTED_REVERT')
                     report['transactions'].append(reverted)
                     head = int(rpc_read(url, 'eth_blockNumber', []),16)

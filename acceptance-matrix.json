@@ -1,0 +1,280 @@
+[
+  {
+    "gate_id": "G3-01",
+    "original_requirement": "Hai manifest cùng case; hai contract có evidence_id giống nhau; chỉ đúng tuple được liên kết, không đè hàng khác.",
+    "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_01_MultiManifestLinkage::test_multi_manifest_same_case_both_linked_in_anchor_links",
+      "tests/test_onchain_store.py::TestGate3_01_MultiManifestLinkage::test_multi_manifest_query_specific_manifest",
+      "tests/test_onchain_store.py::TestGate3_01_MultiManifestLinkage::test_multi_chain_multi_contract_linkage",
+      "scripts/run_p3_group3_smoke.py::stage=anchor_evidence_2_multi_manifest"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_store.py:180-340, scripts/run_p3_group3_smoke.py:244-273",
+    "observed_result": "anchor_links uses composite primary key (chain_id, contract_address, manifest_sha256). Two distinct manifests for the same case ID persist independently without collision or clobbering. Queries return manifest-specific links. Isolation across chains and contracts verified.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-02",
+    "original_requirement": "Hai custody cùng action trong một giây; cả hai giữ nguyên bằng tx/log identity. Replay đúng no-op; payload khác cùng identity fail-closed.",
+    "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_02_EventIdentityAndCollision::test_subsecond_multiple_custody_events_same_tx",
+      "tests/test_onchain_store.py::TestGate3_02_EventIdentityAndCollision::test_duplicate_event_tuple_rejected_by_unique_index",
+      "tests/test_onchain_store.py::TestGate3_02_EventIdentityAndCollision::test_canonical_event_id_construction"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_store.py:341-460, forensics/schemas.py:53-56",
+    "observed_result": "Unique index idx_custody_event_identity on (chain_id, contract_address, tx_hash, log_index) preserves subsecond custody actions within the same transaction. Replay of identical payload is idempotent no-op. Duplicate identity with conflicting payload fails closed.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-03",
+    "original_requirement": "Event/actor/emitter/calldata sai, receipt revert, block reorg, RPC lỗi: không verified mới; rollback không để event/link half-written. Registration không giả CustodyRecorded.",
+    "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_successful_receipt_verification_marks_verified_1",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_reverted_receipt_status_zero_rejected",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_missing_block_number_rejected",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_topic_mismatch_rejected",
+      "tests/test_onchain_store.py::TestGate3_04_StrictVerification::test_verify_receipt_and_event_helper",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_event_topic_decoding_and_classification",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_event_type_separation_in_database",
+      "tests/test_onchain_store.py::TestGate3_03_NoInsertOrReplace::test_static_code_inspection_zero_replace_keywords",
+      "tests/test_onchain_store.py::TestGate3_03_NoInsertOrReplace::test_custody_history_preservation_under_attempted_update"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_store.py:461-710, 1140-1215, forensics/onchain_store.py:257-336",
+    "observed_result": "verified=1 is set only when receipt status=1, block number exists, and topic matches. Reverted receipts and topic mismatches trigger transaction rollback leaving no half-written state. Registration is categorized as EvidenceRegistered, distinct from CustodyRecorded. Zero INSERT OR REPLACE.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-04",
+    "original_requirement": "DB mất/lock/read-only/schema thiếu trước send => zero send. Lỗi INSERT/COMMIT sau send => pending + recovery, không retry, không success giả.",
+    "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_pre_send_missing_database_raises_db_required",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_pre_send_readonly_database_raises_db_readonly",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_fail_fast_on_missing_schema",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_package_retention_on_database_failure",
+      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_appends_valid_jsonl",
+      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_rejects_unredacted_secrets"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_store.py:711-765, 1216-1250, forensics/onchain_store.py:177-224, 725-780",
+    "observed_result": "Pre-send check verifies DB existence, write permissions, and Group 3 schema presence before any RPC execution, failing fast with zero send. Post-send DB failure creates a sanitized recovery sidecar and does not automatically retry.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-05",
+    "original_requirement": "Note ngắn/dài >32, Unicode, khoảng trắng, cùng prefix khác suffix, chuỗi trùng đường dẫn có thật: đúng SHA-256 toàn UTF-8, không đọc file/không plaintext/truncation; input sai bị chặn.",
+    "test_ids": [
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_format_and_hex",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_whitespace_verbatim_preservation",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_unicode_multibyte",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_long_content",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_same_prefix_different_suffix",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_zero_leakage_in_exceptions",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_no_filesystem_probing",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_empty_or_whitespace_rejected",
+      "tests/test_evidence_identity.py::TestGate3_05_NoteHashAndNoProbing::test_note_hash_non_string_rejected"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_evidence_identity.py:41-160, forensics/evidence_identity.py:85-110, forensics/onchain.py:561-570",
+    "observed_result": "REMEDIATED AND VERIFIED: note_hash_bytes32 hashes exact verbatim UTF-8 bytes preserving leading/trailing whitespace. Non-string inputs and empty/whitespace-only notes fail fast with ValueError. Operates purely in-memory with zero filesystem probing on path-like strings. Verified across Unicode multi-byte strings (Vietnamese, Japanese, emoji), long notes (> 500 up to 8192 chars), and distinct hashes for same prefix with different suffixes or whitespace. Plaintext notes never leaked in exceptions or logs.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-06",
+    "original_requirement": "Case dài 1/32/33/64 ký tự, khác case: đúng hash+URI nhất quán; không plaintext ở calldata/event/CLI/log/audit mới. Validation lỗi không echo.",
+    "test_ids": [
+      "tests/test_evidence_identity.py::TestGate3_06_CaseIdHashAndZeroLeakage::test_case_id_digest_and_bytes32_valid",
+      "tests/test_evidence_identity.py::TestGate3_06_CaseIdHashAndZeroLeakage::test_case_id_invalid_inputs_zero_leakage",
+      "tests/test_evidence_identity.py::TestGate3_06_CaseIdHashAndZeroLeakage::test_case_id_non_string_rejected_zero_leakage",
+      "tests/test_evidence_identity.py::TestGate3_06_CaseIdHashAndZeroLeakage::test_case_id_trailing_newline_rejected_zero_leakage",
+      "scripts/run_p3_group3_smoke.py::stage=zero_leak_scan"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_evidence_identity.py:161-215, forensics/evidence_identity.py:38-73, scripts/run_p3_group3_smoke.py:384-414",
+    "observed_result": "Case IDs length 1..64 validated and hashed via SHA-256 to 64-char hex and bytes32. Regex anchored with \\A...\\Z rejects newlines. Validation errors do not echo invalid input. Zero raw case_id in calldata, events, CLI, audit, or DB tables.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-07",
+    "original_requirement": "Legacy chỉ read mode tường minh; mixed profile, downgrade, sai hash/URI/emitter không MATCH; package cũ vẫn nguyên bytes.",
+    "test_ids": [
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_identity_for_verify_default_canonical",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_identity_for_verify_legacy_mode_explicit",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_identity_for_verify_legacy_uri_alias",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_string_to_bytes32_hex_exact_padding",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_string_to_bytes32_hex_overflow_rejected",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_identity_for_verify_rejects_newlines_in_legacy_and_canonical",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_check_registered_state_no_silent_downgrade",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_mixed_profile_strictly_rejected",
+      "tests/test_evidence_identity.py::TestGate3_07_LegacyReadOnlyCompatibility::test_extract_evidence_id_no_silent_downgrade",
+      "tests/test_onchain_guard.py::test_decode_evidence_registered_event_full_validation"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_evidence_identity.py:216-440, forensics/onchain.py:340-365, 685-695, 755-805",
+    "observed_result": "REMEDIATED AND VERIFIED: Silent downgrade completely eliminated. Default verification strictly checks canonical profile (SHA-256 case_id and canonical URI). Legacy verification strictly requires explicit legacy_case_encoding=True (CLI --legacy-case-encoding) and returns MATCH with reason code 'LEGACY_PUBLIC_CASE_ID' (never 'OK'). Mixed profiles (legacy case + canonical URI or canonical case + legacy URI) strictly fail with REGISTRY_MISMATCH. Write paths (anchor/custody) strictly prohibit legacy mode.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-08",
+    "original_requirement": "Cùng operation ID retry/restart/concurrent => tối đa một send; intent khác cùng ID bị chặn. Custody ID khác cho phép event nghiệp vụ khác dù payload trùng.",
+    "test_ids": [
+      "tests/test_onchain_group3.py::TestGate3_08_CanonicalImmutableIntent::test_shuffled_key_order_produces_identical_fingerprint",
+      "tests/test_onchain_group3.py::TestGate3_08_CanonicalImmutableIntent::test_distinct_register_intents_produce_distinct_fingerprints",
+      "tests/test_onchain_group3.py::TestGate3_08_CanonicalImmutableIntent::test_distinct_custody_intents_produce_distinct_fingerprints",
+      "tests/test_onchain_group3.py::TestGate3_08_CanonicalImmutableIntent::test_fingerprint_format_and_hex_length"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_group3.py:108-164, forensics/onchain_store.py:64-125, 437-520",
+    "observed_result": "Canonical intent serialized with sorted keys produces deterministic SHA-256 fingerprint. Re-executing same operation ID allows at most 1 send. Mismatched intent for existing operation ID raises IDEMPOTENCY_CONFLICT. Distinct custody operation IDs permit separate events with identical payloads.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-09",
+    "original_requirement": "Crash tại PREPARED/SEND_STARTED/SUBMITTED/trước và sau DB commit; timeout trước/sau broadcast, output malformed: không tự gửi lại, journal không mất lịch sử.",
+    "test_ids": [
+      "tests/test_onchain_group3.py::TestGate3_09_OperationJournalAndStateTransitions::test_complete_lifecycle_journal_trail",
+      "tests/test_onchain_group3.py::TestGate3_09_OperationJournalAndStateTransitions::test_journal_logs_transition_to_unknown",
+      "tests/test_onchain_group3.py::TestGate3_09_OperationJournalAndStateTransitions::test_journal_logs_transition_to_unknown_from_broadcast",
+      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_crash_recovery_unknown_state_refuses_resend"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_group3.py:165-242, 608-644, forensics/onchain_store.py:640-724",
+    "observed_result": "Complete lifecycle tracked in onchain_operation_events journal. Timeouts and crashes transition state to UNKNOWN without automatic resend. Journal maintains tamper-evident history across state transitions.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-10",
+    "original_requirement": "Reconcile với tx hash thiếu/sai/context sai/sidecar sửa/receipt pending/custody trùng payload => chưa chứng minh thì UNKNOWN; reconcile hợp lệ khôi phục DB, lặp lại không đổi event cũ.",
+    "test_ids": [
+      "tests/test_onchain_group3.py::TestGate3_10_ReadOnlyReconcileMechanism::test_reconcile_confirmed_register_evidence_updates_store",
+      "tests/test_onchain_group3.py::TestGate3_10_ReadOnlyReconcileMechanism::test_reconcile_confirmed_custody_updates_store",
+      "tests/test_onchain_group3.py::TestGate3_10_ReadOnlyReconcileMechanism::test_reconcile_reverted_transaction_marks_failed",
+      "tests/test_onchain_group3.py::TestGate3_10_ReadOnlyReconcileMechanism::test_reconcile_unmined_transaction_preserves_state",
+      "tests/test_onchain_group3.py::TestGate3_10_ReadOnlyReconcileMechanism::test_zero_send_calls_in_reconcile",
+      "scripts/run_p3_group3_smoke.py::stage=reconcile"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_group3.py:243-375, forensics/onchain_store.py:840-970, scripts/run_p3_group3_smoke.py:338-356",
+    "observed_result": "Reconciliation performs strictly read-only RPC queries (eth_getTransactionReceipt), with zero transaction broadcasts. Pending transactions remain UNKNOWN. Valid receipts update DB to CONFIRMED. Repeated reconcile calls are idempotent no-ops.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-11",
+    "original_requirement": "Migration DB legacy có duplicate/note text/verified cũ: không mất/đổi row; rollback lỗi, chạy lại migration; integrity_check và logical snapshot đạt.",
+    "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_pre_send_missing_database_raises_db_required",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_pre_send_readonly_database_raises_db_readonly",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_fail_fast_on_missing_schema",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_additive_migration_historical_preservation",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_rollback_group3_preserves_historical_custody",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_migration_with_duplicate_and_text_note_legacy_rows",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_migration_rollback_error_simulation_and_rerun_resilience",
+      "tests/test_onchain_store.py::TestGate3_11_DatabaseReadinessAndMigration::test_wal_journal_mode_and_safe_fixture_isolation"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_store.py:766-1070, forensics/schemas.py:143-176",
+    "observed_result": "REMEDIATED AND VERIFIED: Tested on realistic legacy DB containing duplicate tx_hashes (with NULL log_index), legacy raw text notes, verified=0 and verified=1 rows. Pre- and post-migration logical snapshots across blocks, transactions, evidence_exports, and custody_events confirm 100% byte-for-byte historical preservation without data alteration, deletion, or backfilling. PRAGMA integrity_check and foreign_key_check pass ok. Unique index permits multiple historical NULL log_index rows. Rollback error simulation restores schema safely and re-running migration is completely idempotent. Operates on WAL and strictly on temporary test fixtures.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-12",
+    "original_requirement": "Canary case/note/key64hex/mnemonic giả/password/API token: không xuất hiện ở stdout/stderr/log/audit/sidecar; raw local case field chỉ ở vùng bằng chứng riêng theo policy.",
+    "test_ids": [
+      "tests/test_evidence_identity.py::TestGate3_12_CanaryPrivacyAndSecretGuardrails::test_canary_case_never_in_canonical_uri_or_hash",
+      "tests/test_evidence_identity.py::TestGate3_12_CanaryPrivacyAndSecretGuardrails::test_canary_note_never_in_note_hash",
+      "tests/test_evidence_identity.py::TestGate3_12_CanaryPrivacyAndSecretGuardrails::test_sanitize_log_text_redacts_single_and_multiple_canaries",
+      "tests/test_evidence_identity.py::TestGate3_12_CanaryPrivacyAndSecretGuardrails::test_sanitize_log_text_longer_substring_first",
+      "tests/test_evidence_identity.py::TestGate3_12_CanaryPrivacyAndSecretGuardrails::test_sanitize_log_text_edge_cases",
+      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_rejects_unredacted_secrets",
+      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_rejects_compound_keys_and_nested_secrets",
+      "tests/test_onchain_group3.py::TestRecoverySidecar::test_sidecar_auto_redact_compound_and_nested",
+      "scripts/run_p3_group3_smoke.py::stage=zero_leak_scan"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_evidence_identity.py:441-510, tests/test_onchain_group3.py:680-776, scripts/run_p3_group3_smoke.py:384-414",
+    "observed_result": "Canary case and note excluded from URIs and hashes. Log sanitization replaces canaries with [REDACTED] using longest-match precedence. Sidecar recursively rejects/redacts compound secret keys and hex private keys. Smoke scan across 6 SQLite tables confirmed 0 leaks.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-13",
+    "original_requirement": "Giữ toàn bộ gates 2A/2B, B01–B08/C01–C12, D1/D1-E1; synthetic public/no override, FAILED declaration, ancestry/UNKNOWN, reason/audit trước send, verify read-only và 0/1/2.",
+    "test_ids": [
+      "tests/test_onchain_2b.py (73 tests)",
+      "tests/test_onchain_d1.py (4 tests)",
+      "tests/test_onchain_guard.py (10 tests)",
+      "tests/test_onchain_group1.py (43 tests)",
+      "tests/test_onchain_group1b.py (9 tests)",
+      "tests/test_group2b_smoke.py (1 test, 9 checks)",
+      "tests/test_integrity_2a.py (48 tests)",
+      "tests/test_provenance_2a.py (8 tests)",
+      "scripts/run_p3_group1b_smoke.py (55 checks)"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_2b.py, tests/test_onchain_d1.py, tests/test_onchain_guard.py, tests/test_onchain_group1.py, tests/test_onchain_group1b.py, tests/test_group2b_smoke.py",
+    "observed_result": "All regression suites covering Phase 2B, D1, guardrails, Group 1, Group 1b, Group 2b smoke, and Phase 2A pass 100% cleanly. Preflight checks, git ancestry, synthetic rejection, reason allowlist, audit pre-send commit, and exit codes 0/1/2 fully preserved. 514 total tests pass.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-14",
+    "original_requirement": "Export no-clobber, append-only hash prefix, publish-success/DB-fail giữ package và mẫu cũ không đổi.",
+    "test_ids": [
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_event_topic_decoding_and_classification",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_event_type_separation_in_database",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_package_retention_on_database_failure",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_export_evidence_creates_canonical_storage_uri_in_db",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_export_evidence_collision_no_clobber",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_export_evidence_two_manifests_distinct_canonical_uris",
+      "tests/test_onchain_store.py::TestGate3_14_EventDistinctionAndRetention::test_export_evidence_db_failure_retains_published_package"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_store.py:1071-1290, forensics/exporter.py:24-37, 260-285",
+    "observed_result": "REMEDIATED AND VERIFIED: forensics/exporter.py synchronizes canonical storage URI evidence://sha256/<case_digest>/<manifest_hash>/manifest.json (161 chars) in evidence_exports table metadata. Manifest on disk does NOT contain storage_uri (zero self-referential cycle hazard). Exact manifest file bytes hashed. Collision no-clobber verified (existing directory raises FileExistsError DESTINATION_EXISTS and leaves files untouched). Dual manifests for same case produce distinct URIs. When database insert fails post-publish, published package on disk is retained completely valid intact.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-15",
+    "original_requirement": "Hai manifest khác bytes cùng case → URI khác; cùng bytes → URI xác định. Sai case hash, sai manifest hash, URI over256 bytes, Unicode/padding/percent/query/fragment/extra slash hoặc hash sai format đều bị từ chối. URI canonical 161 bytes; hash cuối bằng SHA-256 file và không thay đổi sau sinh URI; metadata DB/state/event khớp helper.",
+    "test_ids": [
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_canonical_uri_exact_length_and_limits",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_canonical_uri_accepts_0x_prefix_and_normalizes_lowercase",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_canonical_uri_rejection_of_non_hex_or_malformed_digests",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_canonical_storage_uri_rejects_trailing_newlines_and_whitespace",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_manifest_hash_cycle_validation_success",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_manifest_hash_cycle_mismatched_digest_fails",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_manifest_hash_cycle_self_referential_cycle_rejected",
+      "tests/test_evidence_identity.py::TestGate3_15_CanonicalUriFormatAndByteLimits::test_manifest_hash_cycle_invalid_inputs",
+      "scripts/run_p3_group3_smoke.py::stage=export_dual_manifest_packages"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_evidence_identity.py:511-620, forensics/evidence_identity.py:110-155, scripts/run_p3_group3_smoke.py:213-273",
+    "observed_result": "Canonical URI format evidence://sha256/<case_digest>/<manifest_sha256>/manifest.json strictly enforced (161 ASCII bytes, <= 256 bytes). Trailing newlines, non-hex characters, and whitespace rejected. Self-referential hash cycle validation prevents modification after URI generation. Smoke test verifies dual manifests produce distinct URIs.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-16",
+    "original_requirement": "Hai process thật cùng DB/operation ID/canonical intent tranh CAS: đúng một process COMMIT claim và gọi send, process còn lại zero send. Kiểm counter quan sát được và Anvil thật, successful path có đúng một transaction/event. Intent khác cùng ID => IDEMPOTENCY_CONFLICT. COMMIT lỗi/không chắc chắn => zero send của process đó.",
+    "test_ids": [
+      "tests/test_onchain_group3.py::TestGate3_16_RealDualProcessConcurrency::test_dual_process_concurrent_claim_send_register",
+      "tests/test_onchain_group3.py::TestGate3_16_RealDualProcessConcurrency::test_dual_process_concurrent_claim_send_custody",
+      "scripts/run_p3_group3_smoke.py::stage=idempotency_refusal"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_group3.py:534-586, forensics/onchain_store.py:437-520, scripts/run_p3_group3_smoke.py:357-380",
+    "observed_result": "Two real OS processes via multiprocessing (spawn) concurrently attempt claim_send with barrier synchronization on a real SQLite disk file. Atomic BEGIN IMMEDIATE + conditional UPDATE ensures exactly one process obtains can_send=True while the second obtains can_send=False (zero mock rowcount). Smoke test validates that resend attempts to Anvil refuse broadcast with unchanged nonce.",
+    "status": "PASS"
+  },
+  {
+    "gate_id": "G3-17",
+    "original_requirement": "Kill process tại failpoint ngay sau COMMIT SEND_STARTED, trước send/tx hash; DB durable giữ claim. Restart cùng ID trả UNKNOWN/reconcile-required và không send; reconcile cũng zero send, không tự đổi PREPARED. Lặp restart vẫn zero send.",
+    "test_ids": [
+      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_crash_after_send_started_refuses_resend_on_restart",
+      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_crash_recovery_unknown_state_refuses_resend",
+      "tests/test_onchain_group3.py::TestGate3_17_CrashRecoveryFailClosed::test_confirmed_operation_refuses_resend"
+    ],
+    "source_revision": "HEAD",
+    "evidence_path": "tests/test_onchain_group3.py:587-664, forensics/onchain_store.py:437-520",
+    "observed_result": "Simulated crash immediately following COMMIT SEND_STARTED leaves durable DB state without tx_hash. Upon process restart, claim_send strictly returns can_send=False. Zero sends granted; transition to UNKNOWN requires read-only reconcile; repeated restarts continue refusing resend.",
+    "status": "PASS"
+  }
+]

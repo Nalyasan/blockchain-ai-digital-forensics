@@ -12,6 +12,7 @@ import sqlite3
 import tempfile
 import uuid
 
+from forensics.evidence_identity import case_id_digest, canonical_storage_uri
 from forensics.integrity import (BASE_FILES, InvalidPackage, Reason, _no_link, need,
                                 package_digest, quantity, raw_hash, verify_package, validate_receipt)
 from forensics.provenance import get_git_state
@@ -268,10 +269,12 @@ def export_package(case_id, start_block, end_block, out_dir=None, db_path=None,
         stage = None
         # Append-only, including identical manifest bytes exported to distinct destinations.
         export_id = f'exp-{case_id}-{manifest_hash[:12]}-{uuid.uuid4().hex[:12]}'
+        case_dig = case_id_digest(case_id)
+        storage_uri = canonical_storage_uri(case_dig, manifest_hash)
         with contextlib.closing(init_db(str(db_file))) as conn:
             with conn:
                 conn.execute('INSERT INTO evidence_exports(export_id,case_id,manifest_path,manifest_sha256,storage_uri,created_at,operator,onchain_evidence_id) VALUES(?,?,?,?,?,?,?,NULL)',
-                             (export_id, case_id, 'manifest.json', manifest_hash, f'evidence://{case_id}/manifest.json', m['exported_at'], m['operator']))
+                             (export_id, case_id, 'manifest.json', manifest_hash, storage_uri, m['exported_at'], m['operator']))
         return m
     except FileExistsError:
         raise FileExistsError('DESTINATION_EXISTS') from None

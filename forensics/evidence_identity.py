@@ -83,27 +83,32 @@ def case_id_hash_bytes32(case_id: str) -> str:
 
 
 def note_hash_bytes32(note: str) -> str:
-    """Validate note is non-empty string, strip whitespace, and return '0x' + SHA-256 digest.
+    """Validate note is non-empty string and return '0x' + SHA-256 digest of verbatim UTF-8 note.
 
     Strictly NO filesystem probing: Operates purely in-memory and does not check
     whether the note matches an existing file path (no os.path.exists or stat calls).
     Zero-leakage: Raw note text is never included in error messages.
 
+    Hash input:
+        Verbatim UTF-8 bytes of note (preserves all characters, including leading/trailing whitespace).
+
+    Validation:
+        Must be a non-empty string and not whitespace-only.
+
     Args:
         note: Custody note string.
 
     Returns:
-        '0x' followed by 64-character lowercase hex digest of stripped note.
+        '0x' followed by 64-character lowercase hex digest of verbatim UTF-8 note.
 
     Raises:
         ValueError: If note is not a string, or is empty/whitespace-only.
     """
     if not isinstance(note, str):
         raise ValueError("Invalid note: must be a string")
-    clean_note = note.strip()
-    if not clean_note:
+    if not note.strip():
         raise ValueError("Invalid note: cannot be empty or whitespace-only")
-    return "0x" + sha256_utf8(clean_note)
+    return "0x" + sha256_utf8(note)
 
 
 def canonical_storage_uri(case_digest: str, manifest_digest: str) -> str:

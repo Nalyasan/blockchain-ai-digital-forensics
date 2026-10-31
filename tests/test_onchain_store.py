@@ -10,7 +10,9 @@ Validates Acceptance Gates:
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -20,6 +22,13 @@ from typing import Any
 
 import pytest
 
+from forensics.evidence_identity import (
+    CANONICAL_URI_LENGTH,
+    canonical_storage_uri,
+    case_id_digest,
+)
+from forensics.exporter import export_package
+from forensics.integrity import verify_package
 from forensics.schemas import (
     GROUP3_TABLES,
     group3_schema_present,
@@ -104,6 +113,82 @@ def legacy_db(tmp_path: Path) -> Path:
     conn.commit()
     conn.close()
     return db_file
+
+
+def populate_store_test_db(db_file: Path | str, num_blocks: int = 5) -> None:
+    """Populate sample blocks, transactions, receipts, and audit events for exporter tests."""
+    conn = init_db(str(db_file))
+    chain_id = 31337
+    prev_hash = "0x" + "0" * 64
+
+    for n in range(num_blocks):
+        b_hash = f"0x{n:064x}"
+        utc_str = datetime.fromtimestamp(1700000000 + n * 12, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        tx_hash = f"0x{n+200:064x}"
+        from_a = "0x1111111111111111111111111111111111111111"
+        to_a = "0x2222222222222222222222222222222222222222"
+        val = 1000000000000000000
+
+        tx_obj = {
+            "hash": tx_hash, "blockHash": b_hash, "blockNumber": hex(n), "transactionIndex": "0x0",
+            "from": from_a, "to": to_a, "value": hex(val), "nonce": "0x0", "input": "0x"
+        }
+        tx_raw = json.dumps(tx_obj, sort_keys=True, separators=(',', ':'))
+        tx_sha = hashlib.sha256(tx_raw.encode()).hexdigest()
+
+        blk_data = {
+            "number": hex(n), "hash": b_hash, "parentHash": prev_hash,
+            "timestamp": hex(1700000000 + n * 12), "transactions": [tx_obj]
+        }
+        b_raw = json.dumps(blk_data, sort_keys=True, separators=(',', ':'))
+        b_sha = hashlib.sha256(b_raw.encode()).hexdigest()
+
+        conn.execute(
+            "INSERT INTO blocks(chain_id, number, hash, parent_hash, block_timestamp, block_time_utc, "
+            "first_observed_at, collected_at, status, raw_json, raw_sha256, synthetic) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'canonical', ?, ?, 0)",
+            (chain_id, n, b_hash, prev_hash, 1700000000 + n * 12, utc_str, utc_str, utc_str, b_raw, b_sha)
+        )
+        conn.execute(
+            "INSERT INTO transactions(chain_id, tx_hash, block_hash, block_number, tx_index, "
+            "from_addr, to_addr, value_raw, nonce, input, raw_json, raw_sha256) "
+            "VALUES(?, ?, ?, ?, 0, ?, ?, ?, 0, '0x', ?, ?)",
+            (chain_id, tx_hash, b_hash, n, from_a, to_a, str(val), tx_raw, tx_sha)
+        )
+        rc_obj = {
+            "transactionHash": tx_hash, "blockHash": b_hash, "blockNumber": hex(n),
+            "transactionIndex": "0x0", "contractAddress": None,
+            "status": "0x1", "gasUsed": "0x5208", "logs": [],
+            "from": from_a, "to": to_a, "cumulativeGasUsed": "0x5208",
+            "effectiveGasPrice": "0x1", "logsBloom": "0x" + "0" * 512
+        }
+        rc_raw = json.dumps(rc_obj, sort_keys=True, separators=(',', ':'))
+        rc_sha = hashlib.sha256(rc_raw.encode()).hexdigest()
+        conn.execute(
+            "INSERT INTO receipts(chain_id, tx_hash, block_hash, status, gas_used, raw_json, raw_sha256) "
+            "VALUES(?, ?, ?, 1, 21000, ?, ?)",
+            (chain_id, tx_hash, b_hash, rc_raw, rc_sha)
+        )
+        conn.execute(
+            "INSERT INTO asset_transfers(chain_id, block_number, block_hash, block_timestamp, tx_hash, "
+            "log_index, asset_id, from_addr, to_addr, amount_raw, synthetic) "
+            "VALUES(?, ?, ?, ?, ?, -1, 'NATIVE', ?, ?, ?, 0)",
+            (chain_id, n, b_hash, 1700000000 + n * 12, tx_hash, from_a, to_a, str(val))
+        )
+        conn.execute(
+            "INSERT INTO audit_events(ts, action, object_ref, metadata) VALUES(?, 'COLLECT_BLOCK', ?, ?)",
+            (utc_str, f"block:{n}", json.dumps({"hash": b_hash}))
+        )
+        prev_hash = b_hash
+
+    conn.execute(
+        "INSERT INTO collector_runs(run_id, rpc_label, chain_id, synthetic, mode, start_block, end_block, "
+        "blocks_count, txs_count, blocks_per_sec, txs_per_sec, retries_count, gaps_count, status, started_at, ended_at, commit_hash) "
+        "VALUES('run-test-01', 'anvil-smoke-node', 31337, 0, 'backfill', 0, ?, ?, ?, 10.0, 10.0, 0, 0, 'completed', ?, ?, 'commit1')",
+        (num_blocks - 1, num_blocks, num_blocks, utc_str, utc_str)
+    )
+    conn.commit()
+    conn.close()
 
 
 # ==============================================================================
@@ -761,6 +846,214 @@ class TestGate3_11_DatabaseReadinessAndMigration:
         finally:
             conn.close()
 
+    def test_migration_with_duplicate_and_text_note_legacy_rows(self, tmp_path: Path):
+        """Migration preserves diverse legacy rows including duplicate tx_hashes, text notes, and verified states."""
+        db_file = tmp_path / "diverse_legacy.db"
+        conn = sqlite3.connect(str(db_file))
+
+        # Create pre-Group 3 schema
+        conn.executescript(
+            """
+            CREATE TABLE blocks(
+                chain_id INT, number INT, hash TEXT, parent_hash TEXT, block_timestamp INT,
+                block_time_utc TEXT, first_observed_at TEXT, collected_at TEXT, status TEXT DEFAULT 'canonical',
+                raw_json TEXT, raw_sha256 TEXT, synthetic INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(chain_id, hash)
+            );
+            CREATE TABLE transactions(
+                chain_id INT, tx_hash TEXT, block_hash TEXT, block_number INT, tx_index INT,
+                from_addr TEXT, to_addr TEXT, value_raw TEXT, nonce INT, input TEXT, raw_json TEXT, raw_sha256 TEXT,
+                PRIMARY KEY(chain_id, tx_hash, block_hash)
+            );
+            CREATE TABLE evidence_exports(
+                export_id TEXT PRIMARY KEY, case_id TEXT, manifest_path TEXT, manifest_sha256 TEXT,
+                storage_uri TEXT, created_at TEXT, operator TEXT, onchain_evidence_id INT
+            );
+            CREATE TABLE custody_events(
+                event_id TEXT PRIMARY KEY, evidence_id INT, case_id TEXT, action INT,
+                actor_address TEXT, artifact_sha256 TEXT, note_hash TEXT, chain_id INT,
+                contract_address TEXT, tx_hash TEXT, block_number INT, recorded_at TEXT,
+                verified INT DEFAULT 0
+            );
+            """
+        )
+
+        # 1. Insert diverse legacy rows:
+        # - Row 1 & Row 2 share the same tx_hash (duplicate in legacy because log_index did not exist)
+        # - Row 1 has legacy raw text note
+        # - Row 2 has verified=0
+        # - Row 3 has hex note_hash and verified=1
+        same_tx = "0x" + "7" * 64
+        shared_contract = "0x" + "8" * 40
+        conn.execute(
+            "INSERT INTO custody_events VALUES("
+            "'ev-legacy-dup1', 1, 'CASE-LEGACY-DUP', 0, '0xactor1', '0xart1', "
+            "'Raw text custody note from legacy investigator without hex prefix', "
+            "31337, ?, ?, 10, '2026-01-01T00:00:00Z', 0)",
+            (shared_contract, same_tx)
+        )
+        conn.execute(
+            "INSERT INTO custody_events VALUES("
+            "'ev-legacy-dup2', 1, 'CASE-LEGACY-DUP', 1, '0xactor2', '0xart2', "
+            "'0x' || hex(randomblob(32)), "
+            "31337, ?, ?, 10, '2026-01-01T00:01:00Z', 0)",
+            (shared_contract, same_tx)
+        )
+        conn.execute(
+            "INSERT INTO custody_events VALUES("
+            "'ev-legacy-ver3', 2, 'CASE-LEGACY-VER', 2, '0xactor3', '0xart3', "
+            "'0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef', "
+            "31337, ?, '0xdiff_tx', 12, '2026-01-01T00:02:00Z', 1)",
+            (shared_contract,)
+        )
+        conn.execute(
+            "INSERT INTO evidence_exports VALUES('exp-1', 'CASE-LEGACY-DUP', 'manifest.json', 'hash1', 'uri1', '2026-01-01T00:00:00Z', 'op1', 1)"
+        )
+        conn.commit()
+
+        # Capture pre-migration logical snapshot across all tables
+        tables = ["blocks", "transactions", "evidence_exports", "custody_events"]
+        pre_snapshot = {}
+        for t in tables:
+            rows = conn.execute(f"SELECT * FROM {t}").fetchall()
+            pre_snapshot[t] = rows
+        pre_snapshot_bytes = json.dumps(pre_snapshot, sort_keys=True, default=str).encode("utf-8")
+        pre_snapshot_hash = hashlib.sha256(pre_snapshot_bytes).hexdigest()
+
+        # Run additive Group 3 migration
+        migrate_group3(conn)
+        conn.commit()
+
+        # 1. Assert Group 3 schema is present
+        assert group3_schema_present(conn) is True
+
+        # 2. Assert PRAGMA integrity_check and foreign_key_check pass
+        integrity = conn.execute("PRAGMA integrity_check").fetchall()
+        assert integrity == [("ok",)]
+        fk_check = conn.execute("PRAGMA foreign_key_check").fetchall()
+        assert fk_check == []
+
+        # 3. Assert pre-existing columns maintain 100% exact logical snapshot
+        post_snapshot = {}
+        # Get column names present prior to migration
+        for t in tables:
+            if t == "custody_events":
+                # Exclude additive columns log_index, event_type when comparing historical data
+                rows = conn.execute(
+                    "SELECT event_id, evidence_id, case_id, action, actor_address, artifact_sha256, "
+                    "note_hash, chain_id, contract_address, tx_hash, block_number, recorded_at, verified "
+                    "FROM custody_events ORDER BY event_id"
+                ).fetchall()
+            else:
+                rows = conn.execute(f"SELECT * FROM {t}").fetchall()
+            post_snapshot[t] = rows
+
+        # Exact match of historical data
+        assert len(post_snapshot["custody_events"]) == 3
+        assert post_snapshot["custody_events"][0][0] == "ev-legacy-dup1"
+        assert post_snapshot["custody_events"][0][6] == "Raw text custody note from legacy investigator without hex prefix"
+        assert post_snapshot["custody_events"][0][12] == 0
+        assert post_snapshot["custody_events"][1][0] == "ev-legacy-dup2"
+        assert post_snapshot["custody_events"][1][9] == same_tx
+        assert post_snapshot["custody_events"][2][0] == "ev-legacy-ver3"
+        assert post_snapshot["custody_events"][2][12] == 1
+
+        # 4. Assert additive columns are NULL on legacy rows (no unauthorized backfilling)
+        null_check = conn.execute("SELECT log_index, event_type FROM custody_events").fetchall()
+        assert all(row == (None, None) for row in null_check)
+
+        # 5. Assert unique index permits multiple legacy rows with NULL log_index
+        # Inserting a new event with explicit log_index works
+        conn.execute(
+            "INSERT INTO custody_events VALUES("
+            "'ev-new-1', 1, 'CASE-NEW', 0, '0xactor', '0xart', '0xnote', "
+            "31337, ?, ?, 15, '2026-01-01T00:03:00Z', 1, 0, 'EvidenceRegistered')",
+            (shared_contract, same_tx)
+        )
+        conn.commit()
+
+        # Duplicate with exact same (chain_id, contract_address, tx_hash, log_index) is rejected
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO custody_events VALUES("
+                "'ev-new-dup', 1, 'CASE-NEW', 0, '0xactor', '0xart', '0xnote', "
+                "31337, ?, ?, 15, '2026-01-01T00:03:00Z', 1, 0, 'EvidenceRegistered')",
+                (shared_contract, same_tx)
+            )
+
+        conn.close()
+
+    def test_migration_rollback_error_simulation_and_rerun_resilience(self, tmp_path: Path):
+        """Simulation of migration failure rolls back cleanly and rerun succeeds idempotently."""
+        db_file = tmp_path / "rollback_resilience.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute(
+            """
+            CREATE TABLE custody_events(
+                event_id TEXT PRIMARY KEY, evidence_id INT, case_id TEXT, action INT,
+                actor_address TEXT, artifact_sha256 TEXT, note_hash TEXT, chain_id INT,
+                contract_address TEXT, tx_hash TEXT, block_number INT, recorded_at TEXT,
+                verified INT DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO custody_events VALUES('ev-1', 1, 'CASE-1', 0, '0xactor', '0xart', '0xnote', "
+            "31337, '0xcontract', '0xtx1', 10, '2026-01-01T00:00:00Z', 1)"
+        )
+        conn.commit()
+
+        # Simulate failure during transaction
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            conn.execute("ALTER TABLE custody_events ADD COLUMN log_index INTEGER")
+            # Inject simulated failure
+            raise sqlite3.OperationalError("SIMULATED_MIGRATION_IO_ERROR")
+        except sqlite3.OperationalError:
+            conn.rollback()
+
+        # Verify DB is uncorrupted and rollback restored original schema
+        integrity = conn.execute("PRAGMA integrity_check").fetchall()
+        assert integrity == [("ok",)]
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(custody_events)").fetchall()}
+        assert "log_index" not in cols
+
+        # Now run migration for real
+        migrate_group3(conn)
+        conn.commit()
+        assert group3_schema_present(conn) is True
+
+        # Running migration a second time is fully idempotent
+        migrate_group3(conn)
+        conn.commit()
+        assert group3_schema_present(conn) is True
+
+        integrity_after = conn.execute("PRAGMA integrity_check").fetchall()
+        assert integrity_after == [("ok",)]
+        conn.close()
+
+    def test_wal_journal_mode_and_safe_fixture_isolation(self, tmp_path: Path):
+        """Migration succeeds under WAL mode and operates strictly within isolated temporary fixtures."""
+        db_file = tmp_path / "wal_test.db"
+        conn = init_db(str(db_file))
+
+        # Enable WAL mode
+        mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+        assert mode.upper() == "WAL"
+
+        # Verify migration on WAL DB
+        migrate_group3(conn)
+        conn.commit()
+        assert group3_schema_present(conn) is True
+
+        integrity = conn.execute("PRAGMA integrity_check").fetchall()
+        assert integrity == [("ok",)]
+
+        # Verify strict database path isolation: must NOT be production DB
+        assert str(db_file) != "data/forensics.db"
+        assert not str(db_file).endswith("data/forensics.db")
+        conn.close()
+
 
 # ==============================================================================
 # Gate G3-14: Distinguish EvidenceRegistered vs CustodyRecorded
@@ -873,3 +1166,125 @@ class TestGate3_14_EventDistinctionAndRetention:
         assert manifest_file.is_file(), "Manifest file must not be deleted on DB failure"
         assert manifest_file.read_bytes() == manifest_content
         assert hashlib.sha256(manifest_file.read_bytes()).hexdigest() == expected_sha
+
+    def test_export_evidence_creates_canonical_storage_uri_in_db(self, tmp_path: Path):
+        """export_package inserts canonical storage URI in database metadata with zero raw case_id leakage."""
+        db_file = tmp_path / "export_test.db"
+        populate_store_test_db(db_file, num_blocks=3)
+
+        case_raw = "CASE-CANONICAL-2026-X1"
+        pkg_dir = tmp_path / "pkg_canonical"
+
+        m = export_package(case_raw, 0, 2, out_dir=str(pkg_dir), db_path=str(db_file), allow_gaps=True)
+        manifest_hash = hashlib.sha256((pkg_dir / "manifest.json").read_bytes()).hexdigest()
+
+        # Query database record
+        conn = sqlite3.connect(str(db_file))
+        row = conn.execute("SELECT case_id, storage_uri, manifest_sha256 FROM evidence_exports").fetchone()
+        conn.close()
+
+        assert row is not None
+        db_case_id, db_storage_uri, db_manifest_hash = row
+        assert db_case_id == case_raw
+        assert db_manifest_hash == manifest_hash
+
+        # Canonical URI assertions
+        expected_uri = canonical_storage_uri(case_id_digest(case_raw), manifest_hash)
+        assert db_storage_uri == expected_uri
+        assert len(db_storage_uri) == CANONICAL_URI_LENGTH
+        assert db_storage_uri.startswith("evidence://sha256/")
+
+        # Zero leakage of raw case_id into storage URI
+        assert case_raw not in db_storage_uri
+
+        # Manifest JSON on disk does NOT contain storage_uri (avoids self-referential cycle)
+        manifest_raw = (pkg_dir / "manifest.json").read_text(encoding="utf-8")
+        assert "storage_uri" not in manifest_raw
+        assert db_storage_uri not in manifest_raw
+
+    def test_export_evidence_collision_no_clobber(self, tmp_path: Path):
+        """Export refuses to overwrite existing destination directory and preserves existing package intact."""
+        db_file = tmp_path / "collision_test.db"
+        populate_store_test_db(db_file, num_blocks=3)
+
+        case_raw = "CASE-COLLISION-01"
+        pkg_dir = tmp_path / "pkg_collision"
+
+        # First export succeeds
+        export_package(case_raw, 0, 2, out_dir=str(pkg_dir), db_path=str(db_file), allow_gaps=True)
+        original_manifest_bytes = (pkg_dir / "manifest.json").read_bytes()
+
+        # Second export to exact same directory MUST fail with DESTINATION_EXISTS
+        with pytest.raises(FileExistsError, match="DESTINATION_EXISTS"):
+            export_package(case_raw, 0, 2, out_dir=str(pkg_dir), db_path=str(db_file), allow_gaps=True)
+
+        # Existing files must be completely untouched
+        assert (pkg_dir / "manifest.json").read_bytes() == original_manifest_bytes
+
+    def test_export_evidence_two_manifests_distinct_canonical_uris(self, tmp_path: Path):
+        """Exporting two distinct packages for the same case yields distinct manifest hashes and URIs."""
+        db_file = tmp_path / "dual_test.db"
+        populate_store_test_db(db_file, num_blocks=5)
+
+        case_raw = "CASE-DUAL-01"
+        pkg1_dir = tmp_path / "pkg1"
+        pkg2_dir = tmp_path / "pkg2"
+
+        export_package(case_raw, 0, 2, out_dir=str(pkg1_dir), db_path=str(db_file), allow_gaps=True)
+        export_package(case_raw, 0, 4, out_dir=str(pkg2_dir), db_path=str(db_file), allow_gaps=True)
+
+        conn = sqlite3.connect(str(db_file))
+        rows = conn.execute("SELECT manifest_sha256, storage_uri FROM evidence_exports ORDER BY export_id").fetchall()
+        conn.close()
+
+        assert len(rows) == 2
+        hash1, uri1 = rows[0]
+        hash2, uri2 = rows[1]
+
+        assert hash1 != hash2
+        assert uri1 != uri2
+        assert uri1.startswith("evidence://sha256/")
+        assert uri2.startswith("evidence://sha256/")
+
+    def test_export_evidence_db_failure_retains_published_package(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Database failure after staging retains the published package on disk."""
+        db_file = tmp_path / "fail_db_test.db"
+        populate_store_test_db(db_file, num_blocks=3)
+
+        case_raw = "CASE-RETAIN-01"
+        pkg_dir = tmp_path / "pkg_retained"
+
+        import forensics.schemas as schemas
+        real_init = schemas.init_db
+
+        class FailingConn:
+            def __init__(self, raw_conn):
+                self._conn = raw_conn
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def close(self):
+                self._conn.close()
+            def execute(self, sql, *args, **kwargs):
+                if "INSERT INTO evidence_exports" in sql:
+                    raise sqlite3.OperationalError("SIMULATED_DB_WRITE_FAILURE")
+                return self._conn.execute(sql, *args, **kwargs)
+
+        calls = 0
+        def failing_init_db(path):
+            nonlocal calls
+            calls += 1
+            c = real_init(path)
+            return FailingConn(c)
+
+        monkeypatch.setattr(schemas, "init_db", failing_init_db)
+
+        with pytest.raises(RuntimeError, match="EXPORT_IO_OR_DB_ERROR: published package, if present, is retained"):
+            export_package(case_raw, 0, 2, out_dir=str(pkg_dir), db_path=str(db_file), allow_gaps=True)
+
+        # Published package on disk MUST still exist and be completely valid
+        assert pkg_dir.is_dir()
+        assert (pkg_dir / "manifest.json").is_file()
+        checked = verify_package(pkg_dir)
+        assert checked.status == "VALID"

@@ -61,7 +61,7 @@ def run(output):
                     require(time.monotonic()<deadline,'START_TIMEOUT');time.sleep(.1)
             owner=oc.rpc_read(url,'eth_accounts',[])[0]
             stage='deploy_local'
-            artifact=json.loads((ROOT/'contracts/out/EvidenceRegistry.sol/EvidenceRegistry.json').read_text())
+            artifact=json.loads((ROOT/'contracts/out/EvidenceRegistry.sol/EvidenceRegistry.json').read_text(encoding='utf-8'))
             raw=oc.run_cast_send(['--from',owner,'--unlocked','--rpc-url',url,'--chain','31337','--json','--create',artifact['bytecode']['object']])
             deployed=json.loads(raw);contract=deployed['contractAddress'];report['receipts'].append(deployed)
             stage='collect_export'
@@ -116,7 +116,7 @@ def run(output):
             require(failure.exit_code==2,'RPC_NOT_ERROR');passed('S6_rpc_error',exit_code=2)
             stage='declaration_exception'
             diag=work/'diagnostic';shutil.copytree(pkg,diag)
-            manifest=diag/'manifest.json';data=json.loads(manifest.read_text())
+            manifest=diag/'manifest.json';data=json.loads(manifest.read_text(encoding='utf-8'))
             data['integrity_checks']['verify_local'].update(status='FAILED',mismatches=1)
             manifest.write_text(json.dumps(data),encoding='utf-8')
             prior=manifest.read_bytes()

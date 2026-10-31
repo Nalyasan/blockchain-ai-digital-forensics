@@ -25,15 +25,19 @@ def registration_data(signer,uri):
     return '0x'+'0'*24+signer[2:]+f'{64:064x}'+abi_uri(uri)
 
 def complete_receipt(contract,signer,tx,case,digest):
+    case_b32 = oc.case_id_hash_bytes32(case)
+    uri = oc.canonical_storage_uri(oc.case_id_digest(case), digest)
     receipt={'from':signer,'to':contract,'status':'0x1','transactionHash':tx,
              'blockHash':'0x'+'6'*64,'blockNumber':'0x1','transactionIndex':'0x0'}
     receipt['logs']=[dict({k:receipt[k] for k in ('transactionHash','blockHash','blockNumber','transactionIndex')},
         address=contract,logIndex='0x0',removed=False,topics=[oc.TOPIC_EVIDENCE_REGISTERED,f'0x{1:064x}',
-        oc.string_to_bytes32_hex(case),'0x'+digest],data=registration_data(signer,f'evidence://{case}/manifest.json'))]
+        case_b32,'0x'+digest],data=registration_data(signer,uri))]
     return receipt
 
 def registry_reply(case,digest,signer):
-    return '0x'+f'{32:064x}{1:064x}'+oc.string_to_bytes32_hex(case)[2:]+digest+f'{224:064x}'+('0'*24)+signer[2:]+f'{1:064x}{1:064x}'+abi_uri(f'evidence://{case}/manifest.json')
+    case_b32 = oc.case_id_hash_bytes32(case)
+    uri = oc.canonical_storage_uri(oc.case_id_digest(case), digest)
+    return '0x'+f'{32:064x}{1:064x}'+case_b32[2:]+digest+f'{224:064x}'+('0'*24)+signer[2:]+f'{1:064x}{1:064x}'+abi_uri(uri)
 
 def test_B01_anchor_rejects_tampered_payload_before_send(tmp_path,sample,monkeypatch):
     pkg=exported(tmp_path,sample)
@@ -228,7 +232,8 @@ def test_C01_decoder_has_no_subprocess_dependency(monkeypatch):
     receipt=complete_receipt(CONTRACT,SIGNER,'0x'+'7'*64,'case','a'*64)
     blocked=Mock(side_effect=AssertionError('Runtime topic subprocess forbidden'))
     monkeypatch.setattr(oc.subprocess,'run',blocked)
-    assert oc.extract_evidence_id_from_receipt(receipt,'case','a'*64,CONTRACT,SIGNER,'evidence://case/manifest.json')==1
+    uri=oc.canonical_storage_uri(oc.case_id_digest('case'),'a'*64)
+    assert oc.extract_evidence_id_from_receipt(receipt,'case','a'*64,CONTRACT,SIGNER,uri)==1
     blocked.assert_not_called()
 
 @pytest.mark.parametrize('signature,topic',[
@@ -244,7 +249,9 @@ def test_C02_ethereum_keccak_independent_cast(signature,topic):
 def test_B05_C03_event_mutations_never_verified(flow,mutation):
     r=flow['receipt'];e=r['logs'][0];other='0x'+'1'*40
     if mutation=='emitter':e['address']=other
-    if mutation=='submitter':e['data']=registration_data(other,'evidence://test-2a/manifest.json')
+    if mutation=='submitter':
+        can_uri = oc.canonical_storage_uri(oc.case_id_digest('test-2a'), oc.compute_file_sha256(flow['pkg']/'manifest.json'))
+        e['data']=registration_data(other, can_uri)
     if mutation=='uri':e['data']=registration_data(SIGNER,'evidence://wrong/manifest.json')
     if mutation=='extra_topic':e['topics'].append('0x'+'0'*64)
     if mutation=='topic_width':e['topics'][1]='0x1'

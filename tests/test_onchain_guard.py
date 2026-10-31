@@ -186,9 +186,10 @@ def test_decode_evidence_registered_event_full_validation():
     evidence_id = 42
     topic1 = f"0x{evidence_id:064x}"
     case_id = "CASE-2026-001"
-    case_id_bytes32 = onchain.string_to_bytes32_hex(case_id).lower()
+    case_id_bytes32 = onchain.case_id_hash_bytes32(case_id).lower()
     manifest_hash = "22" * 32
     topic3 = "0x" + manifest_hash
+    can_uri = onchain.canonical_storage_uri(onchain.case_id_digest(case_id), manifest_hash)
 
     fake_receipt = {
         "status": "0x1",
@@ -196,18 +197,39 @@ def test_decode_evidence_registered_event_full_validation():
             {
                 "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
                 "topics": [topic0, topic1, case_id_bytes32, topic3],
-                "data": registration_data("0x"+"9"*40, "evidence://CASE-2026-001/manifest.json")
+                "data": registration_data("0x"+"9"*40, can_uri)
             }
         ]
     }
 
-    # Giải mã thành công và khớp đầy đủ
+    # Giải mã thành công và khớp đầy đủ (canonical)
     extracted_id = onchain.extract_evidence_id_from_receipt(
         fake_receipt,
         expected_case_id=case_id,
-        expected_manifest_sha256=manifest_hash
+        expected_manifest_sha256=manifest_hash,
+        expected_uri=can_uri
     )
     assert extracted_id == 42
+
+    # Giải mã thành công và khớp đầy đủ (legacy với cờ tường minh)
+    legacy_receipt = {
+        "status": "0x1",
+        "logs": [
+            {
+                "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+                "topics": [topic0, topic1, onchain.string_to_bytes32_hex(case_id).lower(), topic3],
+                "data": registration_data("0x"+"9"*40, f"evidence://{case_id}/manifest.json")
+            }
+        ]
+    }
+    legacy_id = onchain.extract_evidence_id_from_receipt(
+        legacy_receipt,
+        expected_case_id=case_id,
+        expected_manifest_sha256=manifest_hash,
+        expected_uri=f"evidence://{case_id}/manifest.json",
+        legacy_case_encoding=True
+    )
+    assert legacy_id == 42
 
     # Receipt status = 0 -> lỗi
     fake_failed_receipt = {"status": "0x0", "logs": []}
