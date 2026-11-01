@@ -321,6 +321,44 @@ class TestIndependentReferenceCheckerIntegration:
         with pytest.raises(ContentMismatchError, match="CONTENT_MISMATCH"):
             inv.investigate(case_id="fake_case")
 
+    def test_strict_ref_checker_rejects_empty_not_evaluated_output(self, mock_evidence_db):
+        """Requirement 8 & 9: Strict reference checker rejects empty observed_facts (NOT_EVALUATED)."""
+        test_model = create_test_model(
+            custom_output_args={
+                "case_id": "a",
+                "observed_facts": [],
+                "conclusions": [],
+            }
+        )
+        inv = ForensicInvestigator(
+            model=test_model,
+            readonly_db=mock_evidence_db,
+            strict_ref_checker=True,
+        )
+        with pytest.raises(ContentMismatchError, match="NOT_EVALUATED"):
+            inv.investigate(case_id="euler-finance")
+
+    def test_case_id_preserved_and_non_strict_marks_not_evaluated(self, mock_evidence_db):
+        """Requirement 6 & 8: Requested case_id is always preserved even if synthetic model returns 'a'."""
+        test_model = create_test_model(
+            custom_output_args={
+                "case_id": "a",
+                "observed_facts": [],
+                "conclusions": [],
+            }
+        )
+        inv = ForensicInvestigator(
+            model=test_model,
+            readonly_db=mock_evidence_db,
+            strict_ref_checker=False,
+        )
+        res = inv.investigate(case_id="euler-finance")
+        assert res.output.case_id == "euler-finance"
+        assert res.ref_check_status == "NOT_EVALUATED"
+        assert res.checked_facts_count == 0
+        assert res.content_match_ratio == 0.0
+        assert res.existence_ref_ratio == 0.0
+
 
 class TestRunPersistenceAndG502Compliance:
     """Verifies atomic run persistence and strict G5-02 invariant compliance."""

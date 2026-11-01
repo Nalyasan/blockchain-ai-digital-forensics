@@ -624,7 +624,27 @@ class TestT10_ReferenceCheckerContentMismatch:
         )
         result = check_investigation_output(output, real_db)
         assert result.is_valid is False
+        assert result.status == "CONTENT_MISMATCH"
         assert result.content_match_ratio == 0.0
         assert len(result.mismatches) == 1
         assert result.mismatches[0].tag == "CONTENT_MISMATCH"
         assert result.mismatches[0].field == "amount_raw"
+
+    def test_empty_observed_facts_returns_not_evaluated_not_pass(self, real_db):
+        """Requirement 8: Zero evaluated facts must return NOT_EVALUATED, never PASS or 1.0."""
+        ratio, mismatches = verify_observed_facts([], real_db)
+        assert ratio == 0.0
+        assert len(mismatches) == 0
+
+        empty_output = ForensicInvestigationOutput(
+            case_id="euler-finance",
+            observed_facts=[],
+            rule_detections=[],
+        )
+        result = check_investigation_output(empty_output, real_db)
+        assert result.status == "NOT_EVALUATED"
+        assert result.is_valid is False
+        assert result.total_facts == 0
+        assert result.content_match_ratio == 0.0
+        assert result.existence_ref_ratio == 0.0
+        assert result.field_match_ratio == 0.0

@@ -300,6 +300,9 @@ def cli_investigate(args):
             payload = {
                 "analysis_id": res.analysis_id,
                 "case_id": res.output.case_id,
+                "ref_check_status": res.ref_check_status,
+                "checked_facts_count": res.checked_facts_count,
+                "referenced_canonical_tx_count": res.referenced_canonical_tx_count,
                 "existence_ref_ratio": res.existence_ref_ratio,
                 "content_match_ratio": res.content_match_ratio,
                 "has_content_mismatch": res.has_content_mismatch,
@@ -310,10 +313,13 @@ def cli_investigate(args):
             }
             formatted = json.dumps(payload, indent=2, sort_keys=True)
             if getattr(args, "out", None):
+                out_dir = os.path.dirname(os.path.abspath(args.out))
+                if out_dir:
+                    os.makedirs(out_dir, exist_ok=True)
                 with open(args.out, "w", encoding="utf-8") as f:
                     f.write(formatted)
             print(_safe_sanitize(formatted))
-            return 1 if (res.has_content_mismatch and getattr(args, "strict_ref_check", False)) else 0
+            return 1 if (res.ref_check_status != "PASS" and getattr(args, "strict_ref_check", False)) else 0
     except Exception as e:
         print(_safe_sanitize(f"LỖI investigate: {e}"), file=sys.stderr)
         return 1

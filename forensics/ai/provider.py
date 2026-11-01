@@ -31,6 +31,8 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
+os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
+
 from pydantic import BaseModel, Field, field_validator
 from pydantic_ai import UsageLimits
 from pydantic_ai.models import Model
@@ -400,7 +402,7 @@ def create_model(
             "and offline fallback is disabled."
         )
 
-    if provider_name == "test":
+    if provider_name in ("test", "offline"):
         test_kwargs = dict(kwargs)
         call_tools = test_kwargs.pop("call_tools", cfg.call_tools)
         custom_output_text = test_kwargs.pop(
@@ -424,5 +426,5 @@ def create_model(
 
     raise InvalidProviderError(
         f"Unsupported AI provider: '{cfg.provider}'. "
-        f"Supported providers: 'gemini', 'google', 'test', 'function'."
+        f"Supported providers: 'gemini', 'google', 'test', 'offline', 'function'."
     )

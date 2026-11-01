@@ -6,13 +6,13 @@
 **Isolated Worktree**: `D:\Projest\worktrees\p5_pydantic_gemini`  
 **Accepted P1–P4 Baseline Commit**: `9bed49a7e83a37790013c3e328ae0a41e091bfa1`  
 **P4-08 Real-Data Integration Reference**: `feat/p4-real-integration` (`e38dff61a6f99985148b927d1ff2c6fddf438650`)  
-**Overall P5 Status**: **PASS (Offline Deterministic, Security T10/T11 & Real-Data Verified; Live Gemini API Smoke Test PENDING API Key)**
+**Overall P5 Status**: **PASS (Offline Deterministic, Security T10/T11 & Real-Data CLI Verified; Live Gemini API Smoke Test PENDING API Key)**
 
 ---
 
-## 1. Executive Summary & Architectural Decisions
+## 1. Executive Summary & Architectural Guarantees
 
-P5 implements a production-grade, strictly bounded **AI Forensic Investigator** built on **Pydantic AI** (`pydantic-ai-slim==1.85.0`) and **Google Gemini Flash** (`GoogleModel` / `GoogleProvider`, default `gemini-3.8-flash` with fallback verification).
+P5 implements a production-grade, strictly bounded **AI Forensic Investigator** built on **Pydantic AI** (`pydantic-ai==2.64.0`, `pydantic-ai-slim==2.64.0`, `pydantic==2.14.2`, `google-genai==2.34.0`) and **Google Gemini Flash** (`GoogleModel` / `GoogleProvider`, default `gemini-3.8-flash` with fallback verification).
 
 ### Key Forensic & Security Guarantees Enforced
 1. **Strict Evidence Immutability (5-Layer Read-Only SQLite)**:
@@ -32,150 +32,134 @@ P5 implements a production-grade, strictly bounded **AI Forensic Investigator** 
      - `get_timeline` (read-only)
      - `collect_missing_range` (isolated staging collector only)
    - Enforces `MAX_AI_TOOL_STEPS = 5` attempted calls per session (`ToolBudgetExceeded`) and `AI_REQUEST_LIMIT = 8` via Pydantic AI `UsageLimits`.
-   - Any unauthorized tool name raises `UnauthorizedToolError` before consuming budget or reaching the database.
+   - `budget_exhausted` is `False` when an investigation completes within the 5-step ceiling, and `True` only when a 6th tool call is attempted and rejected by `ToolBudgetExceeded` or `UsageLimitExceeded`.
    - `collect_missing_range` is strictly limited to `<= 20` inclusive blocks (`RangeLimitExceeded` on 21+ blocks), max 2 calls per session, and explicitly blocked from writing to canonical/production evidence databases (`ProductionDatabaseMutationError`).
-3. **Structured Forensic Output with 4-Layer Evidence Separation**:
-   - Validated via Pydantic (`ForensicInvestigationOutput` in `forensics/ai/schemas.py`), strictly separating:
-     - `observed_facts` (`list[ObservedFact]` — deterministic on-chain records linked to `tx_hash`, `block_number`, and `evidence_refs`)
-     - `rule_detections` (`list[RuleDetection]` — deterministic P4 rule engine alerts)
-     - `external_labels` (`list[ExternalLabel]` — attribution metadata)
-     - `analyst_interpretation` (`AnalystInterpretation` — bounded AI synthesis and explicit `uncertainty_statement`)
-   - Enforces `integrity_mode = "strict"` (production forensic integrity).
+3. **Distinction Between Synthetic `TestModel` and Deterministic Offline Forensic `FunctionModel`**:
+   - **Synthetic `TestModel` (`create_test_model`)**: Used strictly in unit tests that pass explicit `custom_output_args` or custom `call_tools` sequences (e.g., testing 6-call budget overflow or intentional `+1 wei` hallucination rejection).
+   - **Deterministic Offline Forensic Model (`create_offline_forensic_model`)**: Powered by Pydantic AI `FunctionModel`. Used automatically when `--provider test`, `--provider offline`, or default offline fallback is invoked without synthetic mock overrides. Executes a real multi-turn tool workflow (`get_alerts` -> `get_timeline` -> `get_address_history` -> `get_tx` -> `get_counterparties`) within the 5-step budget against the SQLite evidence database and synthesizes verified `ObservedFact`, `RuleDetection`, and `chronological_timeline` records grounded directly in canonical SQLite rows.
+   - **Case ID Preservation**: `ForensicInvestigator.investigate` enforces that `output.case_id` always preserves the requested `case_id`.
 4. **T11 Prompt Injection Isolation (`forensics/ai/sanitizer.py`)**:
-   - Truncates untrusted on-chain strings (`calldata`, revert reasons, ERC-20 symbols, memo strings) to 256 characters.
-   - Strips control characters and dangerous Unicode bidi/zero-width overrides.
-   - Detects adversarial prompt-injection instructions (`IGNORE PREVIOUS INSTRUCTIONS`, `<|im_start|>`, XML/delimiter breakouts, SQL injection payloads, fake audit overrides) without suppressing or deleting underlying transaction facts.
-   - Wraps untrusted strings in `<untrusted_onchain_data>...</untrusted_onchain_data>` delimiters.
-5. **T10 Independent Reference Checker (`forensics/ai/ref_checker.py`)**:
-   - Deterministic, non-AI Python/SQLite verifier that inspects every `ObservedFact` in `ForensicInvestigationOutput` directly against the canonical SQLite database (`transactions`, `asset_transfers`, `alerts`, `evidence_references`).
-   - Any fabricated `tx_hash`, altered `amount_raw` (`+/- 1 wei`), transposed `from_address`/`to_address`, wrong `block_number`, or unlinked `evidence_ref` triggers `ref_check_status = "CONTENT_MISMATCH"` with structured `RefMismatch` records.
+   - Truncates untrusted on-chain strings (`calldata`, revert reasons, ERC-20 symbols, memo strings) to 256 characters, strips control/bidi characters, wraps untrusted strings in `<untrusted_onchain_data>...</untrusted_onchain_data>` tags, and flags injection payloads without deleting underlying transaction evidence.
+5. **T10 Independent Reference Checker (`forensics/ai/ref_checker.py`) & Zero-Fact `NOT_EVALUATED` Enforcement**:
+   - Deterministic, non-AI Python/SQLite verifier inspecting every `ObservedFact` against canonical `asset_transfers`, `transactions`, and `alerts` (`alerts.evidence_refs`).
+   - **Zero-Fact Protection**: When `len(observed_facts) == 0`, the Reference Checker returns `status = "NOT_EVALUATED"`, `is_valid = False`, `content_match_ratio = 0.0`, and `existence_ref_ratio = 0.0` (never reporting a vacuous `1.0` / `PASS`). Under `--strict-ref-check` (`strict_ref_checker=True`), both `CONTENT_MISMATCH` and `NOT_EVALUATED` raise `ContentMismatchError` and cause the CLI to exit non-zero (`1`).
 6. **G5-02 Append-Only / Idempotent Persistence Compliance**:
    - Zero occurrences of `INSERT OR REPLACE`, `REPLACE INTO`, or `INSERT OR IGNORE` across all `forensics/**/*.py` modules.
 
 ---
 
-## 2. File Inventory (KEEP / ADAPT / ADD)
+## 2. Installed Environment & Dependency Versions
 
-| Action | File Path | Purpose |
+| Package | Installed Version | Purpose |
 | :--- | :--- | :--- |
-| **KEEP** | `forensics/collector.py`, `forensics/db.py`, `forensics/ev_ident.py`, `forensics/exporter.py`, `forensics/integrity.py`, `forensics/provenance.py`, `forensics/redaction.py`, `forensics/rules.py`, `forensics/schema.sql`, `forensics/validator.py`, `forensics/onchain/*`, `contracts/*` | All P1–P4 core modules, schemas, and Solidity contracts preserved unmodified. |
-| **ADAPT** | `forensics/cli.py` | Added `investigate` CLI subcommand to invoke `ForensicInvestigator` and write JSON output without altering existing P1–P4 subcommands. |
-| **ADD** | `forensics/ai/__init__.py` | Public API exports for the P5 AI Investigator package. |
-| **ADD** | `forensics/ai/db_readonly.py` | 5-layer read-only SQLite connection wrapper (`mode=ro&immutable=1`, `query_only=ON`, authorizer callback, guarded cursor/connection). |
-| **ADD** | `forensics/ai/provider.py` | `AIConfig`, `GoogleModel`/`GoogleProvider` integration (`gemini-3.8-flash`), `GOOGLE_API_KEY`/`GEMINI_API_KEY` resolution, key masking, `UsageLimits`, and offline `TestModel`/`FunctionModel` factories. |
-| **ADD** | `forensics/ai/tools.py` | Exactly 6 authorized investigator tools, `ToolBudgetManager` (`MAX_AI_TOOL_STEPS=5`), and isolated 20-block staging guardrails. |
-| **ADD** | `forensics/ai/schemas.py` | Validated Pydantic models (`ObservedFact`, `RuleDetection`, `ExternalLabel`, `AnalystInterpretation`, `ForensicInvestigationOutput`). |
-| **ADD** | `forensics/ai/sanitizer.py` | T11 untrusted on-chain input sanitizer, delimiter escaper, and prompt-injection detector. |
-| **ADD** | `forensics/ai/ref_checker.py` | T10 independent post-generation Reference Checker returning `PASS` or `CONTENT_MISMATCH`. |
-| **ADD** | `forensics/ai/investigator.py` | `ForensicInvestigator` coordinator binding Pydantic AI `Agent`, async tool wrappers, sanitizer, Reference Checker, and append-only `analysis_runs` persistence. |
-| **ADD** | `tests/test_ai_db_readonly.py`, `tests/test_ai_db_readonly_adversarial.py`, `tests/test_adversarial_db_concurrency.py` | Unit, adversarial, and concurrency tests for the 5-layer read-only SQLite wrapper (110 tests). |
-| **ADD** | `tests/test_ai_provider.py`, `tests/test_ai_tools.py`, `tests/test_ai_tools_adversarial.py`, `tests/test_adversarial_m2.py` | Unit and adversarial tests for Gemini provider config, credential masking, 6 tools, 5-step budget, and 20-block staging limit (152 tests). |
-| **ADD** | `tests/test_ai_security.py`, `tests/test_ai_investigator.py` | T10 (`CONTENT_MISMATCH`), T11 (Prompt Injection Isolation), structured output schema, and end-to-end investigator tests (56 tests). |
-| **ADD** | `tests/test_p5_real_incidents.py` | Real-data integration tests against P4-08 `real_p4.db` (Euler Finance & Curve/Alchemix incidents), CLI verification, and conditional live Gemini smoke test (8 tests). |
+| `Python` | `3.13.14` | Runtime environment |
+| `pydantic-ai` | `2.64.0` | Agent orchestration, `FunctionModel`, `TestModel`, `UsageLimits` |
+| `pydantic-ai-slim` | `2.64.0` | Core Pydantic AI Google/Gemini model bindings |
+| `pydantic` | `2.14.2` | Strict structured forensic output validation |
+| `google-genai` | `2.34.0` | Official Google Gemini SDK backend |
 
 ---
 
-## 3. Independent Verification of P4-08 Real-Data Artifacts
+## 3. Independent Verification of P4-08 Real-Data Database & Schema
 
-Before integrating P4-08 data, `D:\Projest\worktrees\p4_real_integration\data\real_p4.db` (from branch `feat/p4-real-integration`, commit `e38dff61a6f99985148b927d1ff2c6fddf438650`) was independently verified via read-only connection:
+Before running P5 investigations, `D:\Projest\worktrees\p4_real_integration\data\real_p4.db` (from branch `feat/p4-real-integration`, commit `e38dff61a6f99985148b927d1ff2c6fddf438650`) was independently verified via read-only connection:
 
 - **Database Path**: `D:\Projest\worktrees\p4_real_integration\data\real_p4.db`
 - **SHA-256 Checksum (Before & After All Tests)**: `6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97`
-- **Canonical Row Counts**:
-  - `asset_transfers`: **7,032**
-  - `alerts`: **172** (spanning `R1_LARGE_TRANSFER`, `R2_RAPID_FANOUT`, `R3_MULTI_HOP`, `R4_CYCLE`)
-  - `evidence_references`: **498**
-  - `transactions`: **538**
-  - `blocks`: **45**
-- **Real Ethereum Incidents Verified**:
-  - **Euler Finance Exploit** (`block_number = 16817996`, tx `0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d`, exploiter `0xb66cd966670d962c227b3eaba30a872dbfb995db`): Investigated using the 5 read-only tools within the 5-step budget; verified `ObservedFact` records (`72,621,599.218815488296365999` DAI transfer) pass independent `ref_checker.py` (`PASS`), while a `+1 wei` mutation is immediately vetoed (`CONTENT_MISMATCH`).
-  - **Curve / Alchemix Exploit** (`block_number = 17806076`, tx `0x8ddbe9ee18cd4ca3ad6fbcd9be0bfefca84eb4c06e31e9fb053d2bd1c450d3fa`): Investigated using the read-only tools within the 5-step budget; verified `ObservedFact` records (`22,608.006378365187996923` WETH transfer) pass `ref_checker.py` (`PASS`), while transposed addresses are immediately vetoed (`CONTENT_MISMATCH`).
+- **Verified Schema & Canonical Row Counts**:
+  - `asset_transfers`: **7,032** (`6,520` in Euler block window `16816001..16818110`; `512` in Curve block window `17700536..17851003`)
+  - `alerts`: **172**
+  - `transactions`: **18**
+  - `blocks`: **1,789**
+  - `rule_calibrations`: **224**
+  - **Evidence References**: **498** embedded JSON objects inside `alerts.evidence_refs` (there is no separate `evidence_references` table).
+  - **Canonical Rule IDs in `alerts`**:
+    - `large_transfer`: **82** alerts
+    - `rapid_pass_through`: **71** alerts
+    - `high_frequency`: **11** alerts
+    - `fan_in_out`: **8** alerts
 
 ---
 
-## 4. Test Execution Summary & Commands
+## 4. Mandatory Real-Data CLI Acceptance Verification (Euler & Curve)
 
-### 4.1 P5 AI Investigator Test Suites (10 Suites)
-**Command**:
+Isolated, byte-identical copies of `real_p4.db` (`SHA-256: 6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97`) were created and tested via the actual CLI entry point `python -m forensics.cli investigate`.
+
+### Case A — Euler Finance Incident
+- **Actual Command**:
+  ```powershell
+  python -m forensics.cli investigate `
+    --case-id "euler-finance" `
+    --db "D:\Projest\worktrees\p5_pydantic_gemini\results\p5\euler_real_p4_copy.db" `
+    --query "Investigate Euler Finance Ethereum exploit and address 0xb66cd966670d962c227b3eaba30a872dbfb995db. Retrieve on-chain evidence and verify observed facts." `
+    --provider test `
+    --max-steps 5 `
+    --strict-ref-check `
+    --out "D:\Projest\worktrees\p5_pydantic_gemini\results\p5\euler_investigation.json"
+  ```
+- **Exit Code**: `0`
+- **Requested / Returned `case_id`**: `"euler-finance"` / `"euler-finance"`
+- **Count of `observed_facts`**: `10` (including transfer `6367` of `34186225919500945938720264` DAI to `0xb66cd966670d962c227b3eaba30a872dbfb995db` in block `16818102` tx `0x298bde3f9e53f7a5d870f7f5d56ee2f5e41fa25e6eb5e74611ac97025405db55` and 9 DAI transfers in block `16817996` tx `0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d`)
+- **Count of `rule_detections`**: `15` (including alert `db6f40776586b5e33158c6d0ffe5a38a91ebc0e83d0fd4f74f22619267b3f408` for `0xb66cd966670d962c227b3eaba30a872dbfb995db` and alert `1ba703a159d38ebf21b5c6d4123c7e5d3d8e75e000b3990dd41f983094b96b38` for `0xc310a0af...`)
+- **Count of Referenced Canonical Transactions**: `13`
+- **Reference-Check Status & Checked-Fact Count**: `status = "PASS"`, `checked_facts_count = 10`, `content_match_ratio = 1.0`, `existence_ref_ratio = 1.0`, `has_content_mismatch = false`
+- **Attempted Tool Calls & Budget Status**: `attempted_steps = 5`, `successful_steps = 5`, `failed_steps = 0`, `budget_exhausted = false`
+- **Output File Path**: `D:\Projest\worktrees\p5_pydantic_gemini\results\p5\euler_investigation.json`
+- **SHA-256 of Original `real_p4.db` (Before & After)**: `6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97`
+
+### Case B — Curve / Alchemix Incident
+- **Actual Command**:
+  ```powershell
+  python -m forensics.cli investigate `
+    --case-id "curve-alchemix" `
+    --db "D:\Projest\worktrees\p5_pydantic_gemini\results\p5\curve_real_p4_copy.db" `
+    --query "Investigate Curve Alchemix Vyper reentrancy exploit and address 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8. Retrieve on-chain evidence and verify observed facts." `
+    --provider test `
+    --max-steps 5 `
+    --strict-ref-check `
+    --out "D:\Projest\worktrees\p5_pydantic_gemini\results\p5\curve_investigation.json"
+  ```
+- **Exit Code**: `0`
+- **Requested / Returned `case_id`**: `"curve-alchemix"` / `"curve-alchemix"`
+- **Count of `observed_facts`**: `10` (including transfer `7029` of `7258701569350004501158` wei `NATIVE` ETH from `0x30fb95794a2051abe30a67892b3a1fa73947aee5` to `0xdce5d6b41c32f578f875efffc0d422c57a75d7d8` in block `17806772` tx `0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801`)
+- **Count of `rule_detections`**: `15` (including alert `e6bbfab35ec6327ef77bcdd812b4722700cdf6372672da5837bf0ef0e9438729`)
+- **Count of Referenced Canonical Transactions**: `20`
+- **Reference-Check Status & Checked-Fact Count**: `status = "PASS"`, `checked_facts_count = 10`, `content_match_ratio = 1.0`, `existence_ref_ratio = 1.0`, `has_content_mismatch = false`
+- **Attempted Tool Calls & Budget Status**: `attempted_steps = 5`, `successful_steps = 5`, `failed_steps = 0`, `budget_exhausted = false`
+- **Output File Path**: `D:\Projest\worktrees\p5_pydantic_gemini\results\p5\curve_investigation.json`
+- **SHA-256 of Original `real_p4.db` (Before & After)**: `6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97`
+
+---
+
+## 5. Test Execution Summary & Commands
+
+### 5.1 P5 AI Investigator Test Suites (10 Suites)
 ```powershell
 python -m pytest tests/test_ai_db_readonly.py tests/test_ai_db_readonly_adversarial.py tests/test_adversarial_db_concurrency.py tests/test_ai_provider.py tests/test_ai_tools.py tests/test_ai_tools_adversarial.py tests/test_adversarial_m2.py tests/test_ai_security.py tests/test_ai_investigator.py tests/test_p5_real_incidents.py -v --basetemp="D:\Projest\worktrees\.pytest_tmp_p5"
 ```
 - **Exit Code**: `0`
-- **Results**: **326 passed, 1 skipped** (live Gemini API smoke test skipped when `GOOGLE_API_KEY` / `GEMINI_API_KEY` is not set in environment).
+- **Results**: **329 passed, 1 skipped** (live Gemini API smoke test skipped when `GOOGLE_API_KEY` / `GEMINI_API_KEY` is unset).
 
-### 4.2 Foundry Smart Contract Regression Suite
-**Command**:
+### 5.2 Foundry Smart Contract Regression Suite
 ```powershell
 Set-Location "D:\Projest\worktrees\p5_pydantic_gemini\contracts"
 forge test -v
 ```
 - **Exit Code**: `0`
-- **Results**: **56 passed, 0 failed, 0 skipped** (`EvidenceRegistryTest`: 31 passed; `EvidenceRegistry_Group4Test`: 25 passed).
+- **Results**: **56 passed, 0 failed, 0 skipped**.
 
-### 4.3 Full Repository Python Regression Suite (`pytest tests/`)
-**Command**:
+### 5.3 Full Repository Python Regression Suite (`pytest tests/`)
 ```powershell
 $env:Path = "$env:USERPROFILE\.foundry\bin;$env:Path"
 Set-Location "D:\Projest\worktrees\p5_pydantic_gemini"
 python -m pytest tests/ -q --basetemp="D:\Projest\worktrees\.pytest_tmp_p5"
 ```
 - **Exit Code**: `0`
-- **Results**: **938 passed, 1 skipped, 0 failed** (including all P1–P4 unit, integrity, G5 security QA, Foundry local Anvil smoke suites, and all 326 P5 AI Investigator tests).
+- **Results**: **941 passed, 1 skipped, 0 failed**.
 
 ---
 
-## 5. Protected Artifacts & Evidence Immutability Verification
-
-All historical P1–P4 evidence artifacts and the P4-08 real-data database remain byte-for-byte identical:
-
-| Artifact Path | Expected & Verified SHA-256 | Status |
-| :--- | :--- | :--- |
-| `D:\Projest\worktrees\p4_real_integration\data\real_p4.db` | `6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97` | **UNMODIFIED** |
-| `results/p1/anvil_forensics.db` | `50a5872890f2b92f4e1257230a4b1c56a3ec652bb028a054d67494cf15adb525` | **UNMODIFIED** |
-| `results/p2/case-anvil-p1-001/manifest.json` | `964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e` | **UNMODIFIED** |
-| `results/p2/case-anvil-p1-001/raw_blocks.jsonl` | `b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f` | **UNMODIFIED** |
-| `results/p2/case-anvil-p1-001/timeline.csv` | `239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3` | **UNMODIFIED** |
-| `results/p2/case-anvil-p1-001/asset_transfers.csv` | `d509c83875a411c514d59228cdc6ac88eb836597ca14809e35502b57a90fa5a1` | **UNMODIFIED** |
-| `results/p2/case-anvil-p1-001/audit_events.jsonl` | `8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508` | **UNMODIFIED** |
-
----
-
-## 6. Configuration & CLI Usage Instructions
-
-### Environment Variables
-Configure the investigator via environment variables (never hardcode keys):
-```powershell
-$env:AI_PROVIDER = "gemini"
-$env:AI_MODEL = "gemini-3.8-flash"   # Or gemini-2.5-flash if 3.8 preview is not enabled on project
-$env:MAX_AI_TOOL_STEPS = "5"
-$env:AI_REQUEST_LIMIT = "8"
-$env:GOOGLE_API_KEY = "<YOUR_API_KEY>" # Also supports $env:GEMINI_API_KEY fallback
-```
-
-### CLI Entry Point
-Run an offline deterministic investigation (for CI/testing):
-```powershell
-python -m forensics.cli investigate `
-  --db "D:\Projest\worktrees\p4_real_integration\data\real_p4.db" `
-  --case-id "case-euler-001" `
-  --address "0xb66cd966670d962c227b3eaba30a872dbfb995db" `
-  --offline-test `
-  --output "results/p5/euler_investigation.json"
-```
-
-Run a live Gemini Flash investigation (when `GOOGLE_API_KEY` or `GEMINI_API_KEY` is configured):
-```powershell
-python -m forensics.cli investigate `
-  --db "D:\Projest\worktrees\p4_real_integration\data\real_p4.db" `
-  --case-id "case-euler-live-001" `
-  --address "0xb66cd966670d962c227b3eaba30a872dbfb995db" `
-  --model "gemini-3.8-flash" `
-  --output "results/p5/euler_live_investigation.json"
-```
-
----
-
-## 7. Live Gemini Provider Status
+## 6. Live Gemini Provider Status
 
 - **Status**: **PENDING (No API key configured in current execution environment)**
-- **Details**: `GOOGLE_API_KEY` and `GEMINI_API_KEY` were inspected in the environment and found unset. Per strict P5 instructions, no paid billing or unauthorized external calls were attempted, and `TestLiveGeminiSmokeConditional::test_live_gemini_flash_smoke` is recorded as `SKIPPED` / `PENDING` until an API key is supplied.
+- **Details**: `GOOGLE_API_KEY` and `GEMINI_API_KEY` are unset in the environment. Per strict P5 instructions, no paid billing or unauthorized external calls were attempted, and `TestLiveGeminiSmokeConditional::test_live_gemini_flash_smoke` is recorded as `SKIPPED` / `PENDING` until an API key is supplied.

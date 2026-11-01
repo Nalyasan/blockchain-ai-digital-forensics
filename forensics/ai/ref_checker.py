@@ -86,10 +86,12 @@ class ReferenceCheckResult:
     mismatches: list[RefMismatch] = field(default_factory=list)
     missing_refs: list[str] = field(default_factory=list)
     field_match_ratio: float = 1.0
+    status: str = "PASS"
 
     def to_dict(self) -> dict[str, Any]:
         """Serializes result into dictionary suitable for analysis_runs persistence."""
         return {
+            "status": self.status,
             "is_valid": self.is_valid,
             "existence_ref_ratio": self.existence_ref_ratio,
             "content_match_ratio": self.content_match_ratio,
@@ -305,7 +307,7 @@ def verify_references_existence(
             total_refs.append(("alert", norm))
 
     if not total_refs:
-        return (1.0, [])
+        return (0.0, [])
 
     missing: list[str] = []
     for ref_type, ref_id in total_refs:
@@ -790,7 +792,7 @@ def verify_observed_facts(
         raise ValueError("Database connection db is required for verify_observed_facts.")
 
     if not facts:
-        return (1.0, [])
+        return (0.0, [])
 
     total_facts = len(facts)
     matched_facts = 0
@@ -803,7 +805,7 @@ def verify_observed_facts(
         else:
             all_mismatches.extend(fact_mismatches)
 
-    ratio = round(matched_facts / total_facts, 4) if total_facts > 0 else 1.0
+    ratio = round(matched_facts / total_facts, 4) if total_facts > 0 else 0.0
     return (ratio, all_mismatches)
 
 
@@ -895,12 +897,20 @@ def check_investigation_output(
     mismatched_indices = {m.fact_index for m in mismatches}
     matched_facts = total_facts - len(mismatched_indices)
 
-    # Calculate field match ratio (5 core fields per fact + evidence_refs)
-    total_fields_checked = max(1, total_facts * 6)
-    matching_fields = max(0, total_fields_checked - len(mismatches))
-    field_match_ratio = round(matching_fields / total_fields_checked, 4)
-
-    is_valid = (len(mismatches) == 0) and (len(missing_refs) == 0)
+    if total_facts == 0:
+        field_match_ratio = 0.0
+        is_valid = False
+        status = (
+            "NOT_EVALUATED"
+            if (len(mismatches) == 0 and len(missing_refs) == 0)
+            else "CONTENT_MISMATCH"
+        )
+    else:
+        total_fields_checked = max(1, total_facts * 6)
+        matching_fields = max(0, total_fields_checked - len(mismatches))
+        field_match_ratio = round(matching_fields / total_fields_checked, 4)
+        is_valid = (len(mismatches) == 0) and (len(missing_refs) == 0)
+        status = "PASS" if is_valid else "CONTENT_MISMATCH"
 
     return ReferenceCheckResult(
         is_valid=is_valid,
@@ -913,4 +923,5 @@ def check_investigation_output(
         existing_refs_count=existing_refs_count,
         mismatches=mismatches,
         missing_refs=missing_refs,
+        status=status,
     )

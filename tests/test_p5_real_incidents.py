@@ -105,14 +105,32 @@ class TestP408ArtifactIndependentVerification:
 
     def test_verify_p4_08_canonical_counts(self, ro_real_db):
         tx_count = ro_real_db.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+        blk_count = ro_real_db.execute("SELECT COUNT(*) FROM blocks").fetchone()[0]
         xfer_count = ro_real_db.execute("SELECT COUNT(*) FROM asset_transfers WHERE synthetic = 0").fetchone()[0]
         alert_count = ro_real_db.execute("SELECT COUNT(*) FROM alerts WHERE synthetic = 0").fetchone()[0]
 
-        assert tx_count > 0
+        assert tx_count == 18, f"Expected 18 canonical transactions, got {tx_count}"
+        assert blk_count == 1789, f"Expected 1,789 canonical blocks, got {blk_count}"
         assert xfer_count == 7032, f"Expected 7,032 canonical transfers, got {xfer_count}"
         assert alert_count == 172, f"Expected 172 canonical alerts, got {alert_count}"
 
-        # Count evidence references across all 172 alerts
+        # Confirm no separate evidence_references table exists (refs are embedded in alerts.evidence_refs)
+        tables = {
+            r[0]
+            for r in ro_real_db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "evidence_references" not in tables
+
+        # Confirm actual rule IDs in alerts table
+        rule_ids = {
+            r[0]
+            for r in ro_real_db.execute("SELECT DISTINCT rule_id FROM alerts").fetchall()
+        }
+        assert rule_ids == {"large_transfer", "high_frequency", "fan_in_out", "rapid_pass_through"}
+
+        # Count evidence references embedded across all 172 alerts
         rows = ro_real_db.execute("SELECT evidence_refs FROM alerts WHERE synthetic = 0").fetchall()
         total_evidence_refs = 0
         for r in rows:
@@ -393,34 +411,113 @@ class TestStagingRangeCollectionAndCLI:
         staging_conn.close()
 
     def test_cli_investigate_command_end_to_end(self, tmp_path, real_db_baseline_sha256):
-        out_file = tmp_path / "euler_investigation_out.json"
-        cmd = [
+        import shutil
+
+        euler_db_copy = tmp_path / "euler_real_p4_copy.db"
+        curve_db_copy = tmp_path / "curve_real_p4_copy.db"
+        shutil.copy2(REAL_P4_DB_PATH, euler_db_copy)
+        shutil.copy2(REAL_P4_DB_PATH, curve_db_copy)
+
+        assert _compute_sha256(euler_db_copy) == real_db_baseline_sha256
+        assert _compute_sha256(curve_db_copy) == real_db_baseline_sha256
+
+        # Case A: Euler Finance CLI Investigation
+        euler_out = tmp_path / "euler_investigation_out.json"
+        euler_cmd = [
             sys.executable,
             "-m",
             "forensics.cli",
             "investigate",
             "--case-id",
-            "euler",
+            "euler-finance",
             "--db",
-            str(REAL_P4_DB_PATH),
+            str(euler_db_copy),
+            "--query",
+            "Investigate Euler Finance Ethereum exploit and address 0xb66cd966670d962c227b3eaba30a872dbfb995db. Retrieve on-chain evidence and verify observed facts.",
             "--provider",
             "test",
+            "--max-steps",
+            "5",
+            "--strict-ref-check",
             "--out",
-            str(out_file),
+            str(euler_out),
         ]
-        proc = subprocess.run(
-            cmd,
+        proc_euler = subprocess.run(
+            euler_cmd,
             cwd=str(Path(__file__).resolve().parents[1]),
             capture_output=True,
             text=True,
             timeout=30,
         )
-        assert proc.returncode == 0, f"CLI failed: {proc.stderr}"
-        assert out_file.exists()
-        payload = json.loads(out_file.read_text(encoding="utf-8"))
-        assert "analysis_id" in payload
-        assert "output" in payload
-        assert "content_match_ratio" in payload
+        assert proc_euler.returncode == 0, f"Euler CLI failed: {proc_euler.stderr}"
+        assert euler_out.exists()
+        euler_payload = json.loads(euler_out.read_text(encoding="utf-8"))
+        assert euler_payload["case_id"] == "euler-finance"
+        assert euler_payload["output"]["case_id"] == "euler-finance"
+        assert euler_payload["ref_check_status"] == "PASS"
+        assert euler_payload["checked_facts_count"] == 10
+        assert len(euler_payload["output"]["observed_facts"]) == 10
+        assert len(euler_payload["output"]["rule_detections"]) == 15
+        assert len(euler_payload["output"]["chronological_timeline"]) >= 10
+        assert len(euler_payload["output"]["conclusions"]) >= 1
+        assert euler_payload["referenced_canonical_tx_count"] >= 5
+        assert euler_payload["content_match_ratio"] == 1.0
+        assert euler_payload["existence_ref_ratio"] == 1.0
+        assert euler_payload["has_content_mismatch"] is False
+        assert euler_payload["tool_calls_summary"]["attempted_steps"] == 5
+        assert euler_payload["tool_calls_summary"]["successful_steps"] == 5
+        assert euler_payload["tool_calls_summary"]["budget_exhausted"] is False
+
+        # Case B: Curve / Alchemix CLI Investigation
+        curve_out = tmp_path / "curve_investigation_out.json"
+        curve_cmd = [
+            sys.executable,
+            "-m",
+            "forensics.cli",
+            "investigate",
+            "--case-id",
+            "curve-alchemix",
+            "--db",
+            str(curve_db_copy),
+            "--query",
+            "Investigate Curve Alchemix Vyper reentrancy exploit and address 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8. Retrieve on-chain evidence and verify observed facts.",
+            "--provider",
+            "test",
+            "--max-steps",
+            "5",
+            "--strict-ref-check",
+            "--out",
+            str(curve_out),
+        ]
+        proc_curve = subprocess.run(
+            curve_cmd,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert proc_curve.returncode == 0, f"Curve CLI failed: {proc_curve.stderr}"
+        assert curve_out.exists()
+        curve_payload = json.loads(curve_out.read_text(encoding="utf-8"))
+        assert curve_payload["case_id"] == "curve-alchemix"
+        assert curve_payload["output"]["case_id"] == "curve-alchemix"
+        assert curve_payload["ref_check_status"] == "PASS"
+        assert curve_payload["checked_facts_count"] == 10
+        assert len(curve_payload["output"]["observed_facts"]) == 10
+        assert len(curve_payload["output"]["rule_detections"]) == 15
+        assert len(curve_payload["output"]["chronological_timeline"]) >= 10
+        assert len(curve_payload["output"]["conclusions"]) >= 1
+        assert curve_payload["referenced_canonical_tx_count"] >= 5
+        assert curve_payload["content_match_ratio"] == 1.0
+        assert curve_payload["existence_ref_ratio"] == 1.0
+        assert curve_payload["has_content_mismatch"] is False
+        assert curve_payload["tool_calls_summary"]["attempted_steps"] == 5
+        assert curve_payload["tool_calls_summary"]["successful_steps"] == 5
+        assert curve_payload["tool_calls_summary"]["budget_exhausted"] is False
+
+        # Verify database copies and canonical DB remain byte-for-byte unchanged
+        assert _compute_sha256(euler_db_copy) == real_db_baseline_sha256
+        assert _compute_sha256(curve_db_copy) == real_db_baseline_sha256
 
 
 class TestLiveGeminiSmokeConditional:

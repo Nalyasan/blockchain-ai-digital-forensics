@@ -131,6 +131,30 @@ CASE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "end_timestamp": 1692000000,
         "primary_asset": "0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6",
     },
+    "euler-finance": {
+        "name": "Euler Finance Exploit",
+        "start_block": 16817990,
+        "end_block": 16818110,
+        "start_timestamp": 1678697300,
+        "end_timestamp": 1678700000,
+        "primary_asset": "0x6b175474e89094c44da98b954eedeac495271d0f",
+    },
+    "curve-alchemix": {
+        "name": "Curve / Alchemix Vyper Reentrancy Exploit",
+        "start_block": 17806700,
+        "end_block": 17852000,
+        "start_timestamp": 1690731000,
+        "end_timestamp": 1692000000,
+        "primary_asset": "0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6",
+    },
+    "curve_alchemix": {
+        "name": "Curve / Alchemix Vyper Reentrancy Exploit",
+        "start_block": 17806700,
+        "end_block": 17852000,
+        "start_timestamp": 1690731000,
+        "end_timestamp": 1692000000,
+        "primary_asset": "0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6",
+    },
 }
 
 
@@ -174,6 +198,7 @@ class ToolCallBudgetTracker:
     successful_tool_calls: int = 0
     failed_tool_calls: int = 0
     collect_calls: int = 0
+    budget_exhausted: bool = False
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
     def record_attempt(self, tool_name: str, args: dict[str, Any]) -> int:
@@ -182,6 +207,7 @@ class ToolCallBudgetTracker:
         Raises ToolBudgetExceeded if budget is already exhausted.
         """
         if self.attempted_tool_calls >= self.max_steps:
+            self.budget_exhausted = True
             entry = {
                 "step": self.attempted_tool_calls + 1,
                 "tool_name": tool_name,
@@ -255,7 +281,7 @@ class ToolCallBudgetTracker:
                 "failed_steps": self.failed_tool_calls,
                 "collect_calls": self.collect_calls,
                 "max_collect_calls": self.max_collect_calls,
-                "budget_exhausted": self.attempted_tool_calls >= self.max_steps,
+                "budget_exhausted": self.budget_exhausted,
             },
             "calls": self.tool_calls,
         }
@@ -763,8 +789,14 @@ def get_timeline(
 
     if case_id is not None:
         c_key = str(case_id).strip().lower()
-        if c_key in CASE_DEFINITIONS:
-            c_info = CASE_DEFINITIONS[c_key]
+        c_norm = c_key.replace("-", "_")
+        c_info = CASE_DEFINITIONS.get(c_key) or CASE_DEFINITIONS.get(c_norm)
+        if c_info is None:
+            if "euler" in c_norm:
+                c_info = CASE_DEFINITIONS["euler"]
+            elif "curve" in c_norm or "alchemix" in c_norm:
+                c_info = CASE_DEFINITIONS["curve"]
+        if c_info is not None:
             block_min = c_info.get("start_block")
             block_max = c_info.get("end_block")
             if ts_start is None:

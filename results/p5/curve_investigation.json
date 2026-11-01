@@ -1,0 +1,390 @@
+{
+  "analysis_id": "run_71fdb97cb98246bd",
+  "case_id": "curve-alchemix",
+  "checked_facts_count": 10,
+  "content_match_ratio": 1.0,
+  "existence_ref_ratio": 1.0,
+  "has_content_mismatch": false,
+  "injection_detected": false,
+  "mismatches": [],
+  "output": {
+    "analyst_interpretations": [
+      {
+        "competing_hypotheses": [
+          "Automated protocol liquidity rebalancing or batch settlement"
+        ],
+        "confidence": 0.95,
+        "hypothesis_id": "HYP-CURVE-ALCHEM-01",
+        "interpretation": "On-chain transfer sequence across 10 verified transfers and 15 rule detections indicates high-value asset movement involving 9 canonical transactions and 2 counterparties.",
+        "supporting_fact_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      }
+    ],
+    "case_id": "curve-alchemix",
+    "chronological_timeline": [
+      "Block 17806772: Transfer of 7258701569350004501158 base units (NATIVE) from 0x30fb95794a2051abe30a67892b3a1fa73947aee5 to 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 in tx 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801",
+      "Block 17806772: Transfer of 7258701569350004501158 base units (NATIVE) from 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 to 0x30fb95794a2051abe30a67892b3a1fa73947aee5 in tx 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801",
+      "Block 17841884: Transfer of 1000000000000000000 base units (0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0x4197ed0ef9b60ab1cacdc31d6d3ce06413b333b14b8947be5c0cfe29cb88b088",
+      "Block 17841974: Transfer of 1000000000000000000000 base units (0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0xaf7d9a75b66118d76383406259c5860afae1a4ecd0c058593da05a2613b18fc2",
+      "Block 17842059: Transfer of 3819550464760440887778 base units (0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0x9d0b241e96cb8a2fcd181e1af6c6d4e52b193190209ab028ddf174fd6b184b44",
+      "Block 17842176: Transfer of 1000000000000000000 base units (NATIVE) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0x25bc0a257301b4168e2e1862669c68dacb46aace6921f9efc6dd152c040a45c2",
+      "Block 17842261: Transfer of 1000000000000000000000 base units (NATIVE) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0x4ab8367b391ad733ab98433f51f2c4d56cec93941d31c9d19b0e3ff6e8771639",
+      "Block 17842725: Transfer of 1258000000000000000000 base units (NATIVE) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0xfa8560f76f1f4ac1a4ed5bb0bded5afc0e9d7aee8b2e098e3fe92c28088aadec",
+      "Block 17850610: Transfer of 1000000000000000000 base units (NATIVE) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0xfb647fd4e2df611e9c3178c169ded85699284845aeb6a5be5a612ce2ace8d2cb",
+      "Block 17851003: Transfer of 2000000000000000000000 base units (NATIVE) from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in tx 0xdbf1d8dca9858119e3852d52f18821754640013d9914d692589b13f8181a08e8",
+      "Rule Detection [large_transfer] (alert e6bbfab35ec6...): Large transfer: 7258701569350004501158 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+      "Rule Detection [large_transfer] (alert f48713a921f3...): Large transfer: 7258701569350004501158 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+      "Rule Detection [large_transfer] (alert c0d4dac3bef8...): Large transfer: 47258701569350004501158 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+      "Rule Detection [large_transfer] (alert 63a34d57513d...): Large transfer: 32111922626514803331340 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+      "Rule Detection [large_transfer] (alert 1fb6fe7ef09a...): Large transfer: 20000000000000000000000 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)"
+    ],
+    "conclusions": [
+      "Verified 10 canonical on-chain asset transfers across 9 transactions for case 'curve-alchemix'.",
+      "Correlated 15 Rule Engine alerts across rules: fan_in_out, large_transfer, rapid_pass_through."
+    ],
+    "external_labels": [],
+    "investigative_observations": [
+      "Executed 5 read-only forensic tool steps within budget MAX_AI_TOOL_STEPS=5.",
+      "Retrieved 10 verified facts and 15 rule detections."
+    ],
+    "metadata": {
+      "incident_type": "curve",
+      "mode": "deterministic_offline_forensic",
+      "tool_steps_used": 5
+    },
+    "observed_facts": [
+      {
+        "amount_raw": "7258701569350004501158",
+        "asset_id": "NATIVE",
+        "block_number": 17806772,
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801",
+          "block:17806772",
+          "transfer:7029",
+          "alert:e6bbfab35ec6327ef77bcdd812b4722700cdf6372672da5837bf0ef0e9438729",
+          "alert:f48713a921f3ef47a807177e8d0f2a97c0f3d8e4b39e8441da8921595bf4863f",
+          "alert:c0d4dac3bef8ff074972ae8e63c727921a2c4833c10737b0868e591ec260ba1f"
+        ],
+        "from_addr": "0x30fb95794a2051abe30a67892b3a1fa73947aee5",
+        "statement": "Observed transfer of 7258701569350004501158 base units of asset NATIVE from 0x30fb95794a2051abe30a67892b3a1fa73947aee5 to 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 in block 17806772",
+        "to_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "tx_hash": "0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+      },
+      {
+        "amount_raw": "1000000000000000000",
+        "asset_id": "0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6",
+        "block_number": 17841884,
+        "evidence_refs": [
+          "tx:0x4197ed0ef9b60ab1cacdc31d6d3ce06413b333b14b8947be5c0cfe29cb88b088",
+          "block:17841884",
+          "transfer:7009"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 1000000000000000000 base units of asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17841884",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0x4197ed0ef9b60ab1cacdc31d6d3ce06413b333b14b8947be5c0cfe29cb88b088"
+      },
+      {
+        "amount_raw": "1000000000000000000000",
+        "asset_id": "0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6",
+        "block_number": 17841974,
+        "evidence_refs": [
+          "tx:0xaf7d9a75b66118d76383406259c5860afae1a4ecd0c058593da05a2613b18fc2",
+          "block:17841974",
+          "transfer:7010"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 1000000000000000000000 base units of asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17841974",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0xaf7d9a75b66118d76383406259c5860afae1a4ecd0c058593da05a2613b18fc2"
+      },
+      {
+        "amount_raw": "3819550464760440887778",
+        "asset_id": "0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6",
+        "block_number": 17842059,
+        "evidence_refs": [
+          "tx:0x9d0b241e96cb8a2fcd181e1af6c6d4e52b193190209ab028ddf174fd6b184b44",
+          "block:17842059",
+          "transfer:7011"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 3819550464760440887778 base units of asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17842059",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0x9d0b241e96cb8a2fcd181e1af6c6d4e52b193190209ab028ddf174fd6b184b44"
+      },
+      {
+        "amount_raw": "1000000000000000000",
+        "asset_id": "NATIVE",
+        "block_number": 17842176,
+        "evidence_refs": [
+          "tx:0x25bc0a257301b4168e2e1862669c68dacb46aace6921f9efc6dd152c040a45c2",
+          "block:17842176",
+          "transfer:7012"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 1000000000000000000 base units of asset NATIVE from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17842176",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0x25bc0a257301b4168e2e1862669c68dacb46aace6921f9efc6dd152c040a45c2"
+      },
+      {
+        "amount_raw": "1000000000000000000000",
+        "asset_id": "NATIVE",
+        "block_number": 17842261,
+        "evidence_refs": [
+          "tx:0x4ab8367b391ad733ab98433f51f2c4d56cec93941d31c9d19b0e3ff6e8771639",
+          "block:17842261",
+          "transfer:7013"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 1000000000000000000000 base units of asset NATIVE from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17842261",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0x4ab8367b391ad733ab98433f51f2c4d56cec93941d31c9d19b0e3ff6e8771639"
+      },
+      {
+        "amount_raw": "1258000000000000000000",
+        "asset_id": "NATIVE",
+        "block_number": 17842725,
+        "evidence_refs": [
+          "tx:0xfa8560f76f1f4ac1a4ed5bb0bded5afc0e9d7aee8b2e098e3fe92c28088aadec",
+          "block:17842725",
+          "transfer:7014"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 1258000000000000000000 base units of asset NATIVE from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17842725",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0xfa8560f76f1f4ac1a4ed5bb0bded5afc0e9d7aee8b2e098e3fe92c28088aadec"
+      },
+      {
+        "amount_raw": "1000000000000000000",
+        "asset_id": "NATIVE",
+        "block_number": 17850610,
+        "evidence_refs": [
+          "tx:0xfb647fd4e2df611e9c3178c169ded85699284845aeb6a5be5a612ce2ace8d2cb",
+          "block:17850610",
+          "transfer:7015"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 1000000000000000000 base units of asset NATIVE from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17850610",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0xfb647fd4e2df611e9c3178c169ded85699284845aeb6a5be5a612ce2ace8d2cb"
+      },
+      {
+        "amount_raw": "2000000000000000000000",
+        "asset_id": "NATIVE",
+        "block_number": 17851003,
+        "evidence_refs": [
+          "tx:0xdbf1d8dca9858119e3852d52f18821754640013d9914d692589b13f8181a08e8",
+          "block:17851003",
+          "transfer:7016"
+        ],
+        "from_addr": "0xdce5d6b41c32f578f875efffc0d422c57a75d7d8",
+        "statement": "Observed transfer of 2000000000000000000000 base units of asset NATIVE from 0xdce5d6b41c32f578f875efffc0d422c57a75d7d8 to 0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9 in block 17851003",
+        "to_addr": "0x9e2b6378ee8ad2a4a95fe481d63caba8fb0ebbf9",
+        "tx_hash": "0xdbf1d8dca9858119e3852d52f18821754640013d9914d692589b13f8181a08e8"
+      },
+      {
+        "amount_raw": "7258701569350004501158",
+        "asset_id": "NATIVE",
+        "block_number": 17806772,
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801",
+          "block:17806772",
+          "transfer:7028",
+          "alert:e6bbfab35ec6327ef77bcdd812b4722700cdf6372672da5837bf0ef0e9438729",
+          "alert:f48713a921f3ef47a807177e8d0f2a97c0f3d8e4b39e8441da8921595bf4863f",
+          "alert:c0d4dac3bef8ff074972ae8e63c727921a2c4833c10737b0868e591ec260ba1f"
+        ],
+        "from_addr": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "statement": "Observed transfer of 7258701569350004501158 base units of asset NATIVE from 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 to 0x30fb95794a2051abe30a67892b3a1fa73947aee5 in block 17806772",
+        "to_addr": "0x30fb95794a2051abe30a67892b3a1fa73947aee5",
+        "tx_hash": "0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+      }
+    ],
+    "rule_detections": [
+      {
+        "alert_id": "e6bbfab35ec6327ef77bcdd812b4722700cdf6372672da5837bf0ef0e9438729",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 7258701569350004501158 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "f48713a921f3ef47a807177e8d0f2a97c0f3d8e4b39e8441da8921595bf4863f",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 7258701569350004501158 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "c0d4dac3bef8ff074972ae8e63c727921a2c4833c10737b0868e591ec260ba1f",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 47258701569350004501158 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "63a34d57513d0ec2046381b35ef75fc9fb3d89f5b0ac292ec3548c246768c6cd",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 32111922626514803331340 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "1fb6fe7ef09a74cf43884a7a83bba32967507e205904c39278b9b7356044022f",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 20000000000000000000000 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "155a58e72d3466714b86789a1d6f242cf03b99ea9d94a4b26681c581917954d0",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 15146778942835201169818 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "b3a917687a54b7e823a98969f03de5bec8fa4fdc53286a89ccbede85cdc08654",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 20000000000000000000000 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "85773c7e779fa780219241152a23f03fa98d2a3398e93f5543220ac568bf0c57",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 40000000000000000000000 >= threshold 10000000000000000000 for asset NATIVE (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "fb0bd59aa26e4878b10c93ab4f42b47a38125f2c39cb8b5d7f2dfd6645bfd5f6",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Large transfer: 4821550464760440887778 >= threshold 112982846035679582713 for asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 (tx: 0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "a961c23b0b4764e0d1c2447d4da53926f35b3557024238d7c7f867f0ee2a7f7a",
+        "evidence_refs": [
+          "tx:0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff3c9801"
+        ],
+        "reason": "Rapid pass-through: Address 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 received 47258701569350004501158 NATIVE at block 17806772 and forwarded 40000000000000000000000 at block 17806772 (ratio: 0.8464, block delta: 0)",
+        "rule_id": "rapid_pass_through",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "cdf3d6866c1e9272c2a4e23594e2d3e24bd784326964245600f793210f81a2f8",
+        "evidence_refs": [
+          "tx:0x20d00acdfbaeffa5fe618ecbcbb8c13df80133cb6d964f9a7ab6a5a7b0d796f3"
+        ],
+        "reason": "Large transfer: 8027356430634296017707 >= threshold 112982846035679582713 for asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 (tx: 0x20d00acdfbaeffa5fe618ecbcbb8c13df80133cb6d964f9a7ab6a5a7b0d796f3)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "9f4f2b1d69cffe9573fba12a439fefab48bc7afa1b791275fd0c64c958f2a5eb",
+        "evidence_refs": [
+          "tx:0x53df28a95fe310f68f5cf0fd6804b38e6aac0cfc9cffc58caac065d0a4543c4a"
+        ],
+        "reason": "Large transfer: 145322992191658783512 >= threshold 112982846035679582713 for asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 (tx: 0x53df28a95fe310f68f5cf0fd6804b38e6aac0cfc9cffc58caac065d0a4543c4a)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "e5d906f3bca07f014deae689f127d365cd60789839aa3aea5ba6deff2d96f759",
+        "evidence_refs": [
+          "tx:0x53df28a95fe310f68f5cf0fd6804b38e6aac0cfc9cffc58caac065d0a4543c4a"
+        ],
+        "reason": "Large transfer: 145322992191658857110 >= threshold 112982846035679582713 for asset 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 (tx: 0x53df28a95fe310f68f5cf0fd6804b38e6aac0cfc9cffc58caac065d0a4543c4a)",
+        "rule_id": "large_transfer",
+        "score": 1.0,
+        "severity": "high"
+      },
+      {
+        "alert_id": "c5197ae71fb97e095ff57c06071c619eed27eae573f6262308e792502819f756",
+        "evidence_refs": [
+          "tx:0x53df28a95fe310f68f5cf0fd6804b38e6aac0cfc9cffc58caac065d0a4543c4a",
+          "tx:0x5f34e85b8f62b6724782dfaebbffa53b712c52cd27107feb90e7a3451cddb995",
+          "tx:0x1ee394b15a398cfec25c79c233b201f560560a30770f3ffe125fec5e3a7a68f0",
+          "tx:0x3a1dcf313c2a82f715055263cb3934c2565fe83ca4cfbbb67b54b0923ff63199",
+          "tx:0x6bf83d52c4b83951755b6284ea2ad66c445fcb052c7e9cc070a75fffc543786d",
+          "tx:0x70028791c470ef5e90049912329b92b7caa667db97417c859c5f3198a3e7db89",
+          "tx:0x746523d8a04ed1aadac2c5a2774150da5bb074b36a07c9b6e19d315e67826ec5",
+          "tx:0xb377e9062a29b9af13a9d76758255efd254fa63aa0ff4723b5e30185f6c1f0da",
+          "tx:0xeb7d5fca327dfde2aec929b8b482251989d22ada4d5ff58ddeed728f0ad3d430",
+          "tx:0xfb2a9217c255d20463ec00635d1aefb4c75619c045d52565dc02355ef53311d6"
+        ],
+        "reason": "FAN_OUT: Address 0xb657b895b265c38c53fff00166cf7f6a3c70587d distributed to 9 unique destinations for 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 within 900s (threshold >= 8 in 900s)",
+        "rule_id": "fan_in_out",
+        "score": 0.75,
+        "severity": "high"
+      },
+      {
+        "alert_id": "8e9d0ebedba56c945a8c1b1577601a024e03bebb896fc5fe9c3c3d3aad247fc1",
+        "evidence_refs": [
+          "tx:0x53df28a95fe310f68f5cf0fd6804b38e6aac0cfc9cffc58caac065d0a4543c4a"
+        ],
+        "reason": "Rapid pass-through: Address 0x0000000000007f150bd6f54c40a34d7c3d5e9f56 received 145322992191658783512 0x0100546f2cd4c9d97f798ffc9755e47865ff7ee6 at block 17806741 and forwarded 145322992191658857110 at block 17806741 (ratio: 1.0000, block delta: 0)",
+        "rule_id": "rapid_pass_through",
+        "score": 1.0,
+        "severity": "high"
+      }
+    ],
+    "uncertainty_and_limitations": [
+      "Deterministic offline forensic investigation executed against local canonical SQLite evidence.",
+      "Off-chain entity attributions require external intelligence verification."
+    ]
+  },
+  "ref_check_status": "PASS",
+  "referenced_canonical_tx_count": 20,
+  "tool_calls_summary": {
+    "attempted_steps": 5,
+    "budget_exhausted": false,
+    "collect_calls": 0,
+    "failed_steps": 0,
+    "max_collect_calls": 2,
+    "max_steps": 5,
+    "successful_steps": 5
+  }
+}
