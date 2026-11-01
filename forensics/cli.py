@@ -265,6 +265,65 @@ def cli_analyze(args):
         print(_safe_sanitize(f"LỖI analyze: {e}"), file=sys.stderr)
         return 1
 
+def cli_investigate(args):
+    """Lệnh điều tra pháp y tự động bằng P5 AI Investigator (Pydantic AI + Gemini Flash)."""
+    from forensics.ai.db_readonly import readonly_connection
+    from forensics.ai.investigator import ForensicInvestigator
+    from forensics.ai.provider import get_ai_config
+
+    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    if not os.path.exists(db_file):
+        print(_safe_sanitize(f"LỖI investigate: Database không tồn tại: {db_file}"), file=sys.stderr)
+        return 1
+
+    try:
+        cfg_kwargs = {}
+        if getattr(args, "provider", None):
+            cfg_kwargs["provider"] = args.provider
+        if getattr(args, "model", None):
+            cfg_kwargs["model_name"] = args.model
+        if getattr(args, "max_steps", None):
+            cfg_kwargs["max_tool_steps"] = args.max_steps
+        cfg = get_ai_config(**cfg_kwargs)
+
+        with readonly_connection(db_file) as ro_db:
+            inv = ForensicInvestigator(
+                config=cfg,
+                readonly_db=ro_db,
+                strict_ref_checker=getattr(args, "strict_ref_check", False),
+            )
+            res = inv.investigate(
+                case_id=args.case_id,
+                query=args.query or f"Investigate case {args.case_id}",
+                input_refs=args.refs or [f"case:{args.case_id}"],
+            )
+            payload = {
+                "analysis_id": res.analysis_id,
+                "case_id": res.output.case_id,
+                "ref_check_status": res.ref_check_status,
+                "checked_facts_count": res.checked_facts_count,
+                "referenced_canonical_tx_count": res.referenced_canonical_tx_count,
+                "existence_ref_ratio": res.existence_ref_ratio,
+                "content_match_ratio": res.content_match_ratio,
+                "has_content_mismatch": res.has_content_mismatch,
+                "injection_detected": res.injection_detected,
+                "mismatches": [m.to_dict() if hasattr(m, "to_dict") else str(m) for m in res.mismatches],
+                "output": json.loads(res.output.model_dump_json()),
+                "tool_calls_summary": res.tool_calls_log.get("summary", {}),
+            }
+            formatted = json.dumps(payload, indent=2, sort_keys=True)
+            if getattr(args, "out", None):
+                out_dir = os.path.dirname(os.path.abspath(args.out))
+                if out_dir:
+                    os.makedirs(out_dir, exist_ok=True)
+                with open(args.out, "w", encoding="utf-8") as f:
+                    f.write(formatted)
+            print(_safe_sanitize(formatted))
+            return 1 if (res.ref_check_status != "PASS" and getattr(args, "strict_ref_check", False)) else 0
+    except Exception as e:
+        print(_safe_sanitize(f"LỖI investigate: {e}"), file=sys.stderr)
+        return 1
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="python -m forensics.cli",
@@ -378,6 +437,19 @@ def build_parser():
     pan.add_argument("--format", choices=["json", "csv"], default=None, help="Định dạng xuất file")
     pan.add_argument("--no-persist", action="store_false", dest="persist", default=True, help="Không lưu alerts vào SQLite")
     pan.set_defaults(func=cli_analyze)
+
+    # 12. investigate (P5 AI Investigator)
+    pinv = sub.add_parser("investigate", help="Điều tra pháp y tự động bằng P5 AI Investigator (Pydantic AI + Gemini Flash)")
+    pinv.add_argument("--case-id", required=True, help="Mã vụ việc điều tra (ví dụ: euler-finance, curve-alchemix)")
+    pinv.add_argument("--db", default=None, help="Đường dẫn database SQLite chứng cứ (chỉ đọc)")
+    pinv.add_argument("--query", default=None, help="Chỉ thị điều tra tùy chọn")
+    pinv.add_argument("--refs", nargs="*", default=None, help="Danh sách tham chiếu đầu vào (tx:..., alert:...)")
+    pinv.add_argument("--provider", default=None, help="AI provider (gemini, test, function)")
+    pinv.add_argument("--model", default=None, help="AI model (mặc định: gemini-3.8-flash)")
+    pinv.add_argument("--max-steps", type=int, default=5, help="Giới hạn số bước gọi tool (mặc định: 5)")
+    pinv.add_argument("--strict-ref-check", action="store_true", help="Từ chối kết quả nếu phát hiện CONTENT_MISMATCH")
+    pinv.add_argument("--out", default=None, help="Đường dẫn file JSON xuất kết quả")
+    pinv.set_defaults(func=cli_investigate)
 
     return p
 
