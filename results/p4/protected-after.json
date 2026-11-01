@@ -1,0 +1,171 @@
+{
+    "audit_title": "P4 Post-Execution Protected Evidence Integrity Audit",
+    "audit_timestamp_utc": "2026-11-01T09:33:37.192725+00:00",
+    "baseline_commit": "b0cda230888a50aadb5acbc460d84ede71f96aad",
+    "total_files": 16,
+    "matched_files": 16,
+    "mismatched_files": 0,
+    "status": "PASS",
+    "files": [
+        {
+            "path": "data/forensics.db",
+            "expected_sha256": "3f2b0dfc772a96ff6ea57c65807b5b6b9a20fcf74c409c6f222fcff29f1ef001",
+            "actual_sha256": "3f2b0dfc772a96ff6ea57c65807b5b6b9a20fcf74c409c6f222fcff29f1ef001",
+            "sha256": "3f2b0dfc772a96ff6ea57c65807b5b6b9a20fcf74c409c6f222fcff29f1ef001",
+            "expected_size": 139264,
+            "actual_size": 139264,
+            "size": 139264,
+            "match": true
+        },
+        {
+            "path": "results/p1/anvil_forensics.db",
+            "expected_sha256": "50a5872890f2b92f4e1257230a4b1c56a3ec652bb028a054d67494cf15adb525",
+            "actual_sha256": "50a5872890f2b92f4e1257230a4b1c56a3ec652bb028a054d67494cf15adb525",
+            "sha256": "50a5872890f2b92f4e1257230a4b1c56a3ec652bb028a054d67494cf15adb525",
+            "expected_size": 208896,
+            "actual_size": 208896,
+            "size": 208896,
+            "match": true
+        },
+        {
+            "path": "results/p1/continuous_collect_anvil.log",
+            "expected_sha256": "23bdbcb627408840cbbe5c6b972a42ce27d6bd0676f69cd455d184f5ccf3c03b",
+            "actual_sha256": "23bdbcb627408840cbbe5c6b972a42ce27d6bd0676f69cd455d184f5ccf3c03b",
+            "sha256": "23bdbcb627408840cbbe5c6b972a42ce27d6bd0676f69cd455d184f5ccf3c03b",
+            "expected_size": 6350,
+            "actual_size": 6350,
+            "size": 6350,
+            "match": true
+        },
+        {
+            "path": "results/p1/continuous_forensics.db",
+            "expected_sha256": "e12de6f9667a7d1c1e2dd88c821611dff92f7ec6fdd56da7dbf99f0420940fa6",
+            "actual_sha256": "e12de6f9667a7d1c1e2dd88c821611dff92f7ec6fdd56da7dbf99f0420940fa6",
+            "sha256": "e12de6f9667a7d1c1e2dd88c821611dff92f7ec6fdd56da7dbf99f0420940fa6",
+            "expected_size": 147456,
+            "actual_size": 147456,
+            "size": 147456,
+            "match": true
+        },
+        {
+            "path": "results/p1/step_f_anvil_verification.log",
+            "expected_sha256": "a3a35ba7741b90535dfcf5a2ae30f625a0901a652e7931640d723dafb2d4fecb",
+            "actual_sha256": "a3a35ba7741b90535dfcf5a2ae30f625a0901a652e7931640d723dafb2d4fecb",
+            "sha256": "a3a35ba7741b90535dfcf5a2ae30f625a0901a652e7931640d723dafb2d4fecb",
+            "expected_size": 8280,
+            "actual_size": 8280,
+            "size": 8280,
+            "match": true
+        },
+        {
+            "path": "results/p2/case-anvil-p1-001/asset_transfers.csv",
+            "expected_sha256": "d509c83875a411c514d59228cdc6ac88eb836597ca14809e35502b57a90fa5a1",
+            "actual_sha256": "d509c83875a411c514d59228cdc6ac88eb836597ca14809e35502b57a90fa5a1",
+            "sha256": "d509c83875a411c514d59228cdc6ac88eb836597ca14809e35502b57a90fa5a1",
+            "expected_size": 1028,
+            "actual_size": 1028,
+            "size": 1028,
+            "match": true
+        },
+        {
+            "path": "results/p2/case-anvil-p1-001/audit_events.jsonl",
+            "expected_sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+            "actual_sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+            "sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+            "expected_size": 281,
+            "actual_size": 281,
+            "size": 281,
+            "match": true
+        },
+        {
+            "path": "results/p2/case-anvil-p1-001/manifest.json",
+            "expected_sha256": "964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e",
+            "actual_sha256": "964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e",
+            "sha256": "964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e",
+            "expected_size": 2080,
+            "actual_size": 2080,
+            "size": 2080,
+            "match": true
+        },
+        {
+            "path": "results/p2/case-anvil-p1-001/raw_blocks.jsonl",
+            "expected_sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+            "actual_sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+            "sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+            "expected_size": 18311,
+            "actual_size": 18311,
+            "size": 18311,
+            "match": true
+        },
+        {
+            "path": "results/p2/case-anvil-p1-001/timeline.csv",
+            "expected_sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+            "actual_sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+            "sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+            "expected_size": 1576,
+            "actual_size": 1576,
+            "size": 1576,
+            "match": true
+        },
+        {
+            "path": "results/p3/step_p3_anvil_verification.log",
+            "expected_sha256": "0b33c0eed228868c11d30c92a6c821faf814bf59085ddec64b7512df551023cb",
+            "actual_sha256": "0b33c0eed228868c11d30c92a6c821faf814bf59085ddec64b7512df551023cb",
+            "sha256": "0b33c0eed228868c11d30c92a6c821faf814bf59085ddec64b7512df551023cb",
+            "expected_size": 2898,
+            "actual_size": 2898,
+            "size": 2898,
+            "match": true
+        },
+        {
+            "path": "results/p3/case-tampered-t05/asset_transfers.csv",
+            "expected_sha256": "a42d75acb660fc455284d2afc8c0bd7ce6cdd8f5f1e8ce2587384acba53022fa",
+            "actual_sha256": "a42d75acb660fc455284d2afc8c0bd7ce6cdd8f5f1e8ce2587384acba53022fa",
+            "sha256": "a42d75acb660fc455284d2afc8c0bd7ce6cdd8f5f1e8ce2587384acba53022fa",
+            "expected_size": 1028,
+            "actual_size": 1028,
+            "size": 1028,
+            "match": true
+        },
+        {
+            "path": "results/p3/case-tampered-t05/audit_events.jsonl",
+            "expected_sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+            "actual_sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+            "sha256": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+            "expected_size": 281,
+            "actual_size": 281,
+            "size": 281,
+            "match": true
+        },
+        {
+            "path": "results/p3/case-tampered-t05/manifest.json",
+            "expected_sha256": "078f52e1ded99d70f0a64f035dd5bb5c8f16257d3488b944317740333ca57123",
+            "actual_sha256": "078f52e1ded99d70f0a64f035dd5bb5c8f16257d3488b944317740333ca57123",
+            "sha256": "078f52e1ded99d70f0a64f035dd5bb5c8f16257d3488b944317740333ca57123",
+            "expected_size": 2162,
+            "actual_size": 2162,
+            "size": 2162,
+            "match": true
+        },
+        {
+            "path": "results/p3/case-tampered-t05/raw_blocks.jsonl",
+            "expected_sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+            "actual_sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+            "sha256": "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+            "expected_size": 18311,
+            "actual_size": 18311,
+            "size": 18311,
+            "match": true
+        },
+        {
+            "path": "results/p3/case-tampered-t05/timeline.csv",
+            "expected_sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+            "actual_sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+            "sha256": "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+            "expected_size": 1576,
+            "actual_size": 1576,
+            "size": 1576,
+            "match": true
+        }
+    ]
+}
