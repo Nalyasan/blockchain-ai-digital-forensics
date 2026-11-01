@@ -134,7 +134,7 @@ def run_smoke():
     try:
         with tempfile.TemporaryDirectory(prefix="p3-g3-smoke-") as temp_dir:
             work = Path(temp_dir)
-            allowed_env = {"SYSTEMROOT", "WINDIR", "PATH", "PATHEXT", "COMSPEC", "TEMP", "TMP", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"}
+            allowed_env = {"SYSTEMROOT", "WINDIR", "PATH", "PATHEXT", "COMSPEC", "TEMP", "TMP", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "FORENSICS_TRUSTED_REPOSITORY"}
             os.environ.clear()
             os.environ.update({k: v for k, v in saved_env.items() if k.upper() in allowed_env})
             os.environ.update(

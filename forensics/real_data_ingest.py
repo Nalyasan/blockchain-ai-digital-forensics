@@ -17,6 +17,7 @@ import sqlite3
 from typing import Any
 
 from forensics.schemas import init_db
+from forensics.persistence import EvidenceConflictError, insert_verified
 
 log = logging.getLogger("forensics.real_data_ingest")
 
@@ -87,9 +88,12 @@ def ingest_real_dataset(
     with open(transactions_csv, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            previous = tx_map.get(row["tx_hash"])
+            if previous is not None and previous != row:
+                raise EvidenceConflictError("transactions: conflicting duplicate source row")
             tx_map[row["tx_hash"]] = row
 
-    verified_keys: set[tuple[int, str, int]] = set()
+    verified_keys: dict[tuple[int, str, int], tuple] = {}
     transfers_to_insert: list[tuple] = []
     blocks_map: dict[tuple[int, str], dict[str, Any]] = {}
 
@@ -112,7 +116,10 @@ def ingest_real_dataset(
             amount_raw = str(r["amount_raw"]).strip()
 
             # Record verified key for deduplication of asset_transfers.csv
-            verified_keys.add((cid, tx_hash, log_idx))
+            verified_keys[(cid, tx_hash, log_idx)] = (
+                cid, b_num, b_hash, b_ts, tx_hash, log_idx,
+                asset_id, from_addr, to_addr, amount_raw, 0
+            )
 
             transfers_to_insert.append((
                 cid, b_num, b_hash, b_ts, tx_hash, log_idx,
@@ -120,6 +127,9 @@ def ingest_real_dataset(
             ))
             verified_erc20_count += 1
 
+            previous_block = blocks_map.get((cid, b_hash))
+            if previous_block and (previous_block["number"], previous_block["block_timestamp"]) != (b_num, b_ts):
+                raise EvidenceConflictError("blocks: conflicting source payload")
             if (cid, b_hash) not in blocks_map:
                 blocks_map[(cid, b_hash)] = {
                     "chain_id": cid,
@@ -139,10 +149,6 @@ def ingest_real_dataset(
             cid = int(r["chain_id"])
             tx_hash = r["tx_hash"]
             log_idx = int(r["log_index"])
-
-            # Deduplicate if already present in verified dataset
-            if (cid, tx_hash, log_idx) in verified_keys:
-                continue
 
             b_num = int(r["block_number"])
             b_hash = r["block_hash"]
@@ -164,11 +170,25 @@ def ingest_real_dataset(
                 incident_erc20_count += 1
                 assigned_log_index = log_idx
 
+            if (cid, tx_hash, log_idx) in verified_keys:
+                incoming = (cid, b_num, b_hash, b_ts, tx_hash, assigned_log_index,
+                            asset_id, from_addr, to_addr, amount_raw, 0)
+                if incoming != verified_keys[(cid, tx_hash, log_idx)]:
+                    raise EvidenceConflictError("asset_transfers: conflicting source overlap")
+                if asset_id == "NATIVE":
+                    toplevel_eth_count -= 1
+                else:
+                    incident_erc20_count -= 1
+                continue
+
             transfers_to_insert.append((
                 cid, b_num, b_hash, b_ts, tx_hash, assigned_log_index,
                 asset_id, from_addr, to_addr, amount_raw, 0
             ))
 
+            previous_block = blocks_map.get((cid, b_hash))
+            if previous_block and (previous_block["number"], previous_block["block_timestamp"]) != (b_num, b_ts):
+                raise EvidenceConflictError("blocks: conflicting source payload")
             if (cid, b_hash) not in blocks_map:
                 blocks_map[(cid, b_hash)] = {
                     "chain_id": cid,
@@ -213,6 +233,9 @@ def ingest_real_dataset(
                 asset_id, from_addr, to_addr, amount_raw, 0
             ))
 
+            previous_block = blocks_map.get((cid, b_hash))
+            if previous_block and (previous_block["number"], previous_block["block_timestamp"]) != (b_num, b_ts):
+                raise EvidenceConflictError("blocks: conflicting source payload")
             if (cid, b_hash) not in blocks_map:
                 blocks_map[(cid, b_hash)] = {
                     "chain_id": cid,
@@ -259,37 +282,43 @@ def ingest_real_dataset(
             None,  # raw_sha256
         ))
 
-    # Execute DB writes atomically
-    with conn:
-        conn.executemany(
-            """
-            INSERT OR IGNORE INTO blocks(
-                chain_id, number, hash, parent_hash, block_timestamp, block_time_utc,
-                first_observed_at, collected_at, status, raw_json, raw_sha256, synthetic
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            blocks_to_insert,
-        )
-
-        conn.executemany(
-            """
-            INSERT OR IGNORE INTO transactions(
-                chain_id, tx_hash, block_hash, block_number, tx_index,
-                from_addr, to_addr, value_raw, nonce, input, raw_json, raw_sha256
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            txs_to_insert,
-        )
-
-        conn.executemany(
-            """
-            INSERT INTO asset_transfers(
-                chain_id, block_number, block_hash, block_timestamp, tx_hash, log_index,
-                asset_id, from_addr, to_addr, amount_raw, synthetic
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            transfers_to_insert,
-        )
+    # Serialize canonical identity checks and all writes in one transaction.
+    try:
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            for values in blocks_to_insert:
+                record = dict(zip(
+                    "chain_id number hash parent_hash block_timestamp block_time_utc "
+                    "first_observed_at collected_at status raw_json raw_sha256 synthetic".split(), values))
+                conflicting = conn.execute(
+                    "SELECT 1 FROM blocks WHERE chain_id=? AND number=? AND hash<>? "
+                    "AND status='canonical'",
+                    (record["chain_id"], record["number"], record["hash"]),
+                ).fetchone()
+                if conflicting:
+                    raise EvidenceConflictError("blocks: conflicting canonical hash at accepted height")
+                insert_verified(conn, "blocks", record, ("chain_id", "hash"),
+                                replay_metadata=("collected_at",))
+            for values in txs_to_insert:
+                record = dict(zip(
+                    "chain_id tx_hash block_hash block_number tx_index from_addr to_addr "
+                    "value_raw nonce input raw_json raw_sha256".split(), values))
+                conflict = conn.execute(
+                    "SELECT 1 FROM transactions WHERE chain_id=? AND tx_hash=? AND block_hash<>?",
+                    (record["chain_id"], record["tx_hash"], record["block_hash"]),
+                ).fetchone()
+                if conflict:
+                    raise EvidenceConflictError("transactions: conflicting accepted block identity")
+                insert_verified(conn, "transactions", record, ("chain_id", "tx_hash", "block_hash"))
+            for values in transfers_to_insert:
+                record = dict(zip(
+                    "chain_id block_number block_hash block_timestamp tx_hash log_index "
+                    "asset_id from_addr to_addr amount_raw synthetic".split(), values))
+                insert_verified(conn, "asset_transfers", record,
+                                ("chain_id", "block_hash", "tx_hash", "log_index"))
+    except Exception:
+        conn.close()
+        raise
 
     # Verify counts
     total_transfers = conn.execute("SELECT count(*) FROM asset_transfers").fetchone()[0]
@@ -333,6 +362,7 @@ def ingest_real_dataset(
         "db_path": str(db_file_path),
     }
 
+    conn.close()
     log.info("Successfully ingested real dataset: %s", stats)
     return stats
 

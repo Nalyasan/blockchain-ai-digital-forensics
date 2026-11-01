@@ -139,3 +139,19 @@ def test_commit_lookup_errors_are_unknown(repo, monkeypatch, failure):
         return original(args, root, input_data)
     monkeypatch.setattr(git, '_git', fail)
     assert git.check_commit_provenance(head, repo) == 'UNKNOWN'
+
+
+@pytest.mark.parametrize("trust", ["exact", "other", "wildcard", "relative"])
+def test_explicit_repository_trust_is_path_scoped(repo, tmp_path, monkeypatch, trust):
+    values = {"exact": str(repo.resolve()), "other": str(tmp_path / "other"),
+              "wildcard": "*", "relative": "."}
+    monkeypatch.setenv("FORENSICS_TRUSTED_REPOSITORY", values[trust])
+    original, commands = git.subprocess.run, []
+    def record(command, **kwargs):
+        commands.append(command)
+        return original(command, **kwargs)
+    monkeypatch.setattr(git.subprocess, "run", record)
+    assert git.get_git_state(repo).state == "CLEAN"
+    flags = [arg for command in commands for arg in command if arg.startswith("safe.directory=")]
+    assert bool(flags) == (trust == "exact")
+    assert all(arg == "safe.directory=" + repo.resolve().as_posix() for arg in flags)

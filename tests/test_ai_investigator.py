@@ -390,7 +390,7 @@ class TestRunPersistenceAndG502Compliance:
         assert row["content_match_ratio"] == 0.95
         assert row["injection_detected"] == 0
 
-    def test_idempotent_save_without_replace_or_ignore(self, mock_persistence_db):
+    def test_conflicting_save_preserves_finalized_run(self, mock_persistence_db):
         save_analysis_run(
             mock_persistence_db,
             analysis_id="run_idempotent",
@@ -408,28 +408,31 @@ class TestRunPersistenceAndG502Compliance:
             created_at="2026-11-01T12:00:00Z",
         )
 
-        save_analysis_run(
-            mock_persistence_db,
-            analysis_id="run_idempotent",
-            provider="test",
-            model_name="test-model",
-            prompt_version="v1.0",
-            tool_calls_log="{}",
-            input_refs="[]",
-            output_json="{}",
-            existence_ref_ratio=0.8,
-            content_match_ratio=0.8,
-            injection_detected=1,
-            temperature=0.0,
-            seed=0,
-            created_at="2026-11-01T12:05:00Z",
-        )
+        # Identical replay preserves the finalized row; changed metrics are a conflict.
+        from forensics.persistence import EvidenceConflictError
+        with pytest.raises(EvidenceConflictError):
+            save_analysis_run(
+                mock_persistence_db,
+                analysis_id="run_idempotent",
+                provider="test",
+                model_name="test-model",
+                prompt_version="v1.0",
+                tool_calls_log="{}",
+                input_refs="[]",
+                output_json="{}",
+                existence_ref_ratio=0.8,
+                content_match_ratio=0.8,
+                injection_detected=1,
+                temperature=0.0,
+                seed=0,
+                created_at="2026-11-01T12:05:00Z",
+            )
 
         row = mock_persistence_db.execute(
             "SELECT content_match_ratio, injection_detected FROM analysis_runs WHERE analysis_id = 'run_idempotent'"
         ).fetchone()
-        assert row["content_match_ratio"] == 0.8
-        assert row["injection_detected"] == 1
+        assert row["content_match_ratio"] == 1.0
+        assert row["injection_detected"] == 0
 
     def test_g502_zero_insert_or_replace_across_all_ai_modules(self):
         ai_dir = Path(__file__).resolve().parents[1] / "forensics" / "ai"

@@ -228,7 +228,9 @@ class TestG502_DatabaseAndEvidenceProtection:
             "results/p2/case-anvil-p1-001/audit_events.jsonl": "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
         }
         for rel_path, expected_sha in protected_manifest.items():
-            full_path = ROOT / rel_path
+            # Historical DBs are intentionally untracked; validate original bytes
+            # at an explicitly supplied read-only evidence root in isolated clones.
+            full_path = Path(os.environ.get("HISTORICAL_EVIDENCE_ROOT", ROOT)) / rel_path
             assert full_path.exists(), f"Missing protected file: {rel_path}"
             actual_sha = hashlib.sha256(full_path.read_bytes()).hexdigest()
             assert actual_sha == expected_sha, (

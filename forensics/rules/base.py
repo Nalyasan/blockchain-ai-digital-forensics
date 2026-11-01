@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping
 
+from forensics.persistence import insert_verified
+
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
@@ -210,29 +212,9 @@ class CalibrationRecord:
         }
 
     def save_to_db(self, conn: sqlite3.Connection) -> None:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO rule_calibrations(
-                calibration_id, rule_id, rule_version, chain_id, asset_id,
-                start_block, end_block, sample_count, percentile, selected_threshold,
-                snapshot_hash, created_at, notes
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                self.calibration_id,
-                self.rule_id,
-                self.rule_version,
-                self.chain_id,
-                self.asset_id,
-                self.start_block,
-                self.end_block,
-                self.sample_count,
-                self.percentile,
-                self.selected_threshold,
-                self.snapshot_hash,
-                self.created_at,
-                self.notes,
-            ),
+        insert_verified(
+            conn, "rule_calibrations", self.to_dict(), ("calibration_id",),
+            replay_metadata=("created_at",),
         )
 
 

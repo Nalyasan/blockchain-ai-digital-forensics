@@ -38,7 +38,7 @@ def run(output):
     try:
         with workspace() as temp:
             work=Path(temp);os.chdir(work)
-            allowed={'SYSTEMROOT','WINDIR','PATH','PATHEXT','COMSPEC','TEMP','TMP','USERPROFILE','HOMEDRIVE','HOMEPATH'}
+            allowed={'SYSTEMROOT','WINDIR','PATH','PATHEXT','COMSPEC','TEMP','TMP','USERPROFILE','HOMEDRIVE','HOMEPATH','FORENSICS_TRUSTED_REPOSITORY'}
             os.environ.clear();os.environ.update({k:v for k,v in saved.items() if k.upper() in allowed})
             os.environ.update(PYTHONUTF8='1',PYTHONDONTWRITEBYTECODE='1',NO_PROXY='*',RPC_SYNTHETIC='true',
                               RPC_LABEL='anvil-2b-local',CONFIRMATIONS='0',RATE_LIMIT_RPS='100',ANCHOR_CHAIN_ID='31337')

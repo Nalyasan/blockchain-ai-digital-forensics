@@ -29,7 +29,13 @@ def _git(args, root, input_data=None):
         raise OSError('GIT_UNAVAILABLE')
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('GIT_')}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0', GIT_NO_REPLACE_OBJECTS='1')
-    return subprocess.run([executable, '-c', 'core.fsmonitor=false', *args], cwd=root, env=env, shell=False,
+    trust_args = []
+    # Explicit process-local trust for a reviewed integration checkout. Never
+    # inherit wildcard Git trust or trust unrelated repositories automatically.
+    trusted = os.environ.get('FORENSICS_TRUSTED_REPOSITORY')
+    if trusted and Path(trusted).is_absolute() and Path(trusted).resolve() == Path(root).resolve():
+        trust_args = ['-c', 'safe.directory=' + Path(root).resolve().as_posix()]
+    return subprocess.run([executable, '-c', 'core.fsmonitor=false', *trust_args, *args], cwd=root, env=env, shell=False,
                           timeout=10, capture_output=True, check=False, input=input_data)
 
 

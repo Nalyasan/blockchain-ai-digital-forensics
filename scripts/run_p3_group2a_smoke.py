@@ -47,7 +47,7 @@ def run_smoke():
             work = Path(folder)
             os.chdir(work)  # Collector dotenv lookup sees only this empty directory.
             allowed = {'SYSTEMROOT', 'WINDIR', 'PATH', 'PATHEXT', 'COMSPEC', 'TEMP', 'TMP',
-                       'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'}
+                       'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'FORENSICS_TRUSTED_REPOSITORY'}
             os.environ.clear()
             os.environ.update({k:v for k,v in saved_env.items() if k.upper() in allowed})
             os.environ.update(PYTHONUTF8='1', NO_PROXY='*', RPC_SYNTHETIC='true',

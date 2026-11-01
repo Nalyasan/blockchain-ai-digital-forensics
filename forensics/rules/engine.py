@@ -3,6 +3,8 @@
 Orchestrates Rules R1–R4, enforces calibration-test window separation,
 handles deterministic alert persistence to SQLite, and provides JSON/CSV export.
 """
+from forensics.persistence import insert_verified
+
 import csv
 import json
 import logging
@@ -171,31 +173,12 @@ class RuleEngine:
         with self.conn:
             for alert in alerts:
                 refs_json = json.dumps(alert.evidence_refs, sort_keys=True)
-                self.conn.execute(
-                    """
-                    INSERT OR REPLACE INTO alerts(
-                        alert_id, rule_id, rule_version, unit_type, unit_key,
-                        asset_id, severity, score, reason, evidence_refs,
-                        window_start, window_end, created_at, status, synthetic
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """,
-                    (
-                        alert.alert_id,
-                        alert.rule_id,
-                        alert.rule_version,
-                        alert.unit_type,
-                        alert.unit_key,
-                        alert.asset_id,
-                        alert.severity,
-                        alert.score,
-                        alert.reason,
-                        refs_json,
-                        alert.window_start,
-                        alert.window_end,
-                        alert.created_at,
-                        alert.status,
-                        int(alert.synthetic),
-                    ),
+                record = alert.to_dict()
+                record["evidence_refs"] = refs_json
+                record["synthetic"] = int(alert.synthetic)
+                insert_verified(
+                    self.conn, "alerts", record, ("alert_id",),
+                    replay_metadata=("created_at",), json_fields=("evidence_refs",),
                 )
                 saved += 1
 

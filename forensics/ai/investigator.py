@@ -26,6 +26,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
 
+from forensics.persistence import insert_verified
+
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext, UsageLimits
 from pydantic_ai.exceptions import UsageLimitExceeded
@@ -337,80 +339,21 @@ def save_analysis_run(
     seed: int,
     created_at: str,
 ) -> None:
-    """Persists an analysis run record into the `analysis_runs` SQLite table.
-
-    Strict G5-02 Invariant:
-    Strictly zero state-mutating replacement or ignore SQL statements.
-    Uses standard atomic SELECT check followed by standard INSERT INTO or UPDATE.
-    """
+    """Finalize a run once; identical replay is allowed, changed results rejected."""
+    record = dict(
+        analysis_id=analysis_id, provider=provider, model_name=model_name,
+        prompt_version=prompt_version, tool_calls_log=tool_calls_log,
+        input_refs=input_refs, output_json=output_json,
+        existence_ref_ratio=existence_ref_ratio, content_match_ratio=content_match_ratio,
+        injection_detected=injection_detected, temperature=temperature, seed=seed,
+        created_at=created_at,
+    )
     ensure_analysis_runs_table(conn)
-
     with conn:
-        cursor = conn.cursor()
-        existing = cursor.execute(
-            "SELECT 1 FROM analysis_runs WHERE analysis_id = ?",
-            (analysis_id,),
-        ).fetchone()
-
-        if existing:
-            cursor.execute(
-                """
-                UPDATE analysis_runs
-                SET provider = ?,
-                    model_name = ?,
-                    prompt_version = ?,
-                    tool_calls_log = ?,
-                    input_refs = ?,
-                    output_json = ?,
-                    existence_ref_ratio = ?,
-                    content_match_ratio = ?,
-                    injection_detected = ?,
-                    temperature = ?,
-                    seed = ?,
-                    created_at = ?
-                WHERE analysis_id = ?
-                """,
-                (
-                    provider,
-                    model_name,
-                    prompt_version,
-                    tool_calls_log,
-                    input_refs,
-                    output_json,
-                    existence_ref_ratio,
-                    content_match_ratio,
-                    injection_detected,
-                    temperature,
-                    seed,
-                    created_at,
-                    analysis_id,
-                ),
-            )
-        else:
-            cursor.execute(
-                """
-                INSERT INTO analysis_runs(
-                    analysis_id, provider, model_name, prompt_version,
-                    tool_calls_log, input_refs, output_json, existence_ref_ratio,
-                    content_match_ratio, injection_detected, temperature, seed, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    analysis_id,
-                    provider,
-                    model_name,
-                    prompt_version,
-                    tool_calls_log,
-                    input_refs,
-                    output_json,
-                    existence_ref_ratio,
-                    content_match_ratio,
-                    injection_detected,
-                    temperature,
-                    seed,
-                    created_at,
-                ),
-            )
+        insert_verified(
+            conn, "analysis_runs", record, ("analysis_id",),
+            json_fields=("tool_calls_log", "input_refs", "output_json"),
+        )
 
 
 # ==============================================================================
