@@ -57,7 +57,24 @@ CREATE TABLE IF NOT EXISTS collector_runs(
 CREATE TABLE IF NOT EXISTS alerts(
   alert_id TEXT PRIMARY KEY, rule_id TEXT, rule_version TEXT, unit_type TEXT, unit_key TEXT,
   asset_id TEXT, severity TEXT, score REAL, reason TEXT, evidence_refs TEXT,
-  window_start TEXT, window_end TEXT, created_at TEXT, status TEXT DEFAULT 'new'
+  window_start TEXT, window_end TEXT, created_at TEXT, status TEXT DEFAULT 'new',
+  synthetic INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS rule_calibrations(
+  calibration_id TEXT PRIMARY KEY,
+  rule_id TEXT NOT NULL,
+  rule_version TEXT NOT NULL,
+  chain_id INT NOT NULL,
+  asset_id TEXT NOT NULL,
+  start_block INT,
+  end_block INT,
+  sample_count INT NOT NULL,
+  percentile REAL,
+  selected_threshold TEXT NOT NULL,
+  snapshot_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS analysis_runs(
@@ -92,6 +109,9 @@ CREATE INDEX IF NOT EXISTS idx_transfers_to ON asset_transfers(to_addr);
 CREATE INDEX IF NOT EXISTS idx_transfers_asset ON asset_transfers(asset_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_rule ON alerts(rule_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_time ON alerts(window_start);
+CREATE INDEX IF NOT EXISTS idx_alerts_asset ON alerts(asset_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_unit ON alerts(unit_type, unit_key);
+CREATE INDEX IF NOT EXISTS idx_calibrations_asset ON rule_calibrations(chain_id, asset_id);
 CREATE INDEX IF NOT EXISTS idx_exports_case ON evidence_exports(case_id);
 """
 
@@ -198,7 +218,13 @@ def migrate_db(c, *, migrate_group3_schema: bool = True):
         c.execute("ALTER TABLE blocks ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 0")
         log.info("Đã migrate: thêm cột synthetic vào bảng blocks")
 
-    # 2. Tạo các bảng và index còn thiếu nếu chưa có
+    # 2. Thêm cột synthetic vào alerts nếu thiếu
+    alert_cols = [r[1] for r in c.execute("PRAGMA table_info(alerts)").fetchall()]
+    if alert_cols and "synthetic" not in alert_cols:
+        c.execute("ALTER TABLE alerts ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 0")
+        log.info("Đã migrate: thêm cột synthetic vào bảng alerts")
+
+    # 3. Tạo các bảng và index còn thiếu nếu chưa có
     c.executescript(SCHEMA)
     if migrate_group3_schema:
         migrate_group3(c)

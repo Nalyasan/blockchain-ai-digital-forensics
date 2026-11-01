@@ -1,0 +1,85 @@
+﻿{
+    "files":  [
+                  {
+                      "path":  "data/forensics.db",
+                      "sha256":  "3f2b0dfc772a96ff6ea57c65807b5b6b9a20fcf74c409c6f222fcff29f1ef001",
+                      "size":  139264
+                  },
+                  {
+                      "path":  "results/p1/anvil_forensics.db",
+                      "sha256":  "50a5872890f2b92f4e1257230a4b1c56a3ec652bb028a054d67494cf15adb525",
+                      "size":  208896
+                  },
+                  {
+                      "path":  "results/p1/continuous_collect_anvil.log",
+                      "sha256":  "23bdbcb627408840cbbe5c6b972a42ce27d6bd0676f69cd455d184f5ccf3c03b",
+                      "size":  6350
+                  },
+                  {
+                      "path":  "results/p1/continuous_forensics.db",
+                      "sha256":  "e12de6f9667a7d1c1e2dd88c821611dff92f7ec6fdd56da7dbf99f0420940fa6",
+                      "size":  147456
+                  },
+                  {
+                      "path":  "results/p1/step_f_anvil_verification.log",
+                      "sha256":  "a3a35ba7741b90535dfcf5a2ae30f625a0901a652e7931640d723dafb2d4fecb",
+                      "size":  8280
+                  },
+                  {
+                      "path":  "results/p2/case-anvil-p1-001/asset_transfers.csv",
+                      "sha256":  "d509c83875a411c514d59228cdc6ac88eb836597ca14809e35502b57a90fa5a1",
+                      "size":  1028
+                  },
+                  {
+                      "path":  "results/p2/case-anvil-p1-001/audit_events.jsonl",
+                      "sha256":  "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+                      "size":  281
+                  },
+                  {
+                      "path":  "results/p2/case-anvil-p1-001/manifest.json",
+                      "sha256":  "964da91bd5fcca0171461ed585dc777ffcccea094800b8a3d81ea76f2952006e",
+                      "size":  2080
+                  },
+                  {
+                      "path":  "results/p2/case-anvil-p1-001/raw_blocks.jsonl",
+                      "sha256":  "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+                      "size":  18311
+                  },
+                  {
+                      "path":  "results/p2/case-anvil-p1-001/timeline.csv",
+                      "sha256":  "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+                      "size":  1576
+                  },
+                  {
+                      "path":  "results/p3/step_p3_anvil_verification.log",
+                      "sha256":  "0b33c0eed228868c11d30c92a6c821faf814bf59085ddec64b7512df551023cb",
+                      "size":  2898
+                  },
+                  {
+                      "path":  "results/p3/case-tampered-t05/asset_transfers.csv",
+                      "sha256":  "a42d75acb660fc455284d2afc8c0bd7ce6cdd8f5f1e8ce2587384acba53022fa",
+                      "size":  1028
+                  },
+                  {
+                      "path":  "results/p3/case-tampered-t05/audit_events.jsonl",
+                      "sha256":  "8ce0a9f8b3686fbd4f242ac6c38e8d0a8ee7aa013d2fb35683ee39c8f311d508",
+                      "size":  281
+                  },
+                  {
+                      "path":  "results/p3/case-tampered-t05/manifest.json",
+                      "sha256":  "078f52e1ded99d70f0a64f035dd5bb5c8f16257d3488b944317740333ca57123",
+                      "size":  2162
+                  },
+                  {
+                      "path":  "results/p3/case-tampered-t05/raw_blocks.jsonl",
+                      "sha256":  "b828fdcd0b61cc0c11236cb1c1d0dddf65fc42b2c9aa7f0bd0ad75b532962d8f",
+                      "size":  18311
+                  },
+                  {
+                      "path":  "results/p3/case-tampered-t05/timeline.csv",
+                      "sha256":  "239c640fe958dca801ae0f96a78b6f14037c0958d55aeae428d76291e2b195e3",
+                      "size":  1576
+                  }
+              ],
+    "baseline":  "b0cda230888a50aadb5acbc460d84ede71f96aad"
+}

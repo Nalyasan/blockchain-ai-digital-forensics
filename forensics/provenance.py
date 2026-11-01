@@ -18,6 +18,14 @@ class GitState:
 def _git(args, root, input_data=None):
     executable = shutil.which('git')
     if not executable:
+        for candidate in (
+            r"C:\Program Files\Git\cmd\git.exe",
+            r"C:\Program Files\Git\bin\git.exe",
+        ):
+            if os.path.exists(candidate):
+                executable = candidate
+                break
+    if not executable:
         raise OSError('GIT_UNAVAILABLE')
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('GIT_')}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0', GIT_NO_REPLACE_OBJECTS='1')

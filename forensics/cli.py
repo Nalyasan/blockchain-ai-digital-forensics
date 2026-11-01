@@ -207,6 +207,64 @@ def cli_migrate_db(args):
         print(f"LỖI migrate-db: {e}", file=sys.stderr)
         return 1
 
+def cli_analyze(args):
+    """Lệnh phân tích phát hiện bất thường bằng Rule Engine (Phase 4)."""
+    from forensics.rules.engine import RuleEngine
+    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    if not os.path.exists(db_file):
+        print(_safe_sanitize(f"LỖI analyze: Database không tồn tại: {db_file}"), file=sys.stderr)
+        return 1
+
+    token_thresholds = None
+    if getattr(args, "token_thresholds", None):
+        tt_val = args.token_thresholds
+        if os.path.exists(tt_val):
+            with open(tt_val, "r", encoding="utf-8") as f:
+                token_thresholds = json.load(f)
+        else:
+            try:
+                token_thresholds = json.loads(tt_val)
+            except Exception as e:
+                print(_safe_sanitize(f"LỖI analyze: Không parse được token-thresholds JSON: {e}"), file=sys.stderr)
+                return 1
+
+    try:
+        with RuleEngine(
+            db_path_or_conn=db_file,
+            chain_id=args.chain_id,
+            token_thresholds=token_thresholds,
+        ) as engine:
+            alerts = engine.run(
+                test_start_block=args.start_block,
+                test_end_block=args.end_block,
+                cal_start_block=args.cal_start_block,
+                cal_end_block=args.cal_end_block,
+                rules=args.rules,
+                persist=args.persist,
+            )
+
+            # Export if requested
+            if args.out:
+                fmt = args.format
+                if not fmt:
+                    fmt = "csv" if str(args.out).lower().endswith(".csv") else "json"
+                if fmt == "csv":
+                    engine.export_csv(alerts, args.out)
+                else:
+                    engine.export_json(alerts, args.out)
+
+            print(f"OK: Hoàn tất phân tích Rule Engine trên chain {args.chain_id}.")
+            print(f"  Số alerts phát hiện: {len(alerts)}")
+            for idx, a in enumerate(alerts[:5], 1):
+                reason_snippet = str(a.reason)[:80]
+                print(f"  [{idx}] Rule: {a.rule_id} | Asset: {a.asset_id} | Unit: {a.unit_type} | Reason: {reason_snippet}...")
+            if len(alerts) > 5:
+                print(f"  ... và {len(alerts) - 5} alerts khác.")
+            return 0
+    except Exception as e:
+        print(_safe_sanitize(f"LỖI analyze: {e}"), file=sys.stderr)
+        return 1
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="python -m forensics.cli",
@@ -305,6 +363,21 @@ def build_parser():
     pmig = sub.add_parser("migrate-db", help="Thực hiện migration cơ sở dữ liệu SQLite lên schema Group 3 một cách chủ động")
     pmig.add_argument("--db", default=None, help="Đường dẫn database SQLite cần migrate")
     pmig.set_defaults(func=cli_migrate_db)
+
+    # 11. analyze
+    pan = sub.add_parser("analyze", help="Phân tích bất thường giao dịch bằng Rule Engine (Rules R1-R4)")
+    pan.add_argument("--db", default=None, help="Đường dẫn database SQLite")
+    pan.add_argument("--chain-id", type=int, default=1, help="Chain ID cần phân tích (mặc định: 1)")
+    pan.add_argument("--start-block", type=int, default=None, help="Block bắt đầu phân tích (test window)")
+    pan.add_argument("--end-block", type=int, default=None, help="Block kết thúc phân tích (test window)")
+    pan.add_argument("--cal-start-block", type=int, default=None, help="Block bắt đầu tập hiệu chỉnh (calibration window)")
+    pan.add_argument("--cal-end-block", type=int, default=None, help="Block kết thúc tập hiệu chỉnh (calibration window)")
+    pan.add_argument("--rules", nargs="+", default=None, help="Danh sách rule cần chạy (large_transfer, high_frequency, fan_in_out, rapid_pass_through)")
+    pan.add_argument("--token-thresholds", default=None, help="File JSON hoặc chuỗi JSON cấu hình ngưỡng cho token ERC-20")
+    pan.add_argument("--out", default=None, help="Đường dẫn file xuất kết quả (.json hoặc .csv)")
+    pan.add_argument("--format", choices=["json", "csv"], default=None, help="Định dạng xuất file")
+    pan.add_argument("--no-persist", action="store_false", dest="persist", default=True, help="Không lưu alerts vào SQLite")
+    pan.set_defaults(func=cli_analyze)
 
     return p
 
