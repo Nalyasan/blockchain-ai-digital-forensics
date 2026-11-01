@@ -263,7 +263,7 @@ def ingest_real_dataset(
     with conn:
         conn.executemany(
             """
-            INSERT OR REPLACE INTO blocks(
+            INSERT OR IGNORE INTO blocks(
                 chain_id, number, hash, parent_hash, block_timestamp, block_time_utc,
                 first_observed_at, collected_at, status, raw_json, raw_sha256, synthetic
             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

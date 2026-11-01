@@ -168,26 +168,53 @@ The rule engine was executed via `scripts/run_real_rules.py` across both non-ove
 
 ## 6. Full Project Regression Results
 
-Regression testing was executed inside the isolated worktree to ensure zero regressions:
+Regression testing was executed inside the isolated worktree to ensure zero regressions across all historical and real-data pipelines:
 
 ### 6.1 Pytest Suite Execution
+
+#### A. Scoped Real Data & Detection Rules Test Suite
 - **Command**:
   ```powershell
   $env:PATH = "C:\Program Files\Git\cmd;D:\Projest\Blockchain\tools\git\cmd;D:\Projest\Blockchain\tools\foundry;" + $env:PATH
   Set-Location "D:\Projest\worktrees\p4_real_integration"
   $env:PYTHONPATH = "D:\Projest\worktrees\p4_real_integration"
-  py -m pytest tests/test_real_data_ingest.py tests/test_real_data_rules.py tests/test_rules.py tests/test_challenger1_adversarial.py -v --basetemp="C:\Users\Naly\p4_lead_tmp"
+  python -m pytest tests/test_real_data_ingest.py tests/test_real_data_rules.py tests/test_rules.py tests/test_challenger1_adversarial.py -v --basetemp="C:\Users\Naly\p4_it2_tmp"
   ```
-- **Result**: **57 passed in 3.73s** (100% pass rate).
+- **Result**: **57 passed in 3.38s** (100% pass rate).
   - `tests/test_real_data_ingest.py`: 8 passed
   - `tests/test_real_data_rules.py`: 10 passed
   - `tests/test_rules.py`: 32 passed
   - `tests/test_challenger1_adversarial.py`: 7 passed
 
+#### B. Phase 3 Group 5 Security QA Regression Suite (`tests/test_p3_group5_security_qa.py`)
+- **Command**:
+  ```powershell
+  python -m pytest tests/test_p3_group5_security_qa.py -v --basetemp="C:\Users\Naly\p4_it2_tmp"
+  ```
+- **Result**: **15 passed in 0.28s** (100% pass rate).
+  - `TestG501_SecurityTestEffectiveness`: 6 passed (signer guard, chain ID guard, manifest integrity, receipt verifier, canonical custody note hash, idempotency claim)
+  - `TestG502_DatabaseAndEvidenceProtection`: 4 passed:
+    * `test_protected_roots_guard_blocks_destructive_paths` PASSED
+    * `test_pre_send_db_check_fails_on_missing_db` PASSED
+    * `test_zero_insert_or_replace_in_codebase` PASSED (verifies zero `INSERT OR REPLACE` statements in any `forensics/*.py` module; strictly compliant with G5-02 invariant)
+    * `test_protected_files_checksums_unmodified` PASSED (verifies all historical sample files and production DB remain byte-for-byte identical)
+  - `TestG503_SecretLeakageAndPrivacy`: 3 passed (log sanitizer redaction, sidecar recovery redaction, canary detector)
+  - `TestG504_CodeHygieneAndLowFindings`: 2 passed (syntax validation across all forensics modules, evidence registry constants)
+
+#### C. Core Onchain Blockers & Evidence Identity Regression Suites
+- **Command**:
+  ```powershell
+  python -m pytest tests/test_onchain_blockers.py tests/test_onchain_guard.py tests/test_evidence_identity.py -v --basetemp="C:\Users\Naly\p4_it2_tmp"
+  ```
+- **Result**: **90 passed in 4.91s** (100% pass rate).
+  - `tests/test_onchain_blockers.py`: 44 passed
+  - `tests/test_onchain_guard.py`: 17 passed
+  - `tests/test_evidence_identity.py`: 29 passed
+
 ### 6.2 Smoke Test Execution
-- **Command**: `py scripts/run_p4_smoke.py`
+- **Command**: `python scripts/run_p4_smoke.py`
   - **Result**: `ALL PHASE 4 SMOKE CHECKS PASSED (5/5)`
-- **Command**: `py scripts/run_real_rules.py`
+- **Command**: `python scripts/run_real_rules.py`
   - **Result**: `ALL REAL DATA DETECTION RULE CHECKS PASSED [100%]` (172 alerts generated)
 
 ### 6.3 Foundry / Forge Smart Contract Suite
@@ -195,7 +222,7 @@ Regression testing was executed inside the isolated worktree to ensure zero regr
   ```powershell
   & "D:\Projest\Blockchain\tools\foundry\forge.exe" test --root contracts
   ```
-- **Result**: **56 passed, 0 failed, 0 skipped** (finished in 24.60ms).
+- **Result**: **56 passed, 0 failed, 0 skipped** (finished in 28.64ms).
   - `EvidenceRegistry_Group4Test`: 25 passed
   - `EvidenceRegistryTest`: 31 passed
 
