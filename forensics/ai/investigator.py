@@ -372,7 +372,10 @@ CURVE_DEFAULT_TX = "0xb676d789bb8b66a08105c844a49c2bcffb400e5c1cfabd4bc30cca4bff
 CURVE_DEFAULT_ADDR = "0x30fb95794a2051abe30a67892b3a1fa73947aee5"
 
 
-def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> FunctionModel:
+def create_offline_forensic_model(
+    max_steps: int = DEFAULT_MAX_TOOL_STEPS,
+    enable_threat_intel: bool = False,
+) -> FunctionModel:
     """Builds a deterministic offline forensic FunctionModel.
 
     Unlike Pydantic AI's synthetic TestModel (which generates dummy 'a' arguments
@@ -427,6 +430,10 @@ def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> Fu
             )
         )
 
+        # Check whether threat intelligence tool is enabled or registered on the agent
+        registered_tool_names = {t.name for t in getattr(info, "function_tools", [])}
+        has_threat_intel = enable_threat_intel or ("tool_get_threat_intel" in registered_tool_names)
+
         # Turn 1: Issue initial discovery tool calls within budget
         if len(called_tools) == 0:
             turn1_calls: list[ToolCallPart] = [
@@ -451,12 +458,15 @@ def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> Fu
                 )
             return ModelResponse(parts=turn1_calls[:bounded_max])
 
-        # Turn 2: Issue targeted transaction and counterparty lookups using Turn 1 evidence
+        # Turn 2: Issue targeted transaction, threat intel, and counterparty lookups using Turn 1 evidence
         rem_budget = bounded_max - len(called_tools)
         if (
             rem_budget > 0
-            and "tool_get_tx" not in called_tools
-            and "tool_get_counterparties" not in called_tools
+            and (
+                "tool_get_tx" not in called_tools
+                or (has_threat_intel and "tool_get_threat_intel" not in called_tools)
+                or "tool_get_counterparties" not in called_tools
+            )
         ):
             alerts_data = (tool_returns.get("tool_get_alerts") or [[]])[0] or []
             timeline_data = (tool_returns.get("tool_get_timeline") or [[]])[0] or []
@@ -488,18 +498,39 @@ def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> Fu
                             break
 
             turn2_calls: list[ToolCallPart] = []
-            if target_tx and rem_budget >= 1:
+            if target_tx and rem_budget >= 1 and "tool_get_tx" not in called_tools:
                 turn2_calls.append(
                     ToolCallPart(tool_name="tool_get_tx", args={"tx_hash": str(target_tx)})
                 )
                 rem_budget -= 1
-            if target_cp_addr and rem_budget >= 1:
+
+            if (
+                has_threat_intel
+                and seed_addr
+                and rem_budget >= 1
+                and "tool_get_threat_intel" not in called_tools
+            ):
+                turn2_calls.append(
+                    ToolCallPart(
+                        tool_name="tool_get_threat_intel",
+                        args={"address": str(seed_addr)},
+                    )
+                )
+                rem_budget -= 1
+
+            if (
+                target_cp_addr
+                and rem_budget >= 1
+                and "tool_get_counterparties" not in called_tools
+            ):
                 turn2_calls.append(
                     ToolCallPart(
                         tool_name="tool_get_counterparties",
                         args={"address": str(target_cp_addr), "limit": 25},
                     )
                 )
+                rem_budget -= 1
+
             if turn2_calls:
                 return ModelResponse(parts=turn2_calls)
 
@@ -841,7 +872,8 @@ class ForensicInvestigator:
             has_custom_tools = getattr(self.model, "call_tools", "all") != "all"
             if not has_custom_output and not has_custom_tools and model is None:
                 self.model = create_offline_forensic_model(
-                    max_steps=self.config.max_tool_steps
+                    max_steps=self.config.max_tool_steps,
+                    enable_threat_intel=self.enable_threat_intel or (self.benchmark_db is not None),
                 )
             elif getattr(self.model, "call_tools", None) == "all":
                 if has_custom_output:

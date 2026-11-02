@@ -1106,9 +1106,10 @@ def collect_missing_range(
 
 
 def get_threat_intel(
-    arg1: Union[sqlite3.Connection, str],
+    arg1: Union[sqlite3.Connection, str, None] = None,
     arg2: Optional[Union[sqlite3.Connection, str]] = None,
     *,
+    address: Optional[str] = None,
     db: Optional[sqlite3.Connection] = None,
     db_path: Optional[Union[str, Path]] = None,
     limit: int = 100,
@@ -1123,8 +1124,9 @@ def get_threat_intel(
     - Sanitized hex address normalization (case-insensitive lowercase matching).
 
     Args:
-        arg1: Target address string, or sqlite3.Connection if passing connection first.
+        arg1: Target address string, or sqlite3.Connection if passing connection first, or None.
         arg2: Target address string if connection passed first, or optional connection.
+        address: Target address string passed as keyword argument.
         db: Strictly read-only connection to benchmark_p6.db.
         db_path: Optional custom path to benchmark database.
         limit: Max number of matching records to return (default: 100, clamped 1..1000).
@@ -1135,17 +1137,21 @@ def get_threat_intel(
     conn: Optional[sqlite3.Connection] = None
     target_address: str = ""
 
-    if isinstance(arg1, sqlite3.Connection):
-        conn = arg1
-        if isinstance(arg2, str):
-            target_address = arg2
+    # Resolve target address: keyword 'address' takes precedence, then arg1 if str, then arg2 if str
+    if address is not None and isinstance(address, str):
+        target_address = address
     elif isinstance(arg1, str):
         target_address = arg1
-        if isinstance(arg2, sqlite3.Connection):
-            conn = arg2
+    elif isinstance(arg2, str):
+        target_address = arg2
 
-    if conn is None and db is not None:
+    # Resolve database connection: keyword 'db' takes precedence, then arg1 if Connection, then arg2 if Connection
+    if db is not None:
         conn = db
+    elif isinstance(arg1, sqlite3.Connection):
+        conn = arg1
+    elif isinstance(arg2, sqlite3.Connection):
+        conn = arg2
 
     if not target_address or not isinstance(target_address, str):
         return []

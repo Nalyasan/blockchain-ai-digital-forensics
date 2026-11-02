@@ -20,10 +20,12 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
 import sqlite3
+from unittest.mock import MagicMock
 import pytest
 
 from forensics.ai.db_readonly import get_readonly_connection
@@ -189,6 +191,24 @@ class TestThreatIntelDirectTool:
 
         assert len(r1) == len(r2) == len(r3)
         assert r1[0]["row_identifier"] == r2[0]["row_identifier"] == r3[0]["row_identifier"]
+
+    def test_get_threat_intel_keyword_arguments(self, benchmark_db_conn):
+        addr = "0x000000000532b45f47779fce440748893b257865"
+
+        # Pattern: address=... with db=...
+        r1 = get_threat_intel(address=addr, db=benchmark_db_conn)
+        # Pattern: address=... with default db path
+        r2 = get_threat_intel(address=addr)
+        # Pattern: positional db, keyword address
+        r3 = get_threat_intel(benchmark_db_conn, address=addr)
+
+        assert len(r1) >= 1
+        assert len(r2) >= 1
+        assert len(r3) >= 1
+        assert r1[0]["address"] == addr
+        assert r2[0]["address"] == addr
+        assert r3[0]["address"] == addr
+        assert r1[0]["row_identifier"] == r3[0]["row_identifier"]
 
     def test_get_threat_intel_default_path_resolution(self):
         # Omitting db should automatically connect strictly read-only to DEFAULT_BENCHMARK_DB_PATH
@@ -359,6 +379,36 @@ class TestForensicInvestigatorThreatIntelIntegration:
         assert "tool_get_threat_intel" in enabled_tools
         assert len(enabled_tools) == 7
 
+    def test_tool_get_threat_intel_agent_dispatch_no_type_error(
+        self, mock_canonical_db, benchmark_db_conn
+    ):
+        """Directly invokes the registered agent tool function to verify zero TypeError on dispatch."""
+        inv = ForensicInvestigator(
+            readonly_db=mock_canonical_db,
+            benchmark_db=benchmark_db_conn,
+            enable_threat_intel=True,
+        )
+        assert "tool_get_threat_intel" in inv.agent._function_toolset.tools
+        tool_fn = inv.agent._function_toolset.tools["tool_get_threat_intel"].function
+
+        ctx = MagicMock()
+        ctx.deps = InvestigationDeps(
+            readonly_db=mock_canonical_db,
+            staging_db=None,
+            tracker=ToolBudgetManager(),
+            analysis_id="test-dispatch-no-typeerror",
+            benchmark_db=benchmark_db_conn,
+        )
+
+        target_addr = "0x000000000532b45f47779fce440748893b257865"
+        records = asyncio.run(tool_fn(ctx, address=target_addr))
+
+        assert isinstance(records, list)
+        assert len(records) > 0
+        assert records[0]["address"] == target_addr.lower()
+        assert "external_label" in records[0]
+        assert records[0]["external_label"]["is_verified"] is False
+
     def test_end_to_end_offline_investigation_with_threat_intel(
         self, mock_canonical_db, benchmark_db_conn
     ):
@@ -368,9 +418,10 @@ class TestForensicInvestigatorThreatIntelIntegration:
             enable_threat_intel=True,
         )
 
+        target_addr = "0x000000000532b45f47779fce440748893b257865"
         res = inv.investigate(
             case_id="euler-threat-screening",
-            query="Investigate euler exploit and cross-reference attacker address against offline threat intel.",
+            query=f"Investigate euler exploit for address {target_addr} and cross-reference attacker address against offline threat intel.",
             benchmark_db=benchmark_db_conn,
         )
 
@@ -379,12 +430,32 @@ class TestForensicInvestigatorThreatIntelIntegration:
         assert res.ref_check_status in ("PASS", "NOT_EVALUATED")
         assert res.has_content_mismatch is False
         assert isinstance(res.output.external_labels, list)
+        assert len(res.output.external_labels) > 0
         assert isinstance(res.output.observed_facts, list)
+        assert len(res.output.observed_facts) > 0
 
-        # Threat intel findings must NEVER be in observed_facts
+        # Verify tool execution in audit log
+        tool_log = (
+            json.loads(res.tool_calls_log)
+            if isinstance(res.tool_calls_log, str)
+            else res.tool_calls_log
+        )
+        called_names = [call.get("tool_name") for call in tool_log.get("calls", [])]
+        assert "get_threat_intel" in called_names
+
+        # Verify external labels integrity and unverified ground truth status
+        for label in res.output.external_labels:
+            assert label.is_verified is False
+            assert label.address_or_tx.lower() == target_addr.lower()
+
+        # Threat intel findings must NEVER be in observed_facts (Field Separation Invariant)
         for fact in res.output.observed_facts:
             assert "forta" not in fact.statement.lower()
             assert "phishing" not in fact.statement.lower()
+            assert "malicious" not in fact.statement.lower()
+            assert "attacker" not in fact.statement.lower()
+            # Verify each fact passes ObservedFact schema validation
+            ObservedFact.model_validate(fact.model_dump())
 
     def test_adversarial_injection_in_threat_intel_metadata(self):
         # Simulate adversarial prompt injection in third-party metadata
