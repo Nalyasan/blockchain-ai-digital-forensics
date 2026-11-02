@@ -210,7 +210,7 @@ def insert_intel_batch(
             "source_commit": batch.source_commit,
             "total_raw_records": batch.total_raw_records,
             "valid_records": batch.valid_records,
-            "rejected_records": batch.rejected_records,
+            "rejected_records": len(batch.rejections) if len(batch.rejections) > 0 else batch.rejected_records,
             "duplicate_records": batch.duplicate_records,
             "ingested_at": current_iso_utc(),
         }
@@ -253,22 +253,6 @@ def insert_intel_batch(
                     rej["rejected_at"],
                 ),
             )
-
-        # Update source summary stats if updated
-        conn.execute(
-            """
-            UPDATE threat_intel_sources
-            SET total_raw_records = ?, valid_records = ?, rejected_records = ?, duplicate_records = ?
-            WHERE source_id = ?
-            """,
-            (
-                batch.total_raw_records,
-                new_inserts,
-                len(batch.rejections),
-                duplicate_inserts,
-                batch.source_id,
-            ),
-        )
 
     return {
         "total": batch.total_raw_records,
