@@ -63,6 +63,7 @@ from forensics.ai.tools import (
     get_alerts,
     get_counterparties,
     get_staging_connection,
+    get_threat_intel,
     get_timeline,
     get_tx,
 )
@@ -271,6 +272,7 @@ class InvestigationDeps:
     tracker: ToolBudgetManager
     analysis_id: str
     custom_block_fetcher: Optional[Callable[[int], dict]] = None
+    benchmark_db: Optional[sqlite3.Connection] = None
 
 
 @dataclass
@@ -507,6 +509,7 @@ def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> Fu
         history_raw = (tool_returns.get("tool_get_address_history") or [[]])[0] or []
         tx_raw = (tool_returns.get("tool_get_tx") or [None])[0]
         counterparties_raw = (tool_returns.get("tool_get_counterparties") or [[]])[0] or []
+        threat_raw = (tool_returns.get("tool_get_threat_intel") or [[]])[0] or []
 
         all_alerts: list[dict[str, Any]] = [
             a for a in (alerts_raw if isinstance(alerts_raw, list) else []) if isinstance(a, dict)
@@ -725,12 +728,29 @@ def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> Fu
                 f"No matching canonical asset transfers were found in the database for case '{case_id}'."
             )
 
+        external_labels: list[dict[str, Any]] = []
+        if isinstance(threat_raw, list):
+            for t_item in threat_raw:
+                if isinstance(t_item, dict):
+                    if "external_label" in t_item and isinstance(t_item["external_label"], dict):
+                        external_labels.append(t_item["external_label"])
+                    else:
+                        external_labels.append({
+                            "source": str(t_item.get("data_source") or "threat_intel_offline"),
+                            "address_or_tx": str(t_item.get("address") or t_item.get("entity_value") or ""),
+                            "category": str(t_item.get("threat_category") or "unclassified").lower(),
+                            "entity_name": t_item.get("threat_sub_tactic"),
+                            "source_url": t_item.get("source_file_path"),
+                            "is_verified": False,
+                            "notes": "Offline threat intel from benchmark_p6.db",
+                        })
+
         out_tool_name = info.output_tools[0].name if info.output_tools else "final_result"
         output_payload = {
             "case_id": case_id,
             "observed_facts": observed_facts,
             "rule_detections": rule_detections,
-            "external_labels": [],
+            "external_labels": external_labels,
             "analyst_interpretations": interpretations,
             "chronological_timeline": timeline_entries,
             "investigative_observations": [
@@ -748,6 +768,11 @@ def create_offline_forensic_model(max_steps: int = DEFAULT_MAX_TOOL_STEPS) -> Fu
                 "tool_steps_used": len(called_tools),
             },
         }
+        if external_labels:
+            output_payload["metadata"]["threat_intel_matches"] = len(external_labels)
+            output_payload["investigative_observations"].append(
+                f"Correlated {len(external_labels)} offline threat intelligence external labels from benchmark dataset."
+            )
         return ModelResponse(
             parts=[ToolCallPart(tool_name=out_tool_name, args=output_payload)]
         )
@@ -779,6 +804,8 @@ class ForensicInvestigator:
         readonly_db: Optional[sqlite3.Connection] = None,
         staging_db: Optional[sqlite3.Connection] = None,
         persistence_db: Optional[sqlite3.Connection] = None,
+        benchmark_db: Optional[sqlite3.Connection] = None,
+        enable_threat_intel: bool = False,
         prompt_version: str = DEFAULT_PROMPT_VERSION,
         system_prompt: Optional[str] = None,
         strict_ref_checker: bool = False,
@@ -793,6 +820,8 @@ class ForensicInvestigator:
         self.readonly_db = readonly_db
         self.staging_db = staging_db
         self.persistence_db = persistence_db
+        self.benchmark_db = benchmark_db
+        self.enable_threat_intel = enable_threat_intel
 
         # Model instantiation
         if model is not None:
@@ -835,6 +864,7 @@ class ForensicInvestigator:
             "get_counterparties": get_counterparties,
             "get_timeline": get_timeline,
             "collect_missing_range": collect_missing_range,
+            "get_threat_intel": get_threat_intel,
         }
 
         # Initialize Pydantic AI Agent
@@ -973,6 +1003,26 @@ class ForensicInvestigator:
                 ctx.deps.tracker,
             )
 
+        if self.benchmark_db is not None or self.enable_threat_intel:
+            @self.agent.tool
+            async def tool_get_threat_intel(
+                ctx: RunContext[InvestigationDeps],
+                address: str,
+            ) -> list[dict[str, Any]]:
+                """Query offline threat intelligence records for a specified address from benchmark_p6.db."""
+                def _dispatch(address):
+                    return get_threat_intel(
+                        address=address,
+                        db=ctx.deps.benchmark_db or self.benchmark_db,
+                    )
+
+                return execute_guarded_tool(
+                    "get_threat_intel",
+                    {"address": address},
+                    {"get_threat_intel": _dispatch},
+                    ctx.deps.tracker,
+                )
+
     def investigate(
         self,
         case_id: str,
@@ -981,6 +1031,7 @@ class ForensicInvestigator:
         readonly_db: Optional[sqlite3.Connection] = None,
         staging_db: Optional[sqlite3.Connection] = None,
         persistence_db: Optional[sqlite3.Connection] = None,
+        benchmark_db: Optional[sqlite3.Connection] = None,
         custom_block_fetcher: Optional[Callable[[int], dict]] = None,
     ) -> InvestigationResult:
         """Executes an end-to-end bounded forensic investigation run.
@@ -1005,6 +1056,7 @@ class ForensicInvestigator:
             effective_staging_db = get_staging_connection()
 
         effective_persist_db = persistence_db or self.persistence_db
+        effective_bench_db = benchmark_db or self.benchmark_db
 
         analysis_id = f"run_{uuid.uuid4().hex[:16]}"
         now_utc = datetime.now(timezone.utc).isoformat()
@@ -1030,6 +1082,7 @@ class ForensicInvestigator:
             tracker=tracker,
             analysis_id=analysis_id,
             custom_block_fetcher=custom_block_fetcher,
+            benchmark_db=effective_bench_db,
         )
 
         usage_limits = get_usage_limits(self.config)

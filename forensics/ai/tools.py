@@ -41,14 +41,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
 
+from forensics.ai.db_readonly import get_readonly_connection
+
 logger = logging.getLogger("forensics.ai.tools")
+
+DEFAULT_BENCHMARK_DB_PATH: Path = Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
 
 __all__ = [
     "AUTHORIZED_TOOLS",
     "CASE_DEFINITIONS",
+    "DEFAULT_BENCHMARK_DB_PATH",
     "MAX_AI_TOOL_STEPS",
     "MAX_BLOCKS_PER_COLLECT",
     "MAX_COLLECT_CALLS_PER_SESSION",
+    "P6_AUTHORIZED_TOOLS",
     "ProductionDatabaseMutationError",
     "RangeLimitExceeded",
     "RULE_ALIASES",
@@ -64,6 +70,7 @@ __all__ = [
     "get_alerts",
     "get_counterparties",
     "get_staging_connection",
+    "get_threat_intel",
     "get_timeline",
     "get_tx",
     "init_staging_tables",
@@ -84,6 +91,8 @@ AUTHORIZED_TOOLS: frozenset[str] = frozenset({
     "get_timeline",
     "collect_missing_range",
 })
+
+P6_AUTHORIZED_TOOLS: frozenset[str] = frozenset(AUTHORIZED_TOOLS | {"get_threat_intel"})
 
 # Canonical rule aliases matching Phase 4 Rule Engine
 RULE_ALIASES: dict[str, str] = {
@@ -1092,6 +1101,139 @@ def collect_missing_range(
 
 
 # ==============================================================================
+# Authorized Tool: get_threat_intel (Offline Benchmark Threat Intelligence)
+# ==============================================================================
+
+
+def get_threat_intel(
+    arg1: Union[sqlite3.Connection, str],
+    arg2: Optional[Union[sqlite3.Connection, str]] = None,
+    *,
+    db: Optional[sqlite3.Connection] = None,
+    db_path: Optional[Union[str, Path]] = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Query offline threat intelligence records for a specified address from benchmark_p6.db.
+
+    Guarantees:
+    - Strictly read-only query mode (PRAGMA query_only = ON, mode=ro&immutable=1, authorizer).
+    - Open World Assumption: Non-matching addresses return an empty list [], NOT marked as benign.
+    - Field Separation: Results are external threat intelligence claims intended for
+      `external_labels` or `metadata`, and MUST NEVER be classified as `observed_facts`.
+    - Sanitized hex address normalization (case-insensitive lowercase matching).
+
+    Args:
+        arg1: Target address string, or sqlite3.Connection if passing connection first.
+        arg2: Target address string if connection passed first, or optional connection.
+        db: Strictly read-only connection to benchmark_p6.db.
+        db_path: Optional custom path to benchmark database.
+        limit: Max number of matching records to return (default: 100, clamped 1..1000).
+
+    Returns:
+        List of matching threat intelligence record dictionaries.
+    """
+    conn: Optional[sqlite3.Connection] = None
+    target_address: str = ""
+
+    if isinstance(arg1, sqlite3.Connection):
+        conn = arg1
+        if isinstance(arg2, str):
+            target_address = arg2
+    elif isinstance(arg1, str):
+        target_address = arg1
+        if isinstance(arg2, sqlite3.Connection):
+            conn = arg2
+
+    if conn is None and db is not None:
+        conn = db
+
+    if not target_address or not isinstance(target_address, str):
+        return []
+
+    norm_addr = target_address.strip().lower()
+    if not (norm_addr.startswith("0x") and len(norm_addr) == 42):
+        return []
+
+    bounded_limit = max(1, min(int(limit), 1000))
+    close_conn = False
+
+    if conn is None:
+        target_path = Path(db_path) if db_path is not None else DEFAULT_BENCHMARK_DB_PATH
+        if not target_path.exists():
+            logger.warning("Benchmark threat intel database not found at: %s", target_path)
+            return []
+        conn = get_readonly_connection(target_path)
+        close_conn = True
+
+    try:
+        cursor = conn.cursor()
+        query = """
+            SELECT entity_value, entity_type, threat_category, threat_sub_tactic,
+                   confidence_score, data_source, source_file_path, source_file_sha256,
+                   row_identifier, raw_metadata_json, ingestion_timestamp
+            FROM threat_intel_records
+            WHERE LOWER(entity_value) = ? AND entity_type IN ('address', 'contract')
+            ORDER BY ingestion_timestamp DESC
+            LIMIT ?
+        """
+        cursor.execute(query, (norm_addr, bounded_limit))
+        rows = cursor.fetchall()
+
+        results: list[dict[str, Any]] = []
+        for r in rows:
+            val = r[0]
+            ent_type = r[1]
+            cat = r[2]
+            sub = r[3]
+            conf = float(r[4]) if r[4] is not None else 1.0
+            src = r[5]
+            src_path = r[6]
+            src_sha = r[7]
+            row_id = r[8]
+            raw_meta = r[9]
+            ing_ts = r[10]
+
+            parsed_meta: Any = None
+            if isinstance(raw_meta, str) and raw_meta.strip():
+                try:
+                    parsed_meta = json.loads(raw_meta)
+                except Exception:
+                    parsed_meta = raw_meta
+
+            record = {
+                "address": val,
+                "entity_type": ent_type,
+                "threat_category": cat,
+                "threat_sub_tactic": sub,
+                "confidence_score": conf,
+                "data_source": src,
+                "source_file_path": src_path,
+                "source_file_sha256": src_sha,
+                "row_identifier": row_id,
+                "raw_metadata": parsed_meta,
+                "ingestion_timestamp": ing_ts,
+                "external_label": {
+                    "source": src,
+                    "address_or_tx": val,
+                    "category": cat.lower() if cat else "unknown",
+                    "entity_name": sub or f"label_{src}",
+                    "source_url": src_path,
+                    "is_verified": False,
+                    "notes": (
+                        f"Offline threat intelligence from {src} (file_sha256: {src_sha[:16]}..., "
+                        f"confidence: {conf}, row: {row_id})"
+                    ),
+                },
+            }
+            results.append(record)
+
+        return results
+    finally:
+        if close_conn and conn is not None:
+            conn.close()
+
+
+# ==============================================================================
 # Security Guardrails & Dispatch Wrapper
 # ==============================================================================
 
@@ -1105,7 +1247,7 @@ def execute_guarded_tool(
     """Dispatches tool execution through security guardrails.
 
     Enforces:
-    - Tool authorization check against AUTHORIZED_TOOLS
+    - Tool authorization check against AUTHORIZED_TOOLS / P6_AUTHORIZED_TOOLS
     - Step budget ceiling (MAX_AI_TOOL_STEPS = 5)
     - Records attempted calls separately from successful calls
     - Structured audit logging for analysis_runs.tool_calls_log
@@ -1113,7 +1255,7 @@ def execute_guarded_tool(
     t0 = time.time()
     step_num = tracker.record_attempt(tool_name, args)
 
-    if tool_name not in AUTHORIZED_TOOLS:
+    if tool_name not in AUTHORIZED_TOOLS and tool_name not in P6_AUTHORIZED_TOOLS:
         err = UnauthorizedToolError(
             f"Tool '{tool_name}' is not authorized. Authorized tools are: "
             f"{', '.join(sorted(AUTHORIZED_TOOLS))}"
