@@ -17,6 +17,10 @@ tools/
 __pycache__/
 *.pyc
 .pytest_cache/
+tmp_pytest/
+.agents/
+.cursor/
+scratch/
 
 # Foundry
 out/
