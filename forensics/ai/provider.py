@@ -402,7 +402,7 @@ def create_model(
             "and offline fallback is disabled."
         )
 
-    if provider_name in ("test", "offline"):
+    if provider_name in ("test", "offline", "none"):
         test_kwargs = dict(kwargs)
         call_tools = test_kwargs.pop("call_tools", cfg.call_tools)
         custom_output_text = test_kwargs.pop(
@@ -426,5 +426,5 @@ def create_model(
 
     raise InvalidProviderError(
         f"Unsupported AI provider: '{cfg.provider}'. "
-        f"Supported providers: 'gemini', 'google', 'test', 'offline', 'function'."
+        f"Supported providers: 'gemini', 'google', 'test', 'offline', 'none', 'function'."
     )
