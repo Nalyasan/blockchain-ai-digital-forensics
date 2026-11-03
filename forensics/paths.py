@@ -4,5 +4,19 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.environ.get('FORENSICS_DATA_DIR', str(PROJECT_ROOT / 'data'))).resolve()
 DATASETS_DIR = PROJECT_ROOT / 'datasets'
+TOOLS_DIR = PROJECT_ROOT / 'tools'
 REAL_P4_DB = DATA_DIR / 'real_p4.db'
 BENCHMARK_DB = DATA_DIR / 'benchmark_p6.db'
+
+
+def get_project_root() -> Path:
+    return PROJECT_ROOT
+
+
+def get_data_dir() -> Path:
+    return Path(os.environ.get('FORENSICS_DATA_DIR', str(PROJECT_ROOT / 'data'))).resolve()
+
+
+def get_tools_dir() -> Path:
+    return PROJECT_ROOT / 'tools'
+

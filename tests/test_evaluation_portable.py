@@ -3,7 +3,8 @@ import sqlite3
 from pathlib import Path
 import pytest
 from forensics.evaluation import confusion, validate_labels, evaluate_database, wilson_review
-from forensics.paths import REAL_P4_DB
+from forensics.paths import REAL_P4_DB, PROJECT_ROOT, get_project_root, get_data_dir, get_tools_dir, TOOLS_DIR
+
 
 def label_doc(labels):
     return {'schema_version':1,'synthetic':False,'labels':[
@@ -50,3 +51,42 @@ def test_wilson_is_not_detection_recall():
     assert r['estimated_precision']==0.8
     assert 0<r['wilson_95'][0]<0.8<r['wilson_95'][1]<1
     assert r['recall'] is None and r['fpr'] is None
+
+
+def test_paths_contract_and_env_override(monkeypatch, tmp_path):
+    assert get_project_root() == PROJECT_ROOT
+    assert get_tools_dir() == TOOLS_DIR == PROJECT_ROOT / 'tools'
+    assert get_data_dir() == PROJECT_ROOT / 'data'
+
+    custom_data = tmp_path / 'custom_data'
+    monkeypatch.setenv('FORENSICS_DATA_DIR', str(custom_data))
+    assert get_data_dir() == custom_data.resolve()
+
+
+def test_fetch_labels_creates_destination_dir(tmp_path):
+    import subprocess
+    import sys
+    label_path = tmp_path / 'source_labels.json'
+    label_path.write_text(json.dumps(label_doc([('tx_unit', '0xabc', True)])), encoding='utf-8')
+    nested_out = tmp_path / 'nested' / 'dir' / 'output.json'
+    assert not nested_out.parent.exists()
+
+    script_path = PROJECT_ROOT / 'scripts' / 'fetch_labels.py'
+    res = subprocess.run([sys.executable, str(script_path), str(label_path), '--out', str(nested_out)],
+                         capture_output=True, text=True)
+    assert res.returncode == 0
+    assert nested_out.exists()
+    data = json.loads(nested_out.read_text(encoding='utf-8'))
+    assert data['schema_version'] == 1
+
+
+def test_generate_benchmark_help_exits_zero_without_output():
+    import subprocess
+    import sys
+    script_path = PROJECT_ROOT / 'scripts' / 'generate_benchmark.py'
+    res = subprocess.run([sys.executable, str(script_path), '--help'],
+                         capture_output=True, text=True)
+    assert res.returncode == 0
+    assert 'usage: generate_benchmark.py' in res.stdout
+    assert 'passed in' not in res.stdout.lower()
+
