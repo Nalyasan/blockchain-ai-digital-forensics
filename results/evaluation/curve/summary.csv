@@ -1,0 +1,11 @@
+unit_type,rule,TP,FP,TN,FN,precision,recall,fpr,f1
+tx_unit,large_transfer,1,0,0,0,1.0,1.0,N/A: No negative instances (TN + FP = 0),1.0
+tx_unit,high_frequency,0,0,0,1,N/A: No positive predictions (TP + FP = 0),0.0,N/A: No negative instances (TN + FP = 0),N/A: Precision or Recall is undefined
+tx_unit,fan_in_out,0,0,0,1,N/A: No positive predictions (TP + FP = 0),0.0,N/A: No negative instances (TN + FP = 0),N/A: Precision or Recall is undefined
+tx_unit,rapid_pass_through,1,0,0,0,1.0,1.0,N/A: No negative instances (TN + FP = 0),1.0
+tx_unit,union,1,0,0,0,1.0,1.0,N/A: No negative instances (TN + FP = 0),1.0
+address_window_unit,large_transfer,0,0,0,5,N/A: No positive predictions (TP + FP = 0),0.0,N/A: No negative instances (TN + FP = 0),N/A: Precision or Recall is undefined
+address_window_unit,high_frequency,0,0,0,5,N/A: No positive predictions (TP + FP = 0),0.0,N/A: No negative instances (TN + FP = 0),N/A: Precision or Recall is undefined
+address_window_unit,fan_in_out,0,0,0,5,N/A: No positive predictions (TP + FP = 0),0.0,N/A: No negative instances (TN + FP = 0),N/A: Precision or Recall is undefined
+address_window_unit,rapid_pass_through,1,0,0,4,1.0,0.2,N/A: No negative instances (TN + FP = 0),0.33333333333333337
+address_window_unit,union,1,0,0,4,1.0,0.2,N/A: No negative instances (TN + FP = 0),0.33333333333333337

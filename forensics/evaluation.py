@@ -39,12 +39,31 @@ def confusion(actual, predicted):
     for key, positive in actual.items():
         counts[('TP' if positive else 'FP') if key in predicted else ('FN' if positive else 'TN')] += 1
     tp, fp, tn, fn = (counts[k] for k in ('TP', 'FP', 'TN', 'FN'))
-    div = lambda a, b: a / b if b else None
-    return {**counts, 'precision': div(tp, tp+fp), 'recall': div(tp, tp+fn),
-            'fpr': div(fp, fp+tn), 'f1': div(2*tp, 2*tp+fp+fn)}
+    
+    if (tp + fp) > 0:
+        precision = tp / (tp + fp)
+    else:
+        precision = "N/A: No positive predictions (TP + FP = 0)"
+
+    if (tp + fn) > 0:
+        recall = tp / (tp + fn)
+    else:
+        recall = "N/A: No positive ground truth labels (TP + FN = 0)"
+
+    if (tn + fp) > 0:
+        fpr = fp / (tn + fp)
+    else:
+        fpr = "N/A: No negative instances (TN + FP = 0)"
+
+    if isinstance(precision, (int, float)) and isinstance(recall, (int, float)) and (precision + recall) > 0:
+        f1 = 2 * precision * recall / (precision + recall)
+    else:
+        f1 = "N/A: Precision or Recall is undefined"
+
+    return {**counts, 'precision': precision, 'recall': recall, 'fpr': fpr, 'f1': f1}
 
 
-def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_size=900):
+def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_size=900, unit_filter=None):
     """Run rules read-only, then evaluate canonical units with explicit labels.
 
     Partial labels produce LABELED_SUBSET_ONLY, never full-cohort accuracy.
@@ -109,15 +128,35 @@ def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_siz
             'status': 'NOT_EVALUATED' if not truth else ('COMPLETE' if len(truth)==len(universe) else 'LABELED_SUBSET_ONLY'),
             'cohort_size': len(universe), 'labeled': len(truth), 'unknown': len(universe)-len(truth),
             'metrics': {g: confusion(truth, predictions[g][kind]) for g in ('large_transfer','high_frequency','fan_in_out','rapid_pass_through','union')} if truth else None}
+    if unit_filter in ('tx_unit', 'address_window_unit'):
+        report['units'] = {unit_filter: report['units'][unit_filter]}
     return report
 
 
 def wilson_review(positive, total):
-    if not 0 <= positive <= total or total <= 0:
+    if total == 0:
+        if positive != 0:
+            raise ValueError('INVALID_REVIEW_COUNTS')
+        return {
+            'reviewed': 0,
+            'true_positive': 0,
+            'estimated_precision': 'N/A: No reviewed sample items (N = 0)',
+            'wilson_95': 'N/A: No reviewed sample items (N = 0)',
+            'recall': None,
+            'fpr': None,
+        }
+    if not 0 <= positive <= total or total < 0:
         raise ValueError('INVALID_REVIEW_COUNTS')
-    z=1.959963984540054
-    p=positive/total; denominator=1+z*z/total
-    center=(p+z*z/(2*total))/denominator
-    margin=z*math.sqrt(p*(1-p)/total+z*z/(4*total*total))/denominator
-    return {'reviewed': total, 'true_positive': positive, 'estimated_precision': p,
-            'wilson_95': [center-margin, center+margin], 'recall': None, 'fpr': None}
+    z = 1.959963984540054
+    p = positive / total
+    denominator = 1 + z * z / total
+    center = (p + z * z / (2 * total)) / denominator
+    margin = z * math.sqrt(p * (1 - p) / total + z * z / (4 * total * total)) / denominator
+    return {
+        'reviewed': total,
+        'true_positive': positive,
+        'estimated_precision': p,
+        'wilson_95': [center - margin, center + margin],
+        'recall': None,
+        'fpr': None,
+    }

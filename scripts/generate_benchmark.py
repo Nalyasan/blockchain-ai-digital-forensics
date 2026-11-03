@@ -1,11 +1,15 @@
 """Run existing R1-R4 synthetic regression fixtures; never report as real accuracy."""
+from __future__ import annotations
+
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import subprocess
 import sys
-from datetime import datetime, timezone
+import tempfile
 import uuid
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -13,7 +17,7 @@ def main():
         '--out',
         type=str,
         default=None,
-        help='Output directory (defaults to run-output/synthetic-<uuid>)',
+        help='Output directory (defaults to temporary directory synthetic-<uuid>)',
     )
     args = parser.parse_args()
 
@@ -21,7 +25,7 @@ def main():
     if args.out:
         out = Path(args.out).resolve()
     else:
-        out = root / 'run-output' / ('synthetic-' + uuid.uuid4().hex[:8])
+        out = Path(tempfile.gettempdir()) / ('synthetic-' + uuid.uuid4().hex[:8])
     out.mkdir(parents=True, exist_ok=True)
 
     cmd = [
@@ -47,6 +51,7 @@ def main():
     print(run.stdout)
     print(out)
     return run.returncode
+
 
 if __name__ == '__main__':
     raise SystemExit(main())
