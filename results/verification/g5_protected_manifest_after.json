@@ -1,0 +1,36 @@
+{
+  "manifest_type": "post_execution",
+  "timestamp_utc": "2026-11-03T23:42:58.958218+00:00",
+  "commit_sha": "caaf532adec55eb83f3e247a91141712753ea0bf",
+  "status": "PASS",
+  "files": [
+    {
+      "path": "data/forensics.db",
+      "expected_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+      "actual_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+      "size_bytes": 139264,
+      "match": true
+    },
+    {
+      "path": "data/real_p4.db",
+      "expected_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+      "actual_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+      "size_bytes": 5947392,
+      "match": true
+    },
+    {
+      "path": "data/benchmark_p6.db",
+      "expected_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+      "actual_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+      "size_bytes": 30175232,
+      "match": true
+    },
+    {
+      "path": ".env",
+      "expected_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+      "actual_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+      "size_bytes": 1032,
+      "match": true
+    }
+  ]
+}

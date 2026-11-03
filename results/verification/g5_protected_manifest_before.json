@@ -1,0 +1,27 @@
+{
+  "manifest_type": "pre_execution",
+  "timestamp_utc": "2026-11-03T23:40:08.965702+00:00",
+  "commit_sha": "caaf532adec55eb83f3e247a91141712753ea0bf",
+  "files": [
+    {
+      "path": "data/forensics.db",
+      "sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+      "size_bytes": 139264
+    },
+    {
+      "path": "data/real_p4.db",
+      "sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+      "size_bytes": 5947392
+    },
+    {
+      "path": "data/benchmark_p6.db",
+      "sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+      "size_bytes": 30175232
+    },
+    {
+      "path": ".env",
+      "sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+      "size_bytes": 1032
+    }
+  ]
+}

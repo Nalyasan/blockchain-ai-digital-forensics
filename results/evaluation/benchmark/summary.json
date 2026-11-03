@@ -1,0 +1,11 @@
+{
+  "mode": "benchmark",
+  "synthetic": true,
+  "chain_id": 1,
+  "real_world_precision": null,
+  "real_world_recall": null,
+  "units": {},
+  "database_sha256": "c7ff724cd214eef57e58a6fbe44dbeb2712c54b035907b2a6279a255c0e80507",
+  "labels_sha256": null,
+  "generated_at": "2026-11-03T23:42:57.974971+00:00"
+}

@@ -1,0 +1,662 @@
+{
+  "schema_version": "1.0.0",
+  "phase": "G5",
+  "title": "Blockchain + AI Digital Forensics P1\u2013P6 Phase G5 Isolated Test Execution and Verification Audit",
+  "audit_timestamp_utc": "2026-11-03T23:40:08.562859+00:00",
+  "execution_duration_sec": 171.36,
+  "overall_status": "PASS",
+  "git_provenance": {
+    "commit_sha": "caaf532adec55eb83f3e247a91141712753ea0bf",
+    "commit_short": "caaf532",
+    "branch": "integration/p1-p6-unified",
+    "checkpoint_tag": "checkpoint-g3-evaluated",
+    "working_tree_clean": true,
+    "worktrees_preserved": [
+      "p4_real_integration",
+      "p5_pydantic_gemini"
+    ]
+  },
+  "environment": {
+    "os_name": "Microsoft Windows 11 Pro",
+    "os_build": "26300",
+    "os_platform": "AMD64",
+    "python_version": "3.13.14",
+    "pytest_version": "9.2.0",
+    "forge_version": "1.8.6",
+    "forge_commit": "6bad0a66de7c83f7b33695044138f0f5fa4c5990",
+    "git_version": "2.56.0.windows.4"
+  },
+  "dependencies": {
+    "total_packages": 102,
+    "pinned_packages": [
+      {
+        "name": "aiofile",
+        "version": "3.12.3"
+      },
+      {
+        "name": "annotated-types",
+        "version": "0.8.0"
+      },
+      {
+        "name": "anthropic",
+        "version": "2.3.0"
+      },
+      {
+        "name": "anyio",
+        "version": "4.16.0"
+      },
+      {
+        "name": "argcomplete",
+        "version": "3.7.2"
+      },
+      {
+        "name": "attrs",
+        "version": "26.1.0"
+      },
+      {
+        "name": "Authlib",
+        "version": "1.9.1"
+      },
+      {
+        "name": "beartype",
+        "version": "0.23.1"
+      },
+      {
+        "name": "cachetools",
+        "version": "7.2.8"
+      },
+      {
+        "name": "caio",
+        "version": "0.12.10"
+      },
+      {
+        "name": "certifi",
+        "version": "2026.10.23"
+      },
+      {
+        "name": "cffi",
+        "version": "2.1.1"
+      },
+      {
+        "name": "charset-normalizer",
+        "version": "3.5.2"
+      },
+      {
+        "name": "click",
+        "version": "8.5.0"
+      },
+      {
+        "name": "colorama",
+        "version": "0.4.6"
+      },
+      {
+        "name": "cryptography",
+        "version": "50.0.2"
+      },
+      {
+        "name": "distro",
+        "version": "1.9.0"
+      },
+      {
+        "name": "dnspython",
+        "version": "2.9.1"
+      },
+      {
+        "name": "docstring_parser",
+        "version": "0.18.0"
+      },
+      {
+        "name": "email-validator",
+        "version": "2.3.0"
+      },
+      {
+        "name": "exceptiongroup",
+        "version": "1.3.1"
+      },
+      {
+        "name": "executing",
+        "version": "2.3.0"
+      },
+      {
+        "name": "fastmcp-slim",
+        "version": "4.1.4"
+      },
+      {
+        "name": "genai-prices",
+        "version": "0.2.1"
+      },
+      {
+        "name": "google-auth",
+        "version": "2.62.0"
+      },
+      {
+        "name": "google-genai",
+        "version": "2.34.0"
+      },
+      {
+        "name": "googleapis-common-protos",
+        "version": "1.76.0"
+      },
+      {
+        "name": "griffelib",
+        "version": "2.4.1"
+      },
+      {
+        "name": "h11",
+        "version": "0.16.0"
+      },
+      {
+        "name": "httpcore",
+        "version": "1.0.9"
+      },
+      {
+        "name": "httpcore2",
+        "version": "2.16.0"
+      },
+      {
+        "name": "httpx",
+        "version": "0.28.1"
+      },
+      {
+        "name": "httpx2",
+        "version": "2.16.0"
+      },
+      {
+        "name": "idna",
+        "version": "3.20"
+      },
+      {
+        "name": "iniconfig",
+        "version": "2.3.1"
+      },
+      {
+        "name": "jiter",
+        "version": "0.18.0"
+      },
+      {
+        "name": "joserfc",
+        "version": "1.7.7"
+      },
+      {
+        "name": "jsonschema",
+        "version": "4.26.0"
+      },
+      {
+        "name": "jsonschema-specifications",
+        "version": "2025.9.1"
+      },
+      {
+        "name": "logfire",
+        "version": "5.4.0"
+      },
+      {
+        "name": "logfire-api",
+        "version": "5.4.0"
+      },
+      {
+        "name": "logfire-sdk",
+        "version": "5.4.0"
+      },
+      {
+        "name": "markdown-it-py",
+        "version": "4.2.0"
+      },
+      {
+        "name": "mcp",
+        "version": "2.3.0"
+      },
+      {
+        "name": "mcp-types",
+        "version": "2.3.0"
+      },
+      {
+        "name": "mdurl",
+        "version": "0.1.2"
+      },
+      {
+        "name": "openai",
+        "version": "3.42.0"
+      },
+      {
+        "name": "opentelemetry-api",
+        "version": "1.45.2"
+      },
+      {
+        "name": "opentelemetry-exporter-http-transport",
+        "version": "0.66b2"
+      },
+      {
+        "name": "opentelemetry-exporter-otlp-common",
+        "version": "0.66b2"
+      },
+      {
+        "name": "opentelemetry-exporter-otlp-proto-common",
+        "version": "1.45.2"
+      },
+      {
+        "name": "opentelemetry-exporter-otlp-proto-http",
+        "version": "1.45.2"
+      },
+      {
+        "name": "opentelemetry-instrumentation",
+        "version": "0.66b2"
+      },
+      {
+        "name": "opentelemetry-instrumentation-httpx",
+        "version": "0.66b2"
+      },
+      {
+        "name": "opentelemetry-proto",
+        "version": "1.45.2"
+      },
+      {
+        "name": "opentelemetry-sdk",
+        "version": "1.45.2"
+      },
+      {
+        "name": "opentelemetry-semantic-conventions",
+        "version": "0.66b2"
+      },
+      {
+        "name": "opentelemetry-util-http",
+        "version": "0.66b2"
+      },
+      {
+        "name": "packaging",
+        "version": "26.3"
+      },
+      {
+        "name": "pip",
+        "version": "26.1.2"
+      },
+      {
+        "name": "platformdirs",
+        "version": "4.14.2"
+      },
+      {
+        "name": "pluggy",
+        "version": "1.7.0"
+      },
+      {
+        "name": "prompt_toolkit",
+        "version": "3.0.53"
+      },
+      {
+        "name": "protobuf",
+        "version": "7.36.2"
+      },
+      {
+        "name": "py-key-value-aio",
+        "version": "0.4.6"
+      },
+      {
+        "name": "pyasn1",
+        "version": "0.6.5"
+      },
+      {
+        "name": "pyasn1_modules",
+        "version": "0.4.2"
+      },
+      {
+        "name": "pycparser",
+        "version": "3.12"
+      },
+      {
+        "name": "pydantic",
+        "version": "2.14.2"
+      },
+      {
+        "name": "pydantic-ai",
+        "version": "2.64.0"
+      },
+      {
+        "name": "pydantic-ai-slim",
+        "version": "2.64.0"
+      },
+      {
+        "name": "pydantic_core",
+        "version": "2.50.2"
+      },
+      {
+        "name": "pydantic-evals",
+        "version": "2.64.0"
+      },
+      {
+        "name": "pydantic-graph",
+        "version": "2.64.0"
+      },
+      {
+        "name": "pydantic-settings",
+        "version": "2.16.2"
+      },
+      {
+        "name": "Pygments",
+        "version": "2.21.0"
+      },
+      {
+        "name": "PyJWT",
+        "version": "2.15.1"
+      },
+      {
+        "name": "pymupdf",
+        "version": "1.28.2"
+      },
+      {
+        "name": "pyperclip",
+        "version": "1.11.0"
+      },
+      {
+        "name": "pytest",
+        "version": "9.2.0"
+      },
+      {
+        "name": "python-dotenv",
+        "version": "1.2.4"
+      },
+      {
+        "name": "python-multipart",
+        "version": "0.0.33"
+      },
+      {
+        "name": "pywin32",
+        "version": "312"
+      },
+      {
+        "name": "PyYAML",
+        "version": "6.0.3"
+      },
+      {
+        "name": "referencing",
+        "version": "0.37.0"
+      },
+      {
+        "name": "regex",
+        "version": "2026.9.29"
+      },
+      {
+        "name": "requests",
+        "version": "2.34.2"
+      },
+      {
+        "name": "rich",
+        "version": "15.0.0"
+      },
+      {
+        "name": "rpds-py",
+        "version": "2026.9.1"
+      },
+      {
+        "name": "sniffio",
+        "version": "1.3.1"
+      },
+      {
+        "name": "sse-starlette",
+        "version": "3.6.0"
+      },
+      {
+        "name": "starlette",
+        "version": "1.10.0"
+      },
+      {
+        "name": "tenacity",
+        "version": "9.1.4"
+      },
+      {
+        "name": "tiktoken",
+        "version": "0.14.0"
+      },
+      {
+        "name": "truststore",
+        "version": "0.10.5"
+      },
+      {
+        "name": "typing_extensions",
+        "version": "4.16.0"
+      },
+      {
+        "name": "typing-inspection",
+        "version": "0.4.4"
+      },
+      {
+        "name": "urllib3",
+        "version": "2.8.0"
+      },
+      {
+        "name": "uvicorn",
+        "version": "0.54.0"
+      },
+      {
+        "name": "wcwidth",
+        "version": "0.9.4"
+      },
+      {
+        "name": "websockets",
+        "version": "17.4"
+      },
+      {
+        "name": "wrapt",
+        "version": "2.5.2"
+      }
+    ],
+    "core_packages": {
+      "cryptography": "50.0.2",
+      "pydantic": "2.14.2",
+      "pydantic_ai": "2.64.0",
+      "pytest": "9.2.0",
+      "python_dotenv": "1.2.4",
+      "requests": "2.34.2"
+    }
+  },
+  "execution_commands": [
+    {
+      "step_id": "STEP_01",
+      "name": "Pre-flight Environment Initialization",
+      "command_line": "Stop-Process -Name anvil; Set-Item env:FORENSICS_OFFLINE 1",
+      "exit_code": 0,
+      "duration_sec": 0.05,
+      "status": "PASS",
+      "log_anchor": "STEP 01: PRE-FLIGHT ENVIRONMENT INITIALIZATION"
+    },
+    {
+      "step_id": "STEP_02",
+      "name": "Pre-Execution Evidence Hash Manifest",
+      "command_line": "Compute-SHA256 -Files canonical_evidence",
+      "exit_code": 0,
+      "duration_sec": 0.15,
+      "status": "PASS",
+      "log_anchor": "STEP 02: PRE-EXECUTION EVIDENCE INTEGRITY SNAPSHOT"
+    },
+    {
+      "step_id": "STEP_03",
+      "name": "Foundry Forge Smart Contract Suite",
+      "command_line": "tools\\foundry\\forge.exe test --root contracts",
+      "exit_code": 0,
+      "duration_sec": 0.725,
+      "status": "PASS",
+      "log_anchor": "STEP 03: FOUNDRY FORGE SMART CONTRACT TEST SUITE"
+    },
+    {
+      "step_id": "STEP_04",
+      "name": "Python Pytest Full Suite Execution",
+      "command_line": "python -m pytest tests --basetemp=../tmp_pytest_workerG5 -v -rs",
+      "exit_code": 0,
+      "duration_sec": 167.837,
+      "status": "PASS",
+      "log_anchor": "STEP 04: FULL PYTEST ISOLATED SUITE EXECUTION"
+    },
+    {
+      "step_id": "STEP_05",
+      "name": "Euler Incident Evaluation Replay",
+      "command_line": "python scripts/evaluate.py --mode incident --data data/real_p4.db --incident euler --unit all --output results/evaluation/euler",
+      "exit_code": 0,
+      "duration_sec": 0.191,
+      "status": "PASS",
+      "log_anchor": "STEP 05: EMPIRICAL INCIDENT EVALUATION (EULER DAI)"
+    },
+    {
+      "step_id": "STEP_06",
+      "name": "Curve Incident Evaluation Replay",
+      "command_line": "python scripts/evaluate.py --mode incident --data data/real_p4.db --incident curve --unit all --output results/evaluation/curve",
+      "exit_code": 0,
+      "duration_sec": 0.148,
+      "status": "PASS",
+      "log_anchor": "STEP 06: EMPIRICAL INCIDENT EVALUATION (CURVE ALETH)"
+    },
+    {
+      "step_id": "STEP_07",
+      "name": "Benchmark Regression Evaluation",
+      "command_line": "python scripts/evaluate.py --mode benchmark --data data/benchmark_p6.db --output results/evaluation/benchmark",
+      "exit_code": 0,
+      "duration_sec": 0.111,
+      "status": "PASS",
+      "log_anchor": "STEP 07: BENCHMARK REGRESSION EVALUATION"
+    },
+    {
+      "step_id": "STEP_08",
+      "name": "Phase 4 Rule Engine Smoke Suite",
+      "command_line": "python scripts/run_p4_smoke.py",
+      "exit_code": 0,
+      "duration_sec": 0.516,
+      "status": "PASS",
+      "log_anchor": "STEP 08: PHASE 4 RULE ENGINE INTEGRATION SMOKE"
+    },
+    {
+      "step_id": "STEP_09",
+      "name": "CLI Interface Smoke Suite",
+      "command_line": "python {collector,fetch_labels,generate_benchmark,run_real_rules}.py --help",
+      "exit_code": 0,
+      "duration_sec": 0.45,
+      "status": "PASS",
+      "log_anchor": "STEP 09: CLI INTERFACE SMOKE SUITE"
+    },
+    {
+      "step_id": "STEP_10",
+      "name": "Post-Execution Evidence Hash & Bitwise Verification",
+      "command_line": "Compare-SHA256 -PreManifest g5_protected_manifest_before.json",
+      "exit_code": 0,
+      "duration_sec": 0.15,
+      "status": "PASS",
+      "log_anchor": "STEP 10: POST-EXECUTION EVIDENCE INTEGRITY SNAPSHOT & COMPARISON"
+    },
+    {
+      "step_id": "STEP_11",
+      "name": "Redaction Verification Audit",
+      "command_line": "Scan-Artifacts -Patterns leak_patterns",
+      "exit_code": 0,
+      "duration_sec": 0.05,
+      "status": "PASS",
+      "log_anchor": "STEP 11: REDACTION VERIFICATION AUDIT"
+    }
+  ],
+  "test_outcomes": {
+    "total_tests_across_all_suites": 1161,
+    "total_passed": 1160,
+    "total_failed": 0,
+    "total_skipped": 1,
+    "suites": {
+      "forge_smart_contracts": {
+        "total": 56,
+        "passed": 56,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 725.0
+      },
+      "python_pytest_full": {
+        "total": 1105,
+        "passed": 1104,
+        "failed": 0,
+        "skipped": 1,
+        "duration_sec": 167.837,
+        "skipped_details": [
+          {
+            "test_id": "tests/test_p5_real_incidents.py::TestLiveGeminiSmokeConditional::test_live_gemini_flash_smoke",
+            "reason": "LIVE_GEMINI_PENDING: Neither GOOGLE_API_KEY nor GEMINI_API_KEY is configured in environment.",
+            "classification": "AUTHORIZED_OFFLINE_CONDITIONAL_SKIP"
+          }
+        ]
+      }
+    }
+  },
+  "canonical_evidence_manifest": {
+    "bitwise_integrity_status": "PASS",
+    "total_files_checked": 4,
+    "files": [
+      {
+        "path": "data/forensics.db",
+        "size_bytes": 139264,
+        "expected_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "pre_test_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "post_test_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "match": true
+      },
+      {
+        "path": "data/real_p4.db",
+        "size_bytes": 5947392,
+        "expected_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "pre_test_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "post_test_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "match": true
+      },
+      {
+        "path": "data/benchmark_p6.db",
+        "size_bytes": 30175232,
+        "expected_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "pre_test_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "post_test_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "match": true
+      },
+      {
+        "path": ".env",
+        "size_bytes": 1032,
+        "expected_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "pre_test_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "post_test_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "match": true
+      }
+    ]
+  },
+  "redaction_verification": {
+    "scan_verdict": "CLEAN",
+    "artifacts_scanned": [
+      "results/verification/g5_isolated_test_summary.json",
+      "results/verification/g5_verification_log.txt"
+    ],
+    "leak_count": 0,
+    "patterns_checked": [
+      "alch_[A-Za-z0-9_-]{20,}",
+      "***REDACTED_ETHERSCAN_KEY***",
+      "AIza[0-9A-Za-z-_]{35}"
+    ]
+  },
+  "live_prerequisites_status": {
+    "gemini_ai_reasoning": {
+      "status": "PENDING_KEY_CONFIGURATION",
+      "api_key_configured": false,
+      "current_provider": "none",
+      "remaining_prerequisite": "Configure GOOGLE_API_KEY or GEMINI_API_KEY in environment or .env for live Gemini Flash model inference."
+    },
+    "sepolia_onchain_anchoring": {
+      "status": "PENDING_DEPLOYMENT_AND_KEYSTORE",
+      "rpc_url_configured": true,
+      "contract_deployed": false,
+      "wallet_funded": false,
+      "remaining_prerequisite": "Deploy EvidenceRegistry to Sepolia, set EVIDENCE_REGISTRY_ADDRESS, configure Cast keystore with funded account."
+    },
+    "threat_intel_live_sync": {
+      "status": "OFFLINE_LOCAL_CACHE",
+      "remaining_prerequisite": "Configure authoritative threat intel endpoints and unset FORENSICS_OFFLINE for live feed sync."
+    }
+  },
+  "production_readiness_assessment": {
+    "verdict": "OFFLINE_TESTING_VERIFIED_PRODUCTION_PREREQUISITES_REMAIN",
+    "rule_5_disclaimer": "In strict compliance with Rule 5, 100% test pass rate confirms offline functional correctness of P1\u2013P6 modules but does not constitute production deployment readiness. Live Sepolia network anchoring and Gemini AI inference require operational keys and funded accounts.",
+    "acceptance_gates_satisfied": [
+      "Gate G0: Data Preservation & Backup (VERIFIED)",
+      "Gate G1: Unified Codebase Integration (VERIFIED)",
+      "Gate G2: Functional Bug Fixing P1\u2013P6 (VERIFIED)",
+      "Gate G3: Empirical Evaluation & Metric Engine (VERIFIED)",
+      "Gate G4: Benchmark Execution & Latency Profiling (VERIFIED)",
+      "Gate G5: Isolated Testing & Verification Logging (VERIFIED)"
+    ]
+  }
+}

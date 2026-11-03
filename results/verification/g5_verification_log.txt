@@ -1,0 +1,250 @@
+================================================================================
+BLOCKCHAIN + AI FORENSICS P1–P6: PHASE G5 ISOLATED VERIFICATION LOG
+================================================================================
+Timestamp (UTC):    2026-11-03T23:40:08.562859+00:00
+Host Environment:   Microsoft Windows 11 Pro (Build 26300) [AMD64]
+Git Baseline Commit: caaf532adec55eb83f3e247a91141712753ea0bf (integration/p1-p6-unified)
+Target Checkpoint:  checkpoint-g3-evaluated
+Integrity Mode:     development (strict offline isolation)
+Redaction Status:   ACTIVE (Zero credentials or private keys logged)
+================================================================================
+
+[STEP 01: PRE-FLIGHT ENVIRONMENT INITIALIZATION]
+Timestamp: 2026-11-03T23:40:08.940307+00:00
+Command:   Stop-Process -Name anvil -ErrorAction SilentlyContinue; $env:FORENSICS_OFFLINE='1'; $env:AI_PROVIDER='none'; $env:ANCHOR_CHAIN_ID='31337'; $env:ANCHOR_RPC_URL='http://127.0.0.1:8545'; $env:INTEGRATION_NO_ACL_CHANGES='1'; $env:PYTHONUTF8='1'
+Exit Code: 0
+Duration:  0.05s
+Output Excerpt:
+  Environment variables initialized. Orphaned Anvil processes terminated.
+Status:    PASS
+
+[STEP 02: PRE-EXECUTION EVIDENCE INTEGRITY SNAPSHOT]
+Timestamp: 2026-11-03T23:40:08.966034+00:00
+Command:   Get-FileHash data/forensics.db, data/real_p4.db, data/benchmark_p6.db, .env
+Exit Code: 0
+Duration:  0.15s
+Output Excerpt:
+  Artifacts:
+    - data/forensics.db: 3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001 (139264 B) [MATCH]
+    - data/real_p4.db: 6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97 (5947392 B) [MATCH]
+    - data/benchmark_p6.db: C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507 (30175232 B) [MATCH]
+    - .env: C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C (1032 B) [MATCH]
+  Status: PASS (Bitwise Match 4/4)
+Status:    PASS
+
+[STEP 03: FOUNDRY FORGE SMART CONTRACT TEST SUITE]
+Timestamp: 2026-11-03T23:40:08.966059+00:00
+Command:   D:\Projest\Blockchain\tools\foundry\forge.exe test --root contracts
+Exit Code: 0
+Duration:  0.725s
+Output Excerpt:
+  No files changed, compilation skipped
+  
+  Ran 25 tests for test/EvidenceRegistry_Group4.t.sol:EvidenceRegistry_Group4Test
+  [PASS] test_CustodyPagination_EmptyHistory() (gas: 294664)
+  [PASS] test_CustodyPagination_EvidenceNotFoundReverts() (gas: 27559)
+  [PASS] test_CustodyPagination_ExactMaxLimit() (gas: 284250)
+  [PASS] test_CustodyPagination_LimitZero() (gas: 449224)
+  [PASS] test_CustodyPagination_MatchesFullHistory() (gas: 1568069)
+  [PASS] test_CustodyPagination_MultipleEventsAndPages() (gas: 1147664)
+  [PASS] test_CustodyPagination_OffsetBeyondTotal() (gas: 449239)
+  [PASS] test_CustodyPagination_SingleEvent() (gas: 474764)
+  [PASS] test_CustodyPagination_ViewDoesNotModifyState() (gas: 500015)
+  [PASS] test_RevertIf_CustodyPagination_LimitExceedsMax() (gas: 289608)
+  [PASS] test_RevertIf_UriContainsControlChar() (gas: 44353)
+  [PASS] test_RevertIf_UriContainsDelChar() (gas: 44358)
+  [PASS] test_RevertIf_UriContainsMultiByteUtf8() (gas: 44626)
+  [PASS] test_RevertIf_UriContainsNewline() (gas: 44309)
+  [PASS] test_RevertIf_UriContainsNonAsciiHighByte() (gas: 44336)
+  [PASS] test_RevertIf_UriContainsNullByte() (gas: 44274)
+  [PASS] test_RevertIf_UriContainsTab() (gas: 44310)
+  [PASS] test_RevertIf_UriExceeds256Bytes_257Bytes() (gas: 75579)
+  [PASS] test_RevertIf_UriMissingPrefix_Http() (gas: 36009)
+  [PASS] test_RevertIf_UriMissingPrefix_RawPath() (gas: 35904)
+  [PASS] test_RevertIf_UriPrefixCaseSensitive_MixedCase() (gas: 36165)
+  [PASS] test_RevertIf_UriPrefixCaseSensitive_Uppercase() (gas: 36208)
+  [PASS] test_RevertIf_UriPrefixOnly() (gas: 41226)
+  [PASS] test_RevertIf_UriPrefixWhitespaceOnlyRef() (gas: 42122)
+  [PASS] test_ValidUri_Exact256Bytes() (gas: 554475)
+  Suite result: ok. 25 passed; 0 failed; 0 skipped; finished in 6.74ms (24.07ms CPU time)
+  
+  Ran 31 tests for test/EvidenceRegistry.t.sol:EvidenceRegistryTest
+  [PASS] testFuzz_RegisterEvidence(bytes32,bytes32,uint8) (runs: 256, μ: 353272, ~: 277184)
+  [PASS] test_AcceptOwnership_GrantsNewOwnerAndRevokesOldOwner() (gas: 447344)
+  [PASS] test_AcceptOwnership_StrangerReverts() (gas: 86320)
+  [PASS] test_CancelOwnershipTransfer_NoPending_Reverts() (gas: 34289)
+  [PASS] test_CancelOwnershipTransfer_StrangerReverts() (gas: 86272)
+  [PASS] test_CancelOwnershipTransfer_Success() (gas: 143977)
+  [PASS] test_CustodyRecord_DetailedFieldsAndOrdering() (gas: 629222)
+  [PASS] test_DuplicateManifestHashReverts() (gas: 317823)
+  [PASS] test_EventsEmittedCorrectly() (gas: 508342)
+  [PASS] test_GetCustodyHistory_NonExistent_Reverts() (gas: 14393)
+  [PASS] test_GetEvidence_NonExistent_Reverts() (gas: 29588)
+  [PASS] test_InitialState() (gas: 41407)
+  [PASS] test_OldOwner_CannotRecordCustodyAfterTransfer() (gas: 415883)
+  [PASS] test_OldOwner_CannotRegisterAfterTransfer() (gas: 144630)
+  [PASS] test_RecordCustody_EvidenceNotFound_Before_ZeroValue() (gas: 36893)
+  [PASS] test_RegisterEvidenceSuccess() (gas: 321920)
+  [PASS] test_RevokedInvestigatorCannotRecordCustody() (gas: 386769)
+  [PASS] test_SeparateCustodyHistories() (gas: 984890)
+  [PASS] test_StrangerCannotRecordCustody() (gas: 310096)
+Status:    PASS
+
+[STEP 04: FULL PYTEST ISOLATED SUITE EXECUTION]
+Timestamp: 2026-11-03T23:40:09.691557+00:00
+Command:   C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe -m pytest tests --basetemp=../tmp_pytest_workerG5 -v -rs
+Exit Code: 0
+Duration:  167.837s
+Output Excerpt:
+  ============================= test session starts =============================
+  platform win32 -- Python 3.13.14, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe
+  cachedir: .pytest_cache
+  rootdir: D:\Projest\Blockchain
+  configfile: pytest.ini
+  plugins: anyio-4.16.0, logfire-sdk-5.4.0, platformdirs-4.14.2
+  collecting ... collected 1105 items
+  
+  tests/test_adversarial_adapters.py::TestAdversarialCSV::test_formula_injection_payloads_neutralized PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialCSV::test_formula_injection_in_address_field_rejected PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialCSV::test_malformed_rows_and_boundary_conditions PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialCSV::test_non_hex_addresses_rejected PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialCSV::test_real_forta_csv_datasets_parse_cleanly PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialJSON::test_invalid_date_strings_handled_gracefully PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialJSON::test_missing_fields_nulls_and_malformed_objects PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialJSON::test_formula_injection_in_comment_neutralized PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialJSON::test_non_list_root_and_syntax_errors PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialJSON::test_real_mew_darklist_dataset_parses_cleanly PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialExcel::test_openxml_fallback_fidelity_ptxphish PASSED [  0%]
+  tests/test_adversarial_adapters.py::TestAdversarialExcel::test_openxml_fallback_fidelity_initial_address PASSED [  1%]
+  tests/test_adversarial_adapters.py::TestAdversarialExcel::test_simulated_absent_openpyxl PASSED [  1%]
+  tests/test_adversarial_adapters.py::TestAdversarialExcel::test_hyperlinks_are_inert_strings PASSED [  1%]
+  tests/test_adversarial_adapters.py::TestAdversarialExcel::test_numeric_and_scientific_address_recovery PASSED [  1%]
+  tests/test_adversarial_adapters.py::TestAdversarialExcel::test_initial_address_tx_tatal_aliasing PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialConcurrency::test_concurrent_threads_reading_all_canonical_tables PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialConcurrency::test_high_thread_volume_100_threads PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialConcurrency::test_unexhausted_cursor_does_not_block_concurrent_readers PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialConcurrency::test_thread_churn_rapid_open_close PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialConcurrency::test_cross_thread_connection_sharing_is_safely_prevented PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialConcurrency::test_multiprocess_concurrency PASSED [  1%]
+  tests/test_adversarial_db_concurrency.py::TestLockFileInvariants::test_lock_files_never_created_in_real_p4_data_dir PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestLockFileInvariants::test_immutable_prevents_wal_and_shm_even_on_wal_configured_db PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_relative_path_resolution PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_directory_path_raises_operational_error PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_empty_string_path_raises_operational_error PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_empty_zero_byte_database_file PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_corrupt_database_file_raises_operational_error PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_spaces_and_unicode_in_path PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_malicious_or_corrupt_uri_strings_fail_closed PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestPathAndCorruptFileHandling::test_invalid_type_raises_type_error PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[/* harmless comment */ INSERT INTO alerts (alert_id) VALUES ('evil')] PASSED [  2%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[-- harmless comment\nINSERT INTO alerts (alert_id) VALUES ('evil')] PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[/* multi \n line \n comment */ UPDATE alerts SET severity = 'low'] PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[\n\t\r  DELETE FROM alerts WHERE alert_id = '1'] PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[; INSERT INTO alerts (alert_id) VALUES ('evil')] PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[WITH del AS (DELETE FROM alerts RETURNING *) SELECT * FROM del;] PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_sql_bypass_attempts_raise_operational_error[WITH ins AS (INSERT INTO alerts (alert_id) VALUES ('evil') RETURNING *) SELECT * FROM ins;] PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_pragma_mutation_attempts_fail_or_are_noop PASSED [  3%]
+  tests/test_adversarial_db_concurrency.py::TestAdversarialSQLBypass::test_database_remains_unmutated_after_attacks PASSED [  3%]
+  tests/test_adversarial_m2.py::TestEVM256BitArithmetic::test_uint256_max_exact_value PASSED [  3%]
+Status:    PASS
+
+[STEP 05: EMPIRICAL INCIDENT EVALUATION (EULER DAI)]
+Timestamp: 2026-11-03T23:42:57.532552+00:00
+Command:   C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/evaluate.py --mode incident --data data/real_p4.db --incident euler --unit all --output results/evaluation/euler
+Exit Code: 0
+Duration:  0.191s
+Output Excerpt:
+  Generated: D:\Projest\Blockchain\results\evaluation\euler\summary.json and D:\Projest\Blockchain\results\evaluation\euler\summary.csv
+Status:    PASS
+
+[STEP 06: EMPIRICAL INCIDENT EVALUATION (CURVE ALETH)]
+Timestamp: 2026-11-03T23:42:57.723577+00:00
+Command:   C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/evaluate.py --mode incident --data data/real_p4.db --incident curve --unit all --output results/evaluation/curve
+Exit Code: 0
+Duration:  0.148s
+Output Excerpt:
+  Generated: D:\Projest\Blockchain\results\evaluation\curve\summary.json and D:\Projest\Blockchain\results\evaluation\curve\summary.csv
+Status:    PASS
+
+[STEP 07: BENCHMARK REGRESSION EVALUATION]
+Timestamp: 2026-11-03T23:42:57.871354+00:00
+Command:   C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/evaluate.py --mode benchmark --data data/benchmark_p6.db --output results/evaluation/benchmark
+Exit Code: 0
+Duration:  0.111s
+Output Excerpt:
+  Generated: D:\Projest\Blockchain\results\evaluation\benchmark\summary.json and D:\Projest\Blockchain\results\evaluation\benchmark\summary.csv
+Status:    PASS
+
+[STEP 08: PHASE 4 RULE ENGINE INTEGRATION SMOKE]
+Timestamp: 2026-11-03T23:42:57.982548+00:00
+Command:   C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/run_p4_smoke.py
+Exit Code: 0
+Duration:  0.516s
+Output Excerpt:
+  ======================================================================
+    PHASE 4 ANOMALY DETECTION RULE ENGINE — INTEGRATION SMOKE RUNNER
+  ======================================================================
+  -> Testing R1: Large Transfer...
+     [PASS] R1 Large Transfer correctly detects ETH and ERC-20 thresholds
+  -> Testing R2: High Frequency...
+     [PASS] R2 High Frequency correctly detects 10 events in rolling 300s window
+  -> Testing R3: Fan-in / Fan-out...
+     [PASS] R3 Fan-in / Fan-out correctly identifies both patterns with >= 8 counterparties
+  -> Testing R4: Rapid Pass-through...
+     [PASS] R4 Rapid Pass-through correctly detects flow forwarded within 5 blocks
+  -> Testing Calibration provenance, Idempotency & Persistence...
+     [PASS] Calibration provenance recorded, alert IDs deterministic, idempotent rerun verified
+  ======================================================================
+    ALL PHASE 4 SMOKE CHECKS PASSED (5/5)
+  ======================================================================
+Status:    PASS
+
+[STEP 09: CLI INTERFACE SMOKE SUITE]
+Timestamp: 2026-11-03T23:42:58.929545+00:00
+Command:   python {collector, fetch_labels, generate_benchmark, run_real_rules}.py --help
+Exit Code: 0
+Duration:  0.45s
+Output Excerpt:
+  Commands:
+    - python collector.py --help -> Exit Code: 0 [PASS]
+    - python scripts/fetch_labels.py --help -> Exit Code: 0 [PASS]
+    - python scripts/generate_benchmark.py --help -> Exit Code: 0 [PASS]
+    - python scripts/run_real_rules.py --help -> Exit Code: 0 [PASS]
+  Status: PASS
+Status:    PASS
+
+[STEP 10: POST-EXECUTION EVIDENCE INTEGRITY SNAPSHOT & COMPARISON]
+Timestamp: 2026-11-03T23:42:58.958797+00:00
+Command:   Compare-SHA256 -PreManifest g5_protected_manifest_before.json -CanonicalFiles
+Exit Code: 0
+Duration:  0.15s
+Output Excerpt:
+  Artifacts:
+    - data/forensics.db: 3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001 (139264 B) [UNALTERED]
+    - data/real_p4.db: 6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97 (5947392 B) [UNALTERED]
+    - data/benchmark_p6.db: C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507 (30175232 B) [UNALTERED]
+    - .env: C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C (1032 B) [UNALTERED]
+  Bitwise Fidelity: 100.0% Match (Zero mutation)
+  Status: PASS
+Status:    PASS
+
+[STEP 11: REDACTION VERIFICATION AUDIT]
+Timestamp: 2026-11-03T23:42:59.924044+00:00
+Command:   Scan-Artifacts -Patterns leak_patterns -Files @('g5_isolated_test_summary.json', 'g5_verification_log.txt')
+Exit Code: 0
+Duration:  0.05s
+Output Excerpt:
+  Scanned Files:
+    - results/verification/g5_isolated_test_summary.json
+    - results/verification/g5_verification_log.txt
+  Detected Secret Count: 0
+  Status: PASS (CLEAN)
+Status:    PASS
+
+================================================================================
+AUDIT VERDICT: VERIFIED (OFFLINE CODE CORRECTNESS CONFIRMED)
+REMAINING ACCEPTANCE PREREQUISITES:
+  - Gemini API key configuration required for live LLM operations.
+  - Sepolia RPC and funded keystore required for live on-chain anchoring.
+  - EvidenceRegistry contract deployment on Sepolia testnet pending.
+================================================================================
