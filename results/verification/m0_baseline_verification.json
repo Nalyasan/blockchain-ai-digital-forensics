@@ -1,0 +1,140 @@
+{
+  "audit_name": "Milestone M0 Baseline Audit & Invariance Certification",
+  "timestamp_utc": "2026-11-04T18:53:04.197890+00:00",
+  "repository_root": "D:\\Projest\\Blockchain",
+  "overall_status": "PASS",
+  "git_state": {
+    "passed": true,
+    "checks": {
+      "branch": {
+        "actual": "integration/p7-p10-dev",
+        "expected": "integration/p7-p10-dev",
+        "match": true
+      },
+      "commit": {
+        "actual": "65f0738a6dab874d289243c7562a1046e08c3ae6",
+        "expected_base": "d7145333dcd1f0955e016f66ada78b806c84e581",
+        "is_valid": true
+      },
+      "tracked_tree_clean": {
+        "clean": true,
+        "diff_output": ""
+      },
+      "osint_preserved": {
+        "exists": true,
+        "path": "D:\\Projest\\Blockchain\\osint-attack-surface",
+        "match": true
+      }
+    }
+  },
+  "canonical_datasets": {
+    "status": "PASS",
+    "files": [
+      {
+        "path": "data/real_p4.db",
+        "status": "PASS",
+        "match": true,
+        "hash_match": true,
+        "size_match": true,
+        "expected_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "actual_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "expected_size": 5947392,
+        "actual_size": 5947392,
+        "description": "Canonical real P4 Euler/Curve attack ground truth"
+      },
+      {
+        "path": "data/forensics.db",
+        "status": "PASS",
+        "match": true,
+        "hash_match": true,
+        "size_match": true,
+        "expected_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "actual_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "expected_size": 139264,
+        "actual_size": 139264,
+        "description": "Canonical evidence store baseline"
+      },
+      {
+        "path": "data/benchmark_p6.db",
+        "status": "PASS",
+        "match": true,
+        "hash_match": true,
+        "size_match": true,
+        "expected_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "actual_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "expected_size": 30175232,
+        "actual_size": 30175232,
+        "description": "Canonical public benchmark database"
+      },
+      {
+        "path": ".env",
+        "status": "PASS",
+        "match": true,
+        "hash_match": true,
+        "size_match": true,
+        "expected_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "actual_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "expected_size": 1032,
+        "actual_size": 1032,
+        "description": "Canonical configuration and environment variables"
+      }
+    ]
+  },
+  "specifications": {
+    "status": "PASS",
+    "files": [
+      {
+        "path": "docs/legacy/agent_v5.1.txt",
+        "status": "PASS",
+        "match": true,
+        "hash_match": true,
+        "size_match": true,
+        "expected_sha256": "A4B883D325FD93A9EEA7A53928FD3698B0FDD2A8144E0E5F5320A3EDEBA1F143",
+        "actual_sha256": "A4B883D325FD93A9EEA7A53928FD3698B0FDD2A8144E0E5F5320A3EDEBA1F143",
+        "expected_size": 50205,
+        "actual_size": 50205,
+        "description": "Archived legacy specification (v5.1)"
+      },
+      {
+        "path": "AGENT.md",
+        "status": "PASS",
+        "match": true,
+        "hash_match": true,
+        "size_match": true,
+        "expected_sha256": "DAE75E00D95A5F2F67FD4D78ED9B843DD8AA791A24B8D7AC3831A0556F16FB7E",
+        "actual_sha256": "DAE75E00D95A5F2F67FD4D78ED9B843DD8AA791A24B8D7AC3831A0556F16FB7E",
+        "expected_size": 42820,
+        "actual_size": 42820,
+        "description": "Authoritative primary specification v6.0"
+      }
+    ]
+  },
+  "toolchain": {
+    "passed": true,
+    "tools": {
+      "python": {
+        "version": "3.13.14",
+        "valid": true
+      },
+      "pytest": {
+        "version": "pytest 9.2.0",
+        "available": true
+      },
+      "forge": {
+        "path": "C:/Users/Naly/.foundry/bin/forge.exe",
+        "version": "forge Version: 1.8.7",
+        "available": true
+      },
+      "anvil": {
+        "path": "C:/Users/Naly/.foundry/bin/anvil.exe",
+        "version": "anvil Version: 1.8.7",
+        "available": true
+      },
+      "cast": {
+        "path": "C:/Users/Naly/.foundry/bin/cast.exe",
+        "version": "cast Version: 1.8.7",
+        "available": true
+      }
+    }
+  }
+}
