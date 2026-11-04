@@ -53,18 +53,18 @@
 | 21 | CLI & Exporter Integration | Add `--legacy-case-encoding` and `reconcile` subcommands to `forensics/cli.py` | M4 (Lead Agent) | R5 / G3-13 |
 | 22 | Smoke Test Suite Group 3 | Create `scripts/run_p3_group3_smoke.py` and `tests/test_onchain_group3_smoke.py` | M4 (Lead Agent) | R5 / G3-13 |
 | 23 | Full 17 Gates Acceptance & Regression | Run and pass all 17 gates G3-01..G3-17, full pytest suite, forge test, regression | M5 (Final Gates) | Acceptance Criteria |
-| 24 | Final Deliverables & Reporting | Author `P3_GROUP3_REPORT.md` and commit with clean audit trail | M6 (Deliverables) | R5 / Deliverables |
+| 24 | Final Deliverables & Reporting | Author `P3_GROUP3_REPORT.txt` and commit with clean audit trail | M6 (Deliverables) | R5 / Deliverables |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M0 | Gate 0 Recovery & Checkpoint | Git audit, backup checkpoint outside repo, `P3_GROUP3_HANDOFF_RECOVERY.md` | none | DONE |
+| M0 | Gate 0 Recovery & Checkpoint | Git audit, backup checkpoint outside repo, `P3_GROUP3_HANDOFF_RECOVERY.txt` | none | DONE |
 | M1 | H6/M5 Identity & Privacy | `forensics/evidence_identity.py`, `tests/test_evidence_identity.py` (G3-05, G3-06, G3-07, G3-12, G3-15) | M0 | DONE |
 | M2 | H5 SQLite & Custody | `forensics/schemas.py`, `forensics/onchain_store.py`, `tests/test_onchain_store.py` (G3-01..G3-04, G3-11, G3-14) | M0 | DONE |
 | M3 | M4 Idempotency & Recovery | `forensics/onchain_store.py`, `tests/test_onchain_group3.py` (G3-08..G3-10, G3-16, G3-17) | M2 | DONE |
 | M4 | Lead Integration & Regression | `forensics/onchain.py`, `forensics/cli.py`, smoke scripts, full test fixes | M1, M2, M3 | DONE |
 | M5 | Final Acceptance & Adversarial Hardening | Full 17 gates (G3-01..G3-17) validation, adversarial verification, forensic audit | M4 | DONE |
-| M6 | Deliverables & Handoff | `P3_GROUP3_REPORT.md`, git commit, victory report | M5 | DONE |
+| M6 | Deliverables & Handoff | `P3_GROUP3_REPORT.txt`, git commit, victory report | M5 | DONE |
 
 ## Interface Contracts
 ### `forensics/evidence_identity.py`

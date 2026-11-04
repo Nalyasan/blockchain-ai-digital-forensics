@@ -6,18 +6,18 @@
 - **Repository:** `D:\Projest\Blockchain`
 - **Baseline P3 đã nghiệm thu:** `713ad068348cab75046e10d52332f0d850ef93f5`
 - **Source Revision nghiệm thu (HEAD):** `67bba6866a59f5c7549893eb68a8c06b5bade553`
-- **Tài liệu chuẩn đối chiếu:** `P3_GROUP3_PLAN_v2.md`
-- **Báo cáo tiếp quản Cursor:** `P3_GROUP3_HANDOFF_RECOVERY.md`
-- **Báo cáo tổng kết trước đó:** `P3_GROUP3_REPORT.md`
+- **Tài liệu chuẩn đối chiếu:** `P3_GROUP3_PLAN_v2.txt`
+- **Báo cáo tiếp quản Cursor:** `P3_GROUP3_HANDOFF_RECOVERY.txt`
+- **Báo cáo tổng kết trước đó:** `P3_GROUP3_REPORT.txt`
 - **Ma trận đối chiếu máy đọc:** `acceptance-matrix.json`
 - **File nén kiểm toán độc lập:** `D:\Projest\p3_group3_audit_handover.zip`
 
 ---
 
-## 1. ĐỐI CHIẾU LẠI ACCEPTANCE GATES THEO NGUỒN CHUẨN P3_GROUP3_PLAN_v2.md
+## 1. ĐỐI CHIẾU LẠI ACCEPTANCE GATES THEO NGUỒN CHUẨN P3_GROUP3_PLAN_v2.txt
 
 ### 1.1. Nguyên tắc đối chiếu
-Tuân thủ nghiêm ngặt chỉ thị: **Lấy `P3_GROUP3_PLAN_v2.md` làm Single Source of Truth**, không được tự thay đổi ý nghĩa gate hay nới lỏng tiêu chuẩn kỹ thuật. Chỉ ghi nhận **`PASS`** khi có bằng chứng trực tiếp đầy đủ; nếu thiếu hoặc có khiếm khuyết, ghi nhận trung thực **`PARTIAL`** hoặc **`NOT VERIFIED`**.
+Tuân thủ nghiêm ngặt chỉ thị: **Lấy `P3_GROUP3_PLAN_v2.txt` làm Single Source of Truth**, không được tự thay đổi ý nghĩa gate hay nới lỏng tiêu chuẩn kỹ thuật. Chỉ ghi nhận **`PASS`** khi có bằng chứng trực tiếp đầy đủ; nếu thiếu hoặc có khiếm khuyết, ghi nhận trung thực **`PARTIAL`** hoặc **`NOT VERIFIED`**.
 
 ### 1.2. Bảng tổng hợp đối chiếu 17 Cổng nghiệm thu (G3-01 đến G3-17)
 
@@ -138,10 +138,10 @@ Gói kiểm toán độc lập đã được tạo tại đường dẫn ngoài 
 
 ### 3.1. Danh mục 11 thành phần đóng gói
 
-1. `P3_GROUP3_REPORT.md`: Báo cáo nghiệm thu kỹ thuật đầy đủ của Nhóm 3.
-2. `P3_GROUP3_FINAL_EVIDENCE_REVIEW.md`: Báo cáo đối chiếu và giải trình bằng chứng này.
+1. `P3_GROUP3_REPORT.txt`: Báo cáo nghiệm thu kỹ thuật đầy đủ của Nhóm 3.
+2. `P3_GROUP3_FINAL_EVIDENCE_REVIEW.txt`: Báo cáo đối chiếu và giải trình bằng chứng này.
 3. `acceptance-matrix.json`: Ma trận nghiệm thu máy đọc (17 gates).
-4. `P3_GROUP3_HANDOFF_RECOVERY.md`: Báo cáo tiếp quản Cursor và phân loại trạng thái Cụm A/B/C/D.
+4. `P3_GROUP3_HANDOFF_RECOVERY.txt`: Báo cáo tiếp quản Cursor và phân loại trạng thái Cụm A/B/C/D.
 5. **Mã nguồn thực tế thay đổi:**
    - `forensics/evidence_identity.py`
    - `forensics/schemas.py`
@@ -188,9 +188,9 @@ Gói kiểm toán độc lập đã được tạo tại đường dẫn ngoài 
 | `tests/test_onchain_store.py` | 33,327 | `2ea38797d4a8c3d80202afc43f32206652978d242ad041b0c1f56c6e8ba656db` | `dcd016f0b2b852ae5d791ac297d3cabf9fce9035` |
 | `tests/test_onchain_group3.py` | 39,127 | `83ee6407d46c246aa5438c463b0429fc1dbfcb71260cb386fe2e035647cb224a` | `2ba970f6f30f16724975864bc1000e4a57ffcb7c` |
 | `tests/test_onchain_group3_smoke.py` | 3,243 | `14980350d92e09aae4e01669c7e3875d93695b617fe2b76650a6f8dc056e8d69` | `d3eb1a2bf0d4b6934afd5bb8ab469c0a1796fe8f` |
-| `P3_GROUP3_REPORT.md` | 32,573 | `5c45d415012d66173201cd1552447a65dba410bd20cbd2747f6ce21225767877` | `8d759a8d890b990af7d90f37b0ed32eaae96a2b5` |
-| `P3_GROUP3_HANDOFF_RECOVERY.md` | 18,908 | `7de54645103361526e329b826a5f2f5e45d62a38daa12121785cbad073e19ebb` | `14a761dea7ed4f9bfaa7a67c797c873575952b46` |
-| `PROJECT.md` | 10,327 | `570f6295ca567e16a01aa332db1982d24fc09eabbd52e46db1b18e72f7053914` | `4048dbf9d04385fa9e85810a8625f5ba90069af8` |
+| `P3_GROUP3_REPORT.txt` | 32,573 | `5c45d415012d66173201cd1552447a65dba410bd20cbd2747f6ce21225767877` | `8d759a8d890b990af7d90f37b0ed32eaae96a2b5` |
+| `P3_GROUP3_HANDOFF_RECOVERY.txt` | 18,908 | `7de54645103361526e329b826a5f2f5e45d62a38daa12121785cbad073e19ebb` | `14a761dea7ed4f9bfaa7a67c797c873575952b46` |
+| `PROJECT.txt` | 10,327 | `570f6295ca567e16a01aa332db1982d24fc09eabbd52e46db1b18e72f7053914` | `4048dbf9d04385fa9e85810a8625f5ba90069af8` |
 
 ---
 
@@ -209,7 +209,7 @@ Theo chỉ thị nghiêm ngặt tại Mục 4 của Yêu cầu Người dùng:
 ## 5. HÀNH ĐỘNG DỪNG CHỜ NGHIỆM THU
 
 Toàn bộ các tài liệu nghiệm thu đã được hoàn tất và đặt tại:
-- [P3_GROUP3_FINAL_EVIDENCE_REVIEW.md](file:///D:/Projest/Blockchain/P3_GROUP3_FINAL_EVIDENCE_REVIEW.md)
+- [P3_GROUP3_FINAL_EVIDENCE_REVIEW.txt](file:///D:/Projest/Blockchain/P3_GROUP3_FINAL_EVIDENCE_REVIEW.txt)
 - [acceptance-matrix.json](file:///D:/Projest/Blockchain/acceptance-matrix.json)
 - Gói kiểm toán ZIP: `D:\Projest\p3_group3_audit_handover.zip`
 

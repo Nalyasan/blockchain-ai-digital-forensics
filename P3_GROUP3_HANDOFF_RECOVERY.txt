@@ -262,7 +262,7 @@ Contents of the checkpoint directory:
    - `backup_files/forensics/onchain.py`
    - `backup_files/forensics/onchain_ops.py`
    - `backup_files/.cursor/commands/*`
-5. `P3_GROUP3_HANDOFF_RECOVERY.md`: This report.
+5. `P3_GROUP3_HANDOFF_RECOVERY.txt`: This report.
 
 **Integrity Guarantee**:
 No production secrets, private keys, seed phrases, or `.env` credential values are stored in the checkpoint directory or repository working tree. All files are safely preserved for the implementation phase.

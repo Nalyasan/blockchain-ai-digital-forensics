@@ -118,7 +118,7 @@ All 16 protected files specified in `results/p4/protected-before.json` were audi
 | **P4-07** | Synthetic Dataset Integration & Isolation | Comprehensive testing on synthetic datasets; isolated temp DBs used for all write-tests; baseline DBs untouched. | **PASS** | `Dataset` fixture with `synthetic=1` preserved; baseline DBs remain bit-for-bit identical before and after test runs. |
 | **P4-08** | Real Ethereum Exploit Dataset Evaluation | Evaluation against real exploit datasets (Euler, Curve/Alchemix). If datasets pending, record as PENDING_DATASET without blocking. | **PENDING_DATASET** | 0 real exploit dataset files present in repo; status recorded per specification as "P4 CORE PASS / REAL-DATA PENDING". |
 | **P4-09** | Regression Verification | Zero regressions across Python test suites (580 baseline + 32 Phase 4 = 612 tests, 44 blockers, 15 security QA) and smoke checks (5/5). | **PASS** | pytest 612/612 pass; blockers 44/44 pass; security QA 15/15 pass; smoke checks 5/5 pass; contracts untouched. |
-| **P4-10** | Documentation & Deliverables Handover | Machine-readable `acceptance-matrix-p4.json` generated; `P4_ACCEPTANCE_REPORT.md` generated; clean Git commit executed. | **PASS** | `acceptance-matrix-p4.json` generated at root and results/p4/; report completed; clean Git commit executed. |
+| **P4-10** | Documentation & Deliverables Handover | Machine-readable `acceptance-matrix-p4.json` generated; `P4_ACCEPTANCE_REPORT.txt` generated; clean Git commit executed. | **PASS** | `acceptance-matrix-p4.json` generated at root and results/p4/; report completed; clean Git commit executed. |
 
 ---
 
@@ -236,7 +236,7 @@ py -m pytest --basetemp="C:/Users/Naly/p4_tmp" tests/ -q
 | `scripts/run_p4_smoke.py` | Standalone Phase 4 smoke test runner (5/5 PASS) | Automation Script |
 | `acceptance-matrix-p4.json` | Machine-readable acceptance matrix covering Gates P4-01 through P4-10 | Audit Artifact |
 | `results/p4/acceptance-matrix-p4.json` | Mirror copy of acceptance matrix in results directory | Audit Artifact |
-| `P4_ACCEPTANCE_REPORT.md` | Authoritative final Phase 4 acceptance report | Documentation |
+| `P4_ACCEPTANCE_REPORT.txt` | Authoritative final Phase 4 acceptance report | Documentation |
 
 ---
 

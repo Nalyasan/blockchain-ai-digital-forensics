@@ -22,7 +22,7 @@ from forensics.evaluation import evaluate_database, wilson_review, validate_labe
 from forensics.paths import REAL_P4_DB, PROJECT_ROOT
 
 
-# Authoritative incident boundary defaults from P4_08_ACCEPTANCE_REPORT.md
+# Authoritative incident boundary defaults from P4_08_ACCEPTANCE_REPORT.txt
 INCIDENT_BOUNDS = {
     'euler': {
         'calibration': (16816000, 16817989),

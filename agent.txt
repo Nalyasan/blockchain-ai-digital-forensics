@@ -39,7 +39,7 @@ Hệ thống gồm 5 thành phần kỹ thuật phải chạy được và kiể
 
 ## 3. Nguồn dữ liệu và giới hạn
 
-| Nguồn dữ liệu | Mục đích sử dụng | Cờ `synthetic` | Ghi chú & Giới hạn bắt buộc ghi vào `docs/limitations.md` |
+| Nguồn dữ liệu | Mục đích sử dụng | Cờ `synthetic` | Ghi chú & Giới hạn bắt buộc ghi vào `docs/limitations.txt` |
 |---|---|---|---|
 | **1. Mainnet Fork / Archive RPC** (`anvil --fork-url <RPC> --fork-block-number <N>` hoặc truy vấn trực tiếp) | Replay cửa sổ block của các sự cố bảo mật thật đã được công bố công khai; đo hiệu năng phát hiện trên dữ liệu thật | `false` | Chỉ **đọc** block/receipt/logs lịch sử thì thường không cần archive node, nhưng nhiều nhà cung cấp giới hạn cửa sổ lịch sử hoặc dải `eth_getLogs`; archive chỉ cần khi truy vấn *state* (`eth_getCode`, `eth_call`, trace) ở block cũ. Collector đọc trực tiếp từ RPC là đủ; chỉ dùng `anvil --fork-url` khi cần chạy contract/trace cục bộ. Với nhánh fork: block có số `<= fork_block` là dữ liệu thật (`synthetic=0`), block được tạo cục bộ sau đó là `synthetic=1` |
 | **2. Sepolia Testnet** | Chạy thu thập liên tục (`continuous`), backfill theo ngày; deploy và neo hash thật lên `EvidenceRegistry.sol` | `false` | Giao dịch trên Sepolia chủ yếu là giao dịch thử nghiệm, faucet và bot; chỉ số precision ước lượng trên Sepolia không đại diện cho lưu lượng tấn công trên Mainnet |
@@ -126,7 +126,7 @@ Giữ các lệnh CLI hiện có (`healthcheck`, `backfill`, `collect`, `verify`
 1. **Thời gian:** Luôn dùng UTC, ISO 8601, hậu tố `Z`. Phân biệt 5 mốc: `block_timestamp`, `first_observed_at`, `collected_at`, `analyzed_at`, `exported_at`.
 2. **Kiểm tra toàn vẹn 3 tầng (không tuyên bố local verify chống giả mạo tuyệt đối):**
    - `verify-local`: Tính lại SHA-256 của cột `raw_json` trong SQLite và so với `raw_sha256` đã lưu; kiểm tra liên kết `parentHash` giữa các block. Lưu ý: bước này chỉ phát hiện lỗi hỏng dữ liệu hoặc chỉnh sửa sơ suất một cột, không chống được kẻ tấn công có quyền ghi DB sửa đồng thời cả `raw_json` và `raw_sha256`.
-   - `verify-rpc`: Truy vấn lại RPC nguồn cho một khoảng block (hoặc lấy mẫu ngẫu nhiên $M$ block), đối chiếu `block_hash`, `parent_hash`, `transactions_root` và danh sách `tx_hash` trên chuỗi với bản ghi trong SQLite. Với mỗi block được kiểm, **bắt buộc so sánh cả nội dung đầy đủ** (so sánh JSON chuẩn hóa của block, và của một mẫu transaction/receipt/log lấy lại từ RPC) vì chỉ so danh sách hash sẽ không phát hiện việc sửa trường `value`, `to`, `topics`, `data` khi hash lưu kèm vẫn giữ nguyên. Giới hạn cần ghi vào `docs/limitations.md`: `verify-rpc` tin vào nguồn RPC; muốn mạnh hơn phải đối chiếu hai RPC độc lập.
+   - `verify-rpc`: Truy vấn lại RPC nguồn cho một khoảng block (hoặc lấy mẫu ngẫu nhiên $M$ block), đối chiếu `block_hash`, `parent_hash`, `transactions_root` và danh sách `tx_hash` trên chuỗi với bản ghi trong SQLite. Với mỗi block được kiểm, **bắt buộc so sánh cả nội dung đầy đủ** (so sánh JSON chuẩn hóa của block, và của một mẫu transaction/receipt/log lấy lại từ RPC) vì chỉ so danh sách hash sẽ không phát hiện việc sửa trường `value`, `to`, `topics`, `data` khi hash lưu kèm vẫn giữ nguyên. Giới hạn cần ghi vào `docs/limitations.txt`: `verify-rpc` tin vào nguồn RPC; muốn mạnh hơn phải đối chiếu hai RPC độc lập.
    - `verify-onchain`: Băm lại các file chứng cứ trên đĩa, tính `manifest_sha256` hiện tại và gọi hàm `verifyEvidence` trên hợp đồng `EvidenceRegistry.sol` để đối chiếu với bản ghi bất biến đã neo trên blockchain.
 
 ### 6.4 Rule Engine (`forensics/rules/`)
@@ -330,7 +330,7 @@ F1        = 2 * Precision * Recall / (Precision + Recall)
 ```text
 blockchain-forensics/
 ├── AGENT.md
-├── README.md
+├── README.txt
 ├── .env.example
 ├── .gitignore
 ├── pyproject.toml               # pytest; tùy chọn eth-account/web3 hoặc dùng stdlib + Foundry cast
@@ -376,7 +376,7 @@ blockchain-forensics/
 ├── data/  evidence/  logs/      # Ignore khỏi Git
 └── docs/
     ├── architecture.md
-    └── limitations.md           # Ghi rõ giới hạn internal tx, Sepolia noise, Archive RPC, local verify
+    └── limitations.txt           # Ghi rõ giới hạn internal tx, Sepolia noise, Archive RPC, local verify
 ```
 
 Mẫu `.env.example`:
@@ -433,7 +433,7 @@ Thực hiện tuần tự từ P1 đến P6; mỗi giai đoạn phải có bài 
 - **P3 — Smart Contract Chain of Custody:** Viết `EvidenceRegistry.sol` và `EvidenceRegistry.t.sol` (Foundry); viết `forensics/onchain.py` gọi `cast` với `shell=False` kèm chốt chặn khóa mặc định Anvil; deploy lên Anvil và Sepolia. *Hoàn thành khi:* T05–T08 hoàn tất, có tx hash thật.
 - **P4 — Rule Engine (ETH & ERC-20):** Triển khai 4 rule đọc từ `asset_transfers` với bộ tham số mặc định; tách `calibration_window` và `test_window`. *Hoàn thành khi:* T04 xanh và chạy tạo được alert trên dữ liệu thật.
 - **P5 — AI Investigator, Sanitizer & Content Ref Checker:** Xây dựng `sanitizer.py`, 6 tool đọc-chỉ (có `collect_missing_range` giới hạn $\le 20$ blocks), `investigator.py` và `ref_checker.py` (kiểm tra cả sự tồn tại lẫn khớp địa chỉ/số tiền). *Hoàn thành khi:* T10 và T11 vượt qua kiểm thử.
-- **P6 — Đánh giá Thực nghiệm (`evaluate.py`) & Tài liệu Giới hạn:** Viết `fetch_labels.py`, `generate_benchmark.py` (`synthetic=true`) và `evaluate.py`; chạy replay sự cố thật trên Mainnet Fork và chạy thực tế trên Sepolia để xuất toàn bộ số liệu vào `results/`; cập nhật `docs/limitations.md`. *Hoàn thành khi:* T09 hoàn tất và thư mục `results/` có đầy đủ bảng chỉ số.
+- **P6 — Đánh giá Thực nghiệm (`evaluate.py`) & Tài liệu Giới hạn:** Viết `fetch_labels.py`, `generate_benchmark.py` (`synthetic=true`) và `evaluate.py`; chạy replay sự cố thật trên Mainnet Fork và chạy thực tế trên Sepolia để xuất toàn bộ số liệu vào `results/`; cập nhật `docs/limitations.txt`. *Hoàn thành khi:* T09 hoàn tất và thư mục `results/` có đầy đủ bảng chỉ số.
 
 Định dạng báo cáo tiến độ của Coding Agent sau mỗi giai đoạn:
 ```text
@@ -451,7 +451,7 @@ Thực hiện tuần tự từ P1 đến P6; mỗi giai đoạn phải có bài 
 - [ ] 4 quy tắc phát hiện có tham số mặc định rõ ràng, tách bạch tập hiệu chỉnh (`calibration_window`) và tập kiểm tra (`test_window`), hoạt động trên cả ETH và ERC-20.
 - [ ] AI Investigator bọc dữ liệu on-chain trong `<untrusted_onchain_data>`, vượt qua bài test chống Prompt Injection (`T11`), và `ref_checker.py` bắt được trường hợp trích dẫn đúng `tx_hash` nhưng sai địa chỉ/giá trị (`T10`).
 - [ ] `scripts/evaluate.py` tính toán chính xác `TP/FP/TN/FN`, `Precision`, `Recall`, `FPR`, `F1` theo đúng đơn vị đánh giá (`tx_unit` và `address_window_unit`) trên dữ liệu replay sự cố thật (Mainnet Fork), tách biệt rõ với kết quả kiểm thử hồi quy (`synthetic=true`).
-- [ ] `docs/limitations.md` ghi nhận trung thực các giới hạn: không thu thập internal transactions nếu không có trace API, tính chất nhiễu của dữ liệu Sepolia, yêu cầu Archive RPC khi fork block cũ, và phạm vi bảo vệ của từng tầng verify.
+- [ ] `docs/limitations.txt` ghi nhận trung thực các giới hạn: không thu thập internal transactions nếu không có trace API, tính chất nhiễu của dữ liệu Sepolia, yêu cầu Archive RPC khi fork block cũ, và phạm vi bảo vệ của từng tầng verify.
 
 ---
 

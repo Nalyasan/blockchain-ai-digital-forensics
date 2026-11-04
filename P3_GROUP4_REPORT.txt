@@ -248,7 +248,7 @@ Output:
 | `contracts/test/EvidenceRegistry_Group4.t.sol` | 14,204 | `6cb7e79be785e558df1b30e831200768f17e7d395bf3a6d8e80e6e53869c3cc5` | `401f7f25362d209d87210a9c83b9ea1e191b1759` |
 | `scripts/run_p3_group4_smoke.py` | 21,865 | `60efc688f0dd4aa2e509ce415fd6e74679147abc3a89b8c7c43a36bb68496d3e` | `0ac7512863579c7823655b784130ae2b61ae9601` |
 | `acceptance-matrix-group4.json` | 10,738 | `b311e00815edf42cfe85ff3738508454ffd021eabcf9c197eb19efd704b0fff9` | `87cf8d4e662f9ef3c2ef441e36fa5503a492317b` |
-| `P3_GROUP4_REPORT.md` | 14,766 | `057d00f68ddaac8ea714d46e13b66976f92ddef525e94ad09dc5955fd69db47c` | `a5a86b995d35f0406cf6d3885066c7c8869f5197` |
+| `P3_GROUP4_REPORT.txt` | 14,766 | `057d00f68ddaac8ea714d46e13b66976f92ddef525e94ad09dc5955fd69db47c` | `a5a86b995d35f0406cf6d3885066c7c8869f5197` |
 
 ---
 

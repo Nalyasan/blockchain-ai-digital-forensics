@@ -12,7 +12,7 @@
 ## 1. Executive Summary
 
 ### 1.1 Context & Cursor Takeover
-Phase 3 Group 3 was initiated to take over incomplete, regressed, and unverified implementation fragments left by Cursor. The initial takeover assessment (documented in `P3_GROUP3_HANDOFF_RECOVERY.md`) revealed:
+Phase 3 Group 3 was initiated to take over incomplete, regressed, and unverified implementation fragments left by Cursor. The initial takeover assessment (documented in `P3_GROUP3_HANDOFF_RECOVERY.txt`) revealed:
 1. **Broken Test Suite**: 161 test failures and errors across the regression suites (`test_onchain_2b.py`, `test_onchain_d1.py`, `test_onchain_guard.py`, `test_onchain_group1.py`) caused by deleted re-exports (`compute_file_sha256`, `init_db`) in `forensics/onchain.py`.
 2. **Missing Architectural Components**: Dedicated modules mandated by the architectural blueprint (`forensics/evidence_identity.py` for H6/M5 and `forensics/onchain_store.py` for H5/M4) did not exist.
 3. **Data Loss & Integrity Hazards**: The custody routine (`record_custody_action`) in `forensics/onchain.py` still contained forbidden `INSERT OR REPLACE INTO custody_events` with hardcoded values (`CUSTODY_UPDATE`), violating immutable custody guarantees.
@@ -253,8 +253,8 @@ An exhaustive leak audit was performed by `run_p3_group3_smoke.py` and `TestGate
 | `tests/test_onchain_store.py` | 33,327 | `2ea38797d4a8c3d80202afc43f32206652978d242ad041b0c1f56c6e8ba656db` | `dcd016f0b2b852ae5d791ac297d3cabf9fce9035` | Unit & adversarial tests for G3-01, G3-02, G3-03, G3-04, G3-11, G3-14 |
 | `tests/test_onchain_group3.py` | 39,127 | `83ee6407d46c246aa5438c463b0429fc1dbfcb71260cb386fe2e035647cb224a` | `2ba970f6f30f16724975864bc1000e4a57ffcb7c` | Unit, dual-process concurrency & crash recovery tests for G3-08, 09, 10, 16, 17 |
 | `tests/test_onchain_group3_smoke.py` | 3,243 | `14980350d92e09aae4e01669c7e3875d93695b617fe2b76650a6f8dc056e8d69` | `d3eb1a2bf0d4b6934afd5bb8ab469c0a1796fe8f` | Pytest assertions for smoke script checks |
-| `P3_GROUP3_HANDOFF_RECOVERY.md` | 18,908 | `7de54645103361526e329b826a5f2f5e45d62a38daa12121785cbad073e19ebb` | `14a761dea7ed4f9bfaa7a67c797c873575952b46` | Gate 0 recovery & takeover analysis report |
-| `PROJECT.md` | 10,327 | `570f6295ca567e16a01aa332db1982d24fc09eabbd52e46db1b18e72f7053914` | `4048dbf9d04385fa9e85810a8625f5ba90069af8` | Project architecture, milestones, and interface contract specification |
+| `P3_GROUP3_HANDOFF_RECOVERY.txt` | 18,908 | `7de54645103361526e329b826a5f2f5e45d62a38daa12121785cbad073e19ebb` | `14a761dea7ed4f9bfaa7a67c797c873575952b46` | Gate 0 recovery & takeover analysis report |
+| `PROJECT.txt` | 10,327 | `570f6295ca567e16a01aa332db1982d24fc09eabbd52e46db1b18e72f7053914` | `4048dbf9d04385fa9e85810a8625f5ba90069af8` | Project architecture, milestones, and interface contract specification |
 
 ---
 

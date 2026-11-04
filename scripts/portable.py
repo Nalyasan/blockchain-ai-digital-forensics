@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -170,6 +171,7 @@ def collect_source_files(root_dir: Path) -> List[Tuple[Path, str]]:
     # 4. Root configuration and entrypoint files
     root_files = [
         "collector.py",
+        "mock_rpc.py",
         "pytest.ini",
         ".env.example",
         "run_tests.bat",
@@ -267,9 +269,24 @@ def build_distribution(
         print(f"    [OK] Generated MANIFEST_SHA256.txt ({len(manifest_entries)} files)")
 
         # Write MANIFEST_INFO.json with packaging metadata
-        total_uncompressed = sum(dest_path.stat().st_size for _, rel in manifest_entries if (stage_dir / rel).exists())
+        total_uncompressed = sum((stage_dir / rel).stat().st_size for _, rel in manifest_entries if (stage_dir / rel).exists())
+        commit_sha = "UNKNOWN"
+        try:
+            res = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root_dir,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if res.returncode == 0:
+                commit_sha = res.stdout.strip()
+        except Exception:
+            pass
+
         info_data = {
             "package_name": archive_name,
+            "git_commit": commit_sha,
             "build_timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "total_files": len(manifest_entries),
             "total_uncompressed_bytes": total_uncompressed,

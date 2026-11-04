@@ -1,5 +1,6 @@
 """Bounded, repository-relative Git provenance. Never reads project .env."""
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -69,20 +70,30 @@ def get_git_state(repo_root=None) -> GitState:
     root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[1]
     try:
         top = _git(['rev-parse', '--show-toplevel'], root)
-        if top.returncode:
-            return GitState('UNKNOWN')
-        resolved = Path(top.stdout.decode('utf-8').strip()).resolve()
-        if not root.resolve().is_relative_to(resolved):
-            return GitState('UNKNOWN')
-        head = _git(['rev-parse', '--verify', 'HEAD'], resolved)
-        status = _git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], resolved)
-        value = head.stdout.decode('ascii').strip()
-        if head.returncode or status.returncode or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', value):
-            return GitState('UNKNOWN')
-        paths = parse_status(status.stdout)
-        return GitState('DIRTY' if paths else 'CLEAN', value, str(resolved), paths)
+        if not top.returncode:
+            resolved = Path(top.stdout.decode('utf-8').strip()).resolve()
+            if root.resolve().is_relative_to(resolved):
+                head = _git(['rev-parse', '--verify', 'HEAD'], resolved)
+                status = _git(['status', '--porcelain=v1', '-z', '--untracked-files=all'], resolved)
+                value = head.stdout.decode('ascii').strip()
+                if not head.returncode and not status.returncode and re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', value):
+                    paths = parse_status(status.stdout)
+                    return GitState('DIRTY' if paths else 'CLEAN', value, str(resolved), paths)
     except (OSError, ValueError, UnicodeError, subprocess.SubprocessError):
-        return GitState('UNKNOWN')
+        pass
+
+    # Fallback for packaged standalone releases when .git is absent
+    manifest_info = root / 'MANIFEST_INFO.json'
+    if manifest_info.is_file():
+        try:
+            data = json.loads(manifest_info.read_text(encoding='utf-8'))
+            commit = data.get('git_commit') or data.get('release_commit')
+            if commit and re.fullmatch(r'[0-9a-fA-F]{40}|[0-9a-fA-F]{64}', commit):
+                return GitState('CLEAN', commit.lower(), str(root.resolve()), ())
+        except Exception:
+            pass
+
+    return GitState('UNKNOWN')
 
 
 def check_commit_provenance(export_commit, repo_root) -> str:
@@ -91,6 +102,8 @@ def check_commit_provenance(export_commit, repo_root) -> str:
     state = get_git_state(repo_root)
     if state.state == 'UNKNOWN':
         return 'UNKNOWN'
+    if state.repo_root and not (Path(state.repo_root) / '.git').exists() and (Path(state.repo_root) / 'MANIFEST_INFO.json').is_file():
+        return 'OK' if state.head and export_commit.lower() == state.head.lower() else 'MISMATCH'
     try:
         # --batch-check separates a missing object from a Git operational error.
         exists = _git(['cat-file', '--batch-check=%(objecttype)'], state.repo_root,

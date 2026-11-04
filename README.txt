@@ -1,7 +1,7 @@
 ===============================================================================
 Blockchain + AI Digital Forensics P1-P6: Standalone Portable Distribution
 Release Version: v1.0.0
-Git Checkpoint:  5f24c09 (checkpoint-g5-tested)
+Git Checkpoint:  checkpoint-g6b-migrated (preceded by 3a9b9a0 checkpoint-g6a-packaged)
 ===============================================================================
 
 1. OVERVIEW
@@ -17,22 +17,29 @@ Blockchain + AI Digital Forensics codebase (P1-P6):
 - Threat Intelligence & Evaluation (P6): Forta, MEW, and PTXPhish adapters, entity screening,
   and multi-unit empirical evaluation engine (tx_unit, address_window_unit).
 
+All project guides, technical specifications, and historical reports are provided
+as clean, standalone plain text files (.txt) with zero external Markdown dependencies.
+
 2. DIRECTORY STRUCTURE
 ----------------------
 .
 |-- collector.py              # Multi-chain transaction collector CLI
+|-- mock_rpc.py               # Local synthetic EVM RPC test harness
 |-- pytest.ini                # Pytest test discovery & execution configuration
 |-- requirements.txt          # 101 pinned Python dependencies
 |-- setup_env.bat             # Automated offline virtual environment installer
 |-- run_tests.bat             # Standalone test runner (Foundry + Pytest)
 |-- run_evaluation.bat        # Standalone empirical evaluation runner
 |-- README.txt                # This distribution documentation
+|-- PROJECT.txt               # Architecture, inventory, and milestone specifications
+|-- agent.txt                 # Technical forensic agent specification & manual
 |-- MANIFEST_SHA256.txt       # SHA-256 checksum manifest of all bundled files
-|-- MANIFEST_INFO.json        # Package build metadata and provenance
+|-- MANIFEST_INFO.json        # Package build metadata, git commit, and provenance
 |-- contracts/                # Foundry smart contracts (EvidenceRegistry.sol, tests)
+|-- docs/                     # Technical documentation (limitations.txt)
 |-- forensics/                # Core forensic analysis, rule engine, and AI pipelines
 |-- scripts/                  # Standalone CLI tools (evaluate.py, portable.py, etc.)
-|-- tests/                    # 39 pytest test suites (>1,104 tests)
+|-- tests/                    # 41 pytest test suites (1,119 tests)
 |-- tools/foundry/            # Bundled Foundry binaries (forge.exe, cast.exe, anvil.exe)
 |-- data/                     # Canonical SQLite databases (forensics.db, real_p4.db, benchmark_p6.db)
 `-- wheels/                   # 101 pre-downloaded offline Python wheels (CPython 3.13)
@@ -62,7 +69,7 @@ Step 3: Run Full Test Suite
     .\run_tests.bat
   This executes:
   - 56 Foundry smart contract tests via bundled tools\foundry\forge.exe (100% pass)
-  - 1,104 Pytest regression tests in isolated environment (100% runnable pass, 1 authorized skip)
+  - 1,119 Pytest regression tests in isolated environment (1,119 passed, 1 authorized skip)
 
 Step 4: Run Empirical Evaluation
   Execute run_evaluation.bat:

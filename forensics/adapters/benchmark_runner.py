@@ -305,7 +305,7 @@ def run_full_benchmark_suite(
     Generates:
     - benchmark_metrics.json in results_dir
     - benchmark_summary.csv in results_dir
-    - P6_03_BENCHMARK_REPORT.md in reports_dir
+    - P6_03_BENCHMARK_REPORT.txt in reports_dir
 
     Returns:
         Consolidated metrics dictionary.
@@ -446,8 +446,8 @@ def run_full_benchmark_suite(
     generate_summary_csv(suite_results, summary_csv_path)
     logger.info("Wrote %s", summary_csv_path)
 
-    # 5. Write reports/P6_03_BENCHMARK_REPORT.md
-    report_md_path = reports_path / "P6_03_BENCHMARK_REPORT.md"
+    # 5. Write reports/P6_03_BENCHMARK_REPORT.txt
+    report_md_path = reports_path / "P6_03_BENCHMARK_REPORT.txt"
     generate_benchmark_report_md(suite_results, report_md_path)
     logger.info("Wrote %s", report_md_path)
 
@@ -516,7 +516,7 @@ def generate_benchmark_report_md(suite_results: dict[str, Any], output_path: Pat
 
 ## 1. Executive Summary & Benchmark Overview
 
-In accordance with the mandates in `ORIGINAL_REQUEST.md` (Sections 8, 10, and 11) and orchestrator requirements in `PROJECT.md`, Milestone 3 execution has performed controlled multi-scale benchmark evaluations of the Phase 6 Public Blockchain Dataset ingestion pipeline and Entity Screening Engine.
+In accordance with the mandates in `ORIGINAL_REQUEST.md` (Sections 8, 10, and 11) and orchestrator requirements in `PROJECT.txt`, Milestone 3 execution has performed controlled multi-scale benchmark evaluations of the Phase 6 Public Blockchain Dataset ingestion pipeline and Entity Screening Engine.
 
 Evaluations were conducted across three discrete workload scales:
 1. **Small Scale (1,000 records)**: Baseline validation of stream parsing, formula sanitization, and index lookups.

@@ -279,7 +279,7 @@ All 16 protected baseline files listed in `results/p4/protected-before.json` wer
 | `results/p4/real_data_alerts.json` | 172 verified alerts export with 10-field evidence references and calibrations | Deliverable Artifact |
 | `results/p4/protected-after.json` | Post-execution SHA-256 evidence integrity audit verification | Audit Artifact |
 | `results/p4/acceptance-matrix-p4.json` | Updated acceptance matrix with Gate P4-08 marked PASS | Acceptance Matrix |
-| `P4_08_ACCEPTANCE_REPORT.md` | Authoritative final Gate P4-08 real data integration acceptance report | Deliverable Report |
+| `P4_08_ACCEPTANCE_REPORT.txt` | Authoritative final Gate P4-08 real data integration acceptance report | Deliverable Report |
 
 ---
 

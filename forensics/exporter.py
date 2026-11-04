@@ -15,7 +15,7 @@ import uuid
 from forensics.evidence_identity import case_id_digest, canonical_storage_uri
 from forensics.integrity import (BASE_FILES, InvalidPackage, Reason, _no_link, need,
                                 package_digest, quantity, raw_hash, verify_package, validate_receipt)
-from forensics.provenance import get_git_state
+from forensics.provenance import get_git_state, GitState
 
 
 class ExportPolicyError(ValueError):
@@ -170,6 +170,16 @@ def export_package(case_id, start_block, end_block, out_dir=None, db_path=None,
         raise ValueError('INVALID_CASE_ID') from None
     need(type(start_block) is int and type(end_block) is int and 0 <= start_block <= end_block)
     git = get_git_state()
+    if git.state == 'UNKNOWN':
+        manifest_info = Path(__file__).resolve().parents[1] / 'MANIFEST_INFO.json'
+        if manifest_info.is_file():
+            try:
+                data = json.loads(manifest_info.read_text(encoding='utf-8'))
+                commit = data.get('git_commit') or data.get('release_commit')
+                if commit and re.fullmatch(r'[0-9a-fA-F]{40}|[0-9a-fA-F]{64}', commit):
+                    git = GitState('CLEAN', commit.lower(), str(Path(__file__).resolve().parents[1].resolve()), ())
+            except Exception:
+                pass
     if git.state == 'UNKNOWN':
         raise RuntimeError('GIT_UNKNOWN')
     db_file = Path(db_path or os.environ.get('DB_PATH', 'data/forensics.db')).absolute()

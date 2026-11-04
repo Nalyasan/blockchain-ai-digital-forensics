@@ -210,8 +210,8 @@
       "gate_id": "P4-10",
       "title": "Documentation & Deliverables Handover",
       "status": "PASS",
-      "description": "Generation of machine-readable acceptance matrix (acceptance-matrix-p4.json), comprehensive acceptance report (P4_ACCEPTANCE_REPORT.md), and clean Git commit containing only authorized Phase 4 deliverables.",
-      "verification_method": "Inspection of acceptance-matrix-p4.json, results/p4/acceptance-matrix-p4.json, P4_ACCEPTANCE_REPORT.md, and git commit status",
+      "description": "Generation of machine-readable acceptance matrix (acceptance-matrix-p4.json), comprehensive acceptance report (P4_ACCEPTANCE_REPORT.txt), and clean Git commit containing only authorized Phase 4 deliverables.",
+      "verification_method": "Inspection of acceptance-matrix-p4.json, results/p4/acceptance-matrix-p4.json, P4_ACCEPTANCE_REPORT.txt, and git commit status",
       "evidence": "Acceptance matrix and acceptance report successfully generated; Phase 5/6 code completely absent; clean Git commit staged and committed."
     }
   ]

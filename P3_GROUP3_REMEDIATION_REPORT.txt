@@ -6,14 +6,14 @@
 **Baseline P3:** `713ad068348cab75046e10d52332f0d850ef93f5`  
 **Candidate Audited:** `67bba6866a59f5c7549893eb68a8c06b5bade553`  
 **Final Verified Commit:** `a79f24057dbe3bb35acd9d6636b8ffc17dd241c6` (parent: `9d1fd8c07e6e068335f460a4f3e8d50bf6ded547`)
-**Governing Standard:** `P3_GROUP3_PLAN_v2.md`  
+**Governing Standard:** `P3_GROUP3_PLAN_v2.txt`  
 **Final Status:** **ALL 17 ACCEPTANCE GATES PASS (17/17 — 100%)**
 
 ---
 
 ## 1. Executive Summary
 
-Following independent gate reconciliation in `P3_GROUP3_FINAL_EVIDENCE_REVIEW.md`, 13 gates were confirmed **PASS** and 4 gates were classified **PARTIAL**:
+Following independent gate reconciliation in `P3_GROUP3_FINAL_EVIDENCE_REVIEW.txt`, 13 gates were confirmed **PASS** and 4 gates were classified **PARTIAL**:
 - **G3-05 (Note Hash):** `note_hash_bytes32()` invoked `strip()`, stripping leading/trailing whitespace instead of hashing verbatim UTF-8 bytes.
 - **G3-07 (Legacy Downgrade):** `forensics/onchain.py` contained an automatic silent downgrade to legacy verification without requiring explicit `--legacy-case-encoding`, returning reason `OK` instead of `LEGACY_PUBLIC_CASE_ID`.
 - **G3-11 (SQLite Migration):** Test fixture only tested a clean 1-row database; lacked coverage for duplicate legacy events (NULL `log_index`), legacy text notes, pre-verified rows, logical snapshot comparisons, rollback simulation, and rerun idempotency.

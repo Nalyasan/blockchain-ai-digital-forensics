@@ -19,7 +19,7 @@ The objectives of this phase:
 4. **Synthetic Canary Secret Leakage & Privacy Safeguards (Gate G5-03):** Assert zero raw leakage of sensitive keys, passphrases, API tokens, raw case IDs, or plaintext custody notes across logs, sidecars, and SQLite tables.
 5. **Code Hygiene & Low-Severity Fixes (Gate G5-04):** Fix dangling syntax errors (`finally: conn.close()` in `forensics/onchain_ops.py`), verify clean compilation across all 39 Python files, and enforce immutable smart contract constants.
 6. **Full Phase 1 – Phase 3 Regression (Gate G5-05):** Execute complete regression testing across all Foundry smart contract tests, Python unit tests, and multi-process Anvil integration smoke scripts.
-7. **Deliverables & Acceptance Matrix (Gate G5-06):** Generate `P3_GROUP5_REPORT.md`, `acceptance-matrix-group5.json`, and `P3_FINAL_ACCEPTANCE_REPORT.md`.
+7. **Deliverables & Acceptance Matrix (Gate G5-06):** Generate `P3_GROUP5_REPORT.txt`, `acceptance-matrix-group5.json`, and `P3_FINAL_ACCEPTANCE_REPORT.txt`.
 
 ---
 
@@ -62,7 +62,7 @@ def persist_verified_event(...):
 | **G5-03** | Secret Leakage & Privacy Safeguards | **PASS** | `tests/test_p3_group5_security_qa.py` (3 tests), `run_p3_group5_smoke.py` | `0` | Synthetic canary keys and tokens redacted in logs/sidecars; 0 raw note/case leaks in SQLite |
 | **G5-04** | Code Hygiene & Low-Severity Fixes | **PASS** | `tests/test_p3_group5_security_qa.py` (2 tests), `py_compile` | `0` | Fixed syntax error in `forensics/onchain_ops.py`; verified all 39 `.py` files compile cleanly |
 | **G5-05** | Full Phase 1 – Phase 3 Regression | **PASS** | Foundry (56/56), Pytest (580/580), 5 Smoke Scripts | `0` | 100% test pass rate across all unit, blocker, and end-to-end integration test suites |
-| **G5-06** | Acceptance Documentation & Commit Isolation | **PASS** | `acceptance-matrix-group5.json`, `P3_FINAL_ACCEPTANCE_REPORT.md` | `0` | Standalone commit for Group 5; zero drift into Phase 4 |
+| **G5-06** | Acceptance Documentation & Commit Isolation | **PASS** | `acceptance-matrix-group5.json`, `P3_FINAL_ACCEPTANCE_REPORT.txt` | `0` | Standalone commit for Group 5; zero drift into Phase 4 |
 
 ---
 
@@ -156,7 +156,7 @@ All test suites were executed on the hardened codebase:
 - **Modified Files:** `forensics/onchain_ops.py` (syntax fix)
 - **New Test Files:** `tests/test_p3_group5_security_qa.py` (15 tests)
 - **New Smoke Scripts:** `scripts/run_p3_group5_smoke.py` (15 checks)
-- **Acceptance Deliverables:** `acceptance-matrix-group5.json`, `P3_GROUP5_REPORT.md`, `P3_FINAL_ACCEPTANCE_REPORT.md`
+- **Acceptance Deliverables:** `acceptance-matrix-group5.json`, `P3_GROUP5_REPORT.txt`, `P3_FINAL_ACCEPTANCE_REPORT.txt`
 - **Protected Files:** All historical test databases and sample packages untouched.
 - **Verdict:** **GROUP 5 PASS**
 

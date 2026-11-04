@@ -777,7 +777,7 @@ def verify_observed_facts(
 ) -> tuple[float, list[RefMismatch]]:
     """Compares all observed facts against database records.
 
-    Specified by `orchestrator_p5/PROJECT.md` line 113.
+    Specified by `orchestrator_p5/PROJECT.txt` line 113.
 
     Args:
         facts: Sequence of ObservedFact model instances or dicts.

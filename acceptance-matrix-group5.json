@@ -117,11 +117,11 @@
     "G5-06": {
       "name": "Deliverables & Phase 3 Acceptance Documentation",
       "status": "PASS",
-      "requirement": "Author comprehensive P3_GROUP5_REPORT.md and P3_FINAL_ACCEPTANCE_REPORT.md, record raw logs/checksums/blob IDs, and prepare exactly one isolated commit without P4 sprawl",
+      "requirement": "Author comprehensive P3_GROUP5_REPORT.txt and P3_FINAL_ACCEPTANCE_REPORT.txt, record raw logs/checksums/blob IDs, and prepare exactly one isolated commit without P4 sprawl",
       "source_files": [
-        "P3_GROUP5_REPORT.md",
+        "P3_GROUP5_REPORT.txt",
         "acceptance-matrix-group5.json",
-        "P3_FINAL_ACCEPTANCE_REPORT.md"
+        "P3_FINAL_ACCEPTANCE_REPORT.txt"
       ],
       "tests": [
         "Verification of Git commit isolation and no P4-P6 creep",

@@ -216,7 +216,7 @@
       "status": "PASS",
       "requirement": "All deliverables generated with exact Git provenance, SHA-256 hashes, Git blob IDs, and comprehensive audit trail",
       "source_files": [
-        "P3_GROUP4_REPORT.md",
+        "P3_GROUP4_REPORT.txt",
         "acceptance-matrix-group4.json"
       ],
       "tests": [
