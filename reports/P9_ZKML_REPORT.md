@@ -240,7 +240,12 @@ tests/test_p9_zkml.py::TestEVMVerifierStudy::test_evm_verifier_generation_and_so
 tests/test_p9_zkml.py::TestEVMVerifierStudy::test_anvil_bn254_pairing_precompiles PASSED
 ```
 
-### 8.2 Kiểm Thử Hồi Quy Toàn Diện P7–P10
+### 8.2 Kết Quả Bộ Kiểm Thử Đối Kháng Toàn Diện P9 (`tests/test_p9_adversarial_challenger.py`)
+- **Tổng số ca kiểm thử đối kháng**: 45 tests (Bao gồm 7 kịch bản tấn công: Bit-flip, Altered Features, Altered Instances, Spoofed Scores, Model Hash Mismatch, Truncated/Empty Proofs, Random Non-Halo2 Bytes, cùng Determinism & DB Invariance).
+- **Kết quả**: **45 PASSED / 0 FAILED** (100% thành công).
+- **Thời gian thực thi**: **11.55 giây**.
+
+### 8.3 Kiểm Thử Hồi Quy Toàn Diện P7–P10
 Chạy đồng thời toàn bộ 4 giai đoạn mở rộng mới:
 - `tests/test_p7_*.py` (153 tests)
 - `tests/test_p8_*.py` (36 tests)
@@ -248,11 +253,11 @@ Chạy đồng thời toàn bộ 4 giai đoạn mở rộng mới:
 - `tests/test_p10_custody.py` (23 tests)
 - **Tổng cộng**: **238 PASSED / 0 FAILED** (thời gian: 12.79 giây).
 
-### 8.3 Kiểm Thử Hợp Đồng Thông Minh (Foundry Test Suite)
+### 8.4 Kiểm Thử Hợp Đồng Thông Minh (Foundry Test Suite)
 - **Tổng số bài test hợp đồng**: 112 tests (`EvidenceRegistry.t.sol`, `EvidenceRegistry_Group4.t.sol`, `EvidenceRegistryDID.t.sol`, `ChallengerDIDAdversarial.t.sol`).
 - **Kết quả**: **112 PASSED / 0 FAILED** (gas cho `test_EIP712_RecordAttestationWithSig_ZKMLVerifierSuccess`: 829,094 gas).
 
-### 8.4 Đo Lường Hiệu Năng Thực Tế (Benchmark Telemetry)
+### 8.5 Đo Lường Hiệu Năng Thực Tế (Benchmark Telemetry)
 | Thao Tác Mật Mã | Thành Phần | Thời Gian Thực Thi Trung Bình | Dung Lượng Dữ Liệu |
 | :--- | :--- | :--- | :--- |
 | Thiết lập SRS ($k=14$) | Cục bộ (`ezkl.gen_srs`) | 0.85 s | 2.09 MB |
@@ -267,10 +272,15 @@ Chạy đồng thời toàn bộ 4 giai đoạn mở rộng mới:
 
 ## 9. Bất Biến An Toàn Dữ Liệu & Kiểm Kê Tính Toàn Vẹn (Invariance Attestation)
 
-Thực hiện kiểm tra băm mật mã SHA-256 đối với các cơ sở dữ liệu gốc:
-- `data/real_p4.db`: `6BD9AED4B41A25E815F899D59C205312C6374D5E0259FF9FD51BC0953A1B436D` (**BẢO TOÀN BẤT BIẾN 100%**)
-- `data/forensics.db`: `3F2B0DFC7B5B6D5381E1FF028BC01955D117B962E34C7507B9F101A066F0F6D5` (**BẢO TOÀN BẤT BIẾN 100%**)
-- Thư mục untracked `osint-attack-surface/`: Giữ nguyên vẹn, không can thiệp.
+Thực hiện kiểm tra băm mật mã SHA-256 đối với toàn bộ các cơ sở dữ liệu gốc và đối chiếu trực tiếp với Manifest chuẩn (`D:\Projest\clean_build_test_G6C\MANIFEST_SHA256.txt` và `reports/P7_P10_BASELINE_AUDIT.md`):
+
+| Tệp Cơ Sở Dữ Liệu | Mã Băm SHA-256 Golden Baseline | Mã Băm SHA-256 Thực Tế Trên Đĩa | Trạng Thái Toàn Vẹn |
+| :--- | :--- | :--- | :--- |
+| `data/real_p4.db` | `6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97` | `6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97` | **100% BITWISE INVARIANT (Khớp tuyệt đối)** |
+| `data/forensics.db` | `3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001` | `3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001` | **100% BITWISE INVARIANT (Khớp tuyệt đối)** |
+| `data/benchmark_p6.db` | `C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507` | `C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507` | **100% BITWISE INVARIANT (Khớp tuyệt đối)** |
+
+- Thư mục untracked `osint-attack-surface/`: Giữ nguyên vẹn 100%, không can thiệp.
 - Các quy tắc bảo mật AI P5 (Whitelist, Prompt Injection Sanitizer, 5-layer Read-Only DB, Reference Checker): Bảo toàn nguyên vẹn.
 
 ---

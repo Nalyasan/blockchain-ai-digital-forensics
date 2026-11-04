@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -24,8 +25,17 @@ if "HOME" not in os.environ and "USERPROFILE" in os.environ:
 
 import ezkl
 
-from forensics.zkml.circuit import compute_input_commitment, setup_circuit_srs
-from forensics.zkml.prover import ZKMLProofResult
+from forensics.zkml.circuit import (
+    compute_input_commitment,
+    dequantize_score,
+    quantize_feature_vector,
+    setup_circuit_srs,
+)
+from forensics.zkml.prover import (
+    BN254_SCALAR_MODULUS,
+    ZKMLProofResult,
+    decode_instance_element,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +81,11 @@ class ZKMLVerifier:
                 default_srs = self.settings_path.parent / "kzg.srs"
                 self.srs_path = setup_circuit_srs(default_srs, logrows=logrows)
 
-        # Read input scale from settings
+        # Read input scale and model instance shapes from settings
         with open(self.settings_path, "r", encoding="utf-8") as f:
             s_data = json.load(f)
         self.input_scale = s_data.get("run_args", {}).get("input_scale", 7)
+        self.model_instance_shapes = s_data.get("model_instance_shapes", [[1, 10], [1, 1]])
 
     def verify(
         self,
@@ -109,10 +120,11 @@ class ZKMLVerifier:
                             "rescaled_outputs": [[str(proof_data.output_score)]]
                         },
                     }
-                # Check model hash
-                if self.expected_model_hash and proof_data.model_hash.lower() != self.expected_model_hash:
-                    logger.warning("Model hash mismatch in ZKMLProofResult")
-                    return False
+                proof_dict["model_hash"] = proof_data.model_hash
+                proof_dict["input_commitment"] = proof_data.input_commitment
+                proof_dict["output_score"] = proof_data.output_score
+                proof_dict["proof_hash"] = proof_data.proof_hash
+
                 # Write temp proof file for ezkl
                 fd, tmp_path_str = tempfile.mkstemp(suffix=".json", prefix="verify_proof_")
                 os.close(fd)
@@ -150,26 +162,118 @@ class ZKMLVerifier:
             if len(proof_ints) < 64:
                 logger.warning("Proof bytes buffer is too short")
                 return False
+            if not instances or not isinstance(instances, list) or not instances[0]:
+                logger.warning("Public instances structure is empty or invalid")
+                return False
 
-            # 3. Public inputs verification (if feature_vector provided)
+            expected_instance_count = (
+                sum(math.prod(s) for s in self.model_instance_shapes)
+                if hasattr(self, "model_instance_shapes")
+                else 11
+            )
+            if len(instances[0]) != expected_instance_count:
+                logger.warning(
+                    f"Instances length mismatch: expected {expected_instance_count}, got {len(instances[0])}"
+                )
+                return False
+
+            # 3. Model Hash Verification for all proof input types
+            if self.expected_model_hash:
+                extracted_hash = None
+                if isinstance(proof_data, ZKMLProofResult):
+                    extracted_hash = proof_data.model_hash
+                elif "model_hash" in proof_dict and proof_dict["model_hash"] is not None:
+                    extracted_hash = proof_dict.get("model_hash")
+                elif "metadata" in proof_dict and isinstance(proof_dict["metadata"], dict):
+                    extracted_hash = proof_dict["metadata"].get("model_hash")
+
+                if extracted_hash and str(extracted_hash).lower() != self.expected_model_hash:
+                    logger.warning(
+                        f"Model hash mismatch: expected {self.expected_model_hash}, got {extracted_hash}"
+                    )
+                    return False
+
+            # 4. Cryptographic Output Anomaly Score Verification
+            raw_instances = instances[0]
+            try:
+                raw_out_hex = raw_instances[-1]
+                q_out = decode_instance_element(raw_out_hex)
+                proven_output_score = dequantize_score(q_out, scale_bits=self.input_scale)
+            except Exception as e:
+                logger.warning(f"Failed to decode cryptographic output instance: {e}")
+                return False
+
+            # Check expected_output_score
+            if expected_output_score is not None:
+                if abs(proven_output_score - expected_output_score) > score_tolerance:
+                    logger.warning(
+                        f"Proven score {proven_output_score} deviates from expected {expected_output_score}"
+                    )
+                    return False
+
+            # Cross-validate against ZKMLProofResult.output_score
+            if isinstance(proof_data, ZKMLProofResult):
+                if abs(proof_data.output_score - proven_output_score) > score_tolerance:
+                    logger.warning(
+                        f"ZKMLProofResult.output_score {proof_data.output_score} contradicts proven score {proven_output_score}"
+                    )
+                    return False
+
+            # Cross-validate against proof_dict.output_score if present
+            if "output_score" in proof_dict and proof_dict["output_score"] is not None:
+                try:
+                    dict_score = float(proof_dict["output_score"])
+                    if abs(dict_score - proven_output_score) > score_tolerance:
+                        logger.warning(
+                            f"proof_dict.output_score {dict_score} contradicts proven score {proven_output_score}"
+                        )
+                        return False
+                except (ValueError, TypeError):
+                    return False
+
+            # Reject proofs where pretty_public_inputs is present but inconsistent with cryptographic public instances
+            pretty = proof_dict.get("pretty_public_inputs")
+            if isinstance(pretty, dict):
+                rescaled_outs = pretty.get("rescaled_outputs", [[]])
+                if rescaled_outs and rescaled_outs[0]:
+                    try:
+                        pretty_score = float(rescaled_outs[0][0])
+                        if abs(pretty_score - proven_output_score) > score_tolerance:
+                            logger.warning(
+                                f"pretty_public_inputs score {pretty_score} contradicts proven score {proven_output_score}"
+                            )
+                            return False
+                    except (ValueError, TypeError):
+                        return False
+
+            # 5. Cryptographic Input Feature Vector Verification (all input types)
             if feature_vector is not None:
+                q_expected = quantize_feature_vector(feature_vector, scale_bits=self.input_scale)
+                if len(raw_instances) < len(q_expected):
+                    logger.warning("Instances array shorter than expected input feature vector")
+                    return False
+
+                try:
+                    actual_q = [decode_instance_element(h) for h in raw_instances[:len(q_expected)]]
+                except Exception as e:
+                    logger.warning(f"Failed to decode input instances: {e}")
+                    return False
+
+                if actual_q != q_expected:
+                    logger.warning("Public instances do not match quantized feature vector")
+                    return False
+
                 expected_comm = compute_input_commitment(feature_vector, scale_bits=self.input_scale)
                 if isinstance(proof_data, ZKMLProofResult):
                     if proof_data.input_commitment != expected_comm:
-                        logger.warning("Input commitment mismatch")
+                        logger.warning("Input commitment mismatch on ZKMLProofResult")
                         return False
 
-            # 4. Public output verification (if expected_output_score provided)
-            if expected_output_score is not None:
-                pretty = proof_dict.get("pretty_public_inputs", {})
-                rescaled_outs = pretty.get("rescaled_outputs", [[]])
-                if rescaled_outs and rescaled_outs[0]:
-                    reported_score = float(rescaled_outs[0][0])
-                    if abs(reported_score - expected_output_score) > score_tolerance:
-                        logger.warning(f"Reported score {reported_score} deviates from expected {expected_output_score}")
-                        return False
+                if "input_commitment" in proof_dict and proof_dict["input_commitment"] != expected_comm:
+                    logger.warning("Input commitment mismatch on proof_dict")
+                    return False
 
-            # 5. Native EZKL Halo2 Cryptographic Verification
+            # 6. Native EZKL Halo2 Cryptographic Verification
             res = ezkl.verify(
                 str(target_proof_path),
                 str(self.settings_path),

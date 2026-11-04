@@ -28,12 +28,25 @@ from forensics.zkml.circuit import (
     CircuitError,
     compile_circuit,
     compute_input_commitment,
+    dequantize_score,
     generate_circuit_settings,
     generate_witness,
     setup_circuit_srs,
     setup_keys,
 )
 from forensics.zkml.export import get_model_architecture_summary
+
+BN254_SCALAR_MODULUS = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+
+
+def decode_instance_element(inst_hex: str) -> int:
+    """Decodes a 32-byte little-endian hex scalar field element to a signed integer."""
+    clean_hex = inst_hex[2:] if inst_hex.startswith("0x") else inst_hex
+    raw_bytes = bytes.fromhex(clean_hex)
+    u = int.from_bytes(raw_bytes, byteorder="little")
+    if u > (BN254_SCALAR_MODULUS // 2):
+        return u - BN254_SCALAR_MODULUS
+    return u
 
 
 class ProverError(Exception):
@@ -92,6 +105,12 @@ class ZKMLProofResult:
                 },
                 "metadata": self.metadata,
             }
+        d["model_hash"] = self.model_hash
+        d["input_commitment"] = self.input_commitment
+        d["output_score"] = self.output_score
+        d["proof_hash"] = self.proof_hash
+        d["raw_instances"] = self.raw_instances
+        d["is_valid"] = self.is_valid
         with open(p, "w", encoding="utf-8") as f:
             json.dump(d, f, indent=2)
         return p
@@ -104,6 +123,7 @@ class ZKMLProofResult:
             d = json.load(f)
         hex_p = d["hex_proof"]
         raw_bytes = bytes.fromhex(hex_p[2:] if hex_p.startswith("0x") else hex_p)
+        instances = d.get("raw_instances") or d.get("instances", [[]])
         return cls(
             proof_bytes=raw_bytes,
             hex_proof=hex_p,
@@ -111,9 +131,10 @@ class ZKMLProofResult:
             model_hash=d["model_hash"],
             input_commitment=d["input_commitment"],
             output_score=float(d["output_score"]),
-            raw_instances=d["raw_instances"],
-            is_valid=bool(d["is_valid"]),
+            raw_instances=instances,
+            is_valid=bool(d.get("is_valid", True)),
             metadata=d.get("metadata", {}),
+            raw_proof_dict=d,
         )
 
 
@@ -255,19 +276,32 @@ class ZKMLProver:
         proof_hash = "0x" + hashlib.sha256(proof_bytes).hexdigest()
         input_comm = compute_input_commitment(raw_features, scale_bits=self.input_scale)
 
-        # Extract output anomaly score
-        output_score = 0.0
+        instances = proof_data.get("instances", [[]])
+        if not instances or not instances[0]:
+            raise ProverError("Proof data missing public instances")
+
+        # Decode authentic output score directly from instances[0][-1]
+        try:
+            raw_out_hex = instances[0][-1]
+            q_out = decode_instance_element(raw_out_hex)
+            proven_score = dequantize_score(q_out, scale_bits=self.input_scale)
+        except Exception as e:
+            raise ProverError(f"Failed to decode cryptographic output instance: {e}") from e
+
+        # Extract pretty score if present and cross-validate against proven_score
+        output_score = proven_score
         pretty_inputs = proof_data.get("pretty_public_inputs", {})
         rescaled_outputs = pretty_inputs.get("rescaled_outputs", [])
         if rescaled_outputs and rescaled_outputs[0]:
-            output_score = float(rescaled_outputs[0][0])
-        else:
-            # Fallback to computing from raw instance or forward pass
-            from forensics.ml.model import CompactAnomalyMLP, load_default_model
-            model = load_default_model(self.model_path.parent)
-            output_score = float(model.predict_score(raw_features))
-
-        instances = proof_data.get("instances", [[]])
+            try:
+                pretty_score = float(rescaled_outputs[0][0])
+                if abs(pretty_score - proven_score) > 0.05:
+                    raise ProverError(
+                        f"Synthesized proof pretty_public_inputs ({pretty_score}) contradicts cryptographic output ({proven_score})"
+                    )
+                output_score = pretty_score
+            except (ValueError, TypeError):
+                output_score = proven_score
 
         return ZKMLProofResult(
             proof_bytes=proof_bytes,
