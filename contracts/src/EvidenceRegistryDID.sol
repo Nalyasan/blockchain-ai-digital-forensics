@@ -124,9 +124,7 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
         emit RoleGranted(ROLE_CUSTODIAN, msg.sender, msg.sender);
     }
 
-    // =========================================================================
     // 1. ERC-1056 Decentralized Identity (DID)
-    // =========================================================================
 
     /// @notice Formats an Ethereum address into a canonical ERC-1056 DID string: "did:ethr:0x<40-hex-chars-lower>".
     function getDID(address account) public pure override returns (string memory) {
@@ -190,9 +188,7 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
         changed[identity] = block.number;
     }
 
-    // =========================================================================
     // 2. Granular Forensic Roles & RBAC
-    // =========================================================================
 
     function grantRole(address account, bytes32 role) public override onlyOwner {
         if (account == address(0)) revert ZeroValue();
@@ -246,9 +242,7 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
         return false;
     }
 
-    // =========================================================================
     // 3. EIP-712 Domain Separator & Signer Recovery
-    // =========================================================================
 
     function domainSeparator() public view override returns (bytes32) {
         return keccak256(
@@ -286,9 +280,7 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
         return signer;
     }
 
-    // =========================================================================
     // 4. ISO/IEC 27037 Custody Transitions with EIP-712 Signatures
-    // =========================================================================
 
     function transferCustodyWithSig(
         uint256 evidenceId,
@@ -327,7 +319,6 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
             signature
         );
 
-        // State changes
         nonces[fromCustodian]++;
         currentCustodians[evidenceId] = toCustodian;
 
@@ -451,7 +442,6 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
             signature
         );
 
-        // State change
         nonces[attestor]++;
 
         _pushAttestationRecord(evidenceId, attestor, role, artifactHash, statementHash, signature);
@@ -537,9 +527,7 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
         emit CustodyRecorded(evidenceId, action, attestor, artifactHash, statementHash);
     }
 
-    // =========================================================================
     // 5. Direct Custody & Artifact Anchoring
-    // =========================================================================
 
     function recordCustodyDID(
         uint256 evidenceId,
@@ -640,9 +628,7 @@ contract EvidenceRegistryDID is EvidenceRegistry, IEvidenceRegistryDID {
         emit ForensicEvidenceAnchored(evidenceId, modelHash, xaiDigest, zkmlProofHash, msg.sender);
     }
 
-    // =========================================================================
     // 6. View & Bounded Pagination
-    // =========================================================================
 
     function getCustodyHistoryDID(uint256 evidenceId) external view override returns (CustodyRecordDID[] memory) {
         if (evidenceId == 0 || evidenceId >= nextEvidenceId) revert EvidenceNotFound(evidenceId);

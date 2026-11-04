@@ -1,6 +1,6 @@
 """Integration assertions share ONE fresh Anvil run; no mocked cast or signatures.
 
-Use scripts/run_p3_group1b_checks.py to run the suite without reading project .env.
+Use scripts/run_onchain_preflight_checks.py to run the suite without reading project .env.
 Missing binaries/artifacts are failures, never skipped integration coverage.
 """
 import json
@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope='module')
 def real_smoke():
-    result = subprocess.run([sys.executable, str(ROOT / 'scripts/run_p3_group1b_smoke.py')],
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/run_onchain_guard_smoke.py')],
                             capture_output=True, encoding='utf-8', errors='replace', timeout=300)
     # Harness output is allowlisted; never include child-process stderr in assertions.
     assert result.returncode == 0, result.stdout

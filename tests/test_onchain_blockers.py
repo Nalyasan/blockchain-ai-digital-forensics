@@ -578,7 +578,7 @@ class TestFinding3_PreSendNoAutoMigration:
         """anchor_evidence on unmigrated DB must fail-closed before send and not mutate schema."""
         import forensics.onchain as oc
         from forensics.evidence import export_evidence
-        from test_evidence_p2 import populate_sample_db
+        from test_evidence_package import populate_sample_db
 
         # Create temporary valid package
         pkg_dir = tmp_path / "pkg"
@@ -895,7 +895,7 @@ class TestFindingB_ExporterPreservesLegacySchema:
     def test_export_evidence_on_legacy_db_preserves_schema_untouched(self, tmp_path: Path):
         """Exporting evidence on a pre-existing legacy SQLite DB must succeed without creating Group 3 tables."""
         from forensics.evidence import export_evidence
-        from test_evidence_p2 import populate_sample_db
+        from test_evidence_package import populate_sample_db
         from forensics.schemas import rollback_group3
 
         legacy_db = tmp_path / "existing_legacy.db"

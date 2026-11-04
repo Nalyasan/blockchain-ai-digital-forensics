@@ -174,7 +174,6 @@ def setup_circuit_srs(srs_path: Path | str, logrows: int = 14) -> Path:
     p = Path(srs_path)
     p.parent.mkdir(parents=True, exist_ok=True)
 
-    # Check if existing SRS file has sufficient size (SRS for logrows=k has 2^(k+1)*32+... bytes)
     min_bytes = (2 ** logrows) * 64
     if p.is_file() and p.stat().st_size >= min_bytes:
         return p
@@ -254,7 +253,6 @@ def generate_witness(
     if isinstance(input_data, (str, Path)) and Path(input_data).is_file():
         input_file_path = str(Path(input_data))
     else:
-        # Construct input payload
         if isinstance(input_data, dict) and "input_data" in input_data:
             payload = input_data
         elif isinstance(input_data, dict):

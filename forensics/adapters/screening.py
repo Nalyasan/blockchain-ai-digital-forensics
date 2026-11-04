@@ -39,7 +39,7 @@ logger = logging.getLogger("forensics.adapters.screening")
 # Canonical default paths
 DEFAULT_REAL_P4_DB_PATH = REAL_P4_DB if REAL_P4_DB.exists() else Path("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
 
-# Non-overlapping window boundaries established during Phase 4 baseline
+# Non-overlapping incident window boundaries
 INCIDENT_BOUNDS: dict[str, tuple[int, int]] = {
     "euler_finance": (16816000, 16818110),
     "curve_aleth": (17700000, 17806830),

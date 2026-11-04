@@ -93,7 +93,7 @@ class EventRecord(BaseEndpointRecord):
     event_id: int
     source: str  # Provider / Source name, e.g. 'Service Control Manager'
     channel: str  # Event channel, e.g. 'System', 'Application', 'Security'
-    description: str  # Event payload description
+    description: str
     level: str  # e.g. 'Information', 'Warning', 'Error', 'Critical'
 
 

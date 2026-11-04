@@ -417,7 +417,6 @@ def run_full_benchmark_suite(
                 )
         canon_conn.close()
 
-        # Execute incident screening on canonical benchmark_p6.db and record matches
         screening_res = run_incident_screening(
             p4_db_path=p4_db_path,
             benchmark_db_path=canonical_benchmark_db,

@@ -1,4 +1,4 @@
-"""P4 reads P3 evidence and custody context, preserving verification status.
+"""Rule Engine reads On-Chain Evidence and custody context, preserving verification status.
 
 Run with python -m forensics.rules.anchored --help. No wallet, signing,
 canonical DB writes, or custody mutations are performed by this entrypoint.
@@ -18,7 +18,7 @@ from forensics.rules.engine import RuleEngine
 
 
 class AnchoredEvidenceError(ValueError):
-    """The P3 verification or the package binding did not pass."""
+    """The on-chain verification or package binding did not pass."""
 
 
 TRANSFER_COLUMNS = (
@@ -166,7 +166,7 @@ def analyze_anchored_package(manifest_path, *, contract_address=None, rpc_url=No
 
 
 def cli_analyze_p3(args):
-    """P3 input mode of the existing P4 analyze command; JSON preserves context."""
+    """Anchored input mode of the analyze command; JSON preserves context."""
     try:
         if args.format == 'csv':
             raise AnchoredEvidenceError('P3_CONTEXT_REQUIRES_JSON')
@@ -174,10 +174,16 @@ def cli_analyze_p3(args):
         if args.token_thresholds:
             value = args.token_thresholds
             thresholds = json.loads(Path(value).read_text() if Path(value).is_file() else value)
+        manifest = getattr(args, "anchored_manifest", None) or getattr(args, "p3_manifest", None)
+        contract = getattr(args, "custody_contract", None) or getattr(args, "p3_contract", None)
+        rpc_url = getattr(args, "custody_rpc_url", None) or getattr(args, "p3_rpc_url", None)
+        anchor_chain_id = getattr(args, "custody_chain_id", None) or getattr(args, "p3_anchor_chain_id", None)
+        custody_db = getattr(args, "custody_db", None) or getattr(args, "p3_custody_db", None)
+        require_verified = getattr(args, "custody_require_verified", False) or getattr(args, "p3_require_verified", False)
         report = analyze_anchored_package(
-            args.p3_manifest, contract_address=args.p3_contract,
-            rpc_url=args.p3_rpc_url, anchor_chain_id=args.p3_anchor_chain_id,
-            custody_db=args.p3_custody_db, require_verified=args.p3_require_verified,
+            manifest, contract_address=contract,
+            rpc_url=rpc_url, anchor_chain_id=anchor_chain_id,
+            custody_db=custody_db, require_verified=require_verified,
             test_start_block=args.start_block, test_end_block=args.end_block,
             cal_start_block=args.cal_start_block, cal_end_block=args.cal_end_block,
             rules=args.rules, token_thresholds=thresholds)
@@ -192,6 +198,9 @@ def cli_analyze_p3(args):
     except Exception:
         print(json.dumps({'error': 'P3_P4_ANALYSIS_REJECTED', 'verification': {'status': 'NOT_VERIFIED'}}))
         return 1
+
+
+cli_analyze_anchored = cli_analyze_p3
 
 
 def main(argv=None):

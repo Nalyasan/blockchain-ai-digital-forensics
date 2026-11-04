@@ -125,7 +125,7 @@ def init_benchmark_db(
     );
     """)
 
-    # 5. Benchmark Runs Log (for Gate P6-03 Telemetry)
+    # 5. Benchmark Runs Telemetry Log
     conn.execute("""
     CREATE TABLE IF NOT EXISTS benchmark_runs (
         run_id TEXT PRIMARY KEY,

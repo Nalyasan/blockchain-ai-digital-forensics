@@ -32,9 +32,7 @@ contract EvidenceRegistry_Group4Test {
         registry = new EvidenceRegistry();
     }
 
-    // =========================================================================
-    // G4-01 / G4-07: URI Prefix Tests
-    // =========================================================================
+    // URI Prefix Invariance Tests
 
     function test_RevertIf_UriMissingPrefix_Http() public {
         vm.expectRevert(abi.encodeWithSelector(EvidenceRegistry.InvalidUriPrefix.selector));
@@ -66,9 +64,7 @@ contract EvidenceRegistry_Group4Test {
         registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://   ");
     }
 
-    // =========================================================================
-    // G4-02 / G4-07: Character Validation Tests
-    // =========================================================================
+    // Character Validation Tests
 
     function test_RevertIf_UriContainsNullByte() public {
         // Null byte at index 15
@@ -114,9 +110,7 @@ contract EvidenceRegistry_Group4Test {
         registry.registerEvidence(CASE_001, MANIFEST_HASH_1, string(bad));
     }
 
-    // =========================================================================
-    // G4-03 / G4-07: Length Boundaries (256 vs 257)
-    // =========================================================================
+    // URI Length Boundary Tests (256 vs 257)
 
     function test_ValidUri_Exact256Bytes() public {
         bytes memory exact256 = new bytes(256);
@@ -146,9 +140,7 @@ contract EvidenceRegistry_Group4Test {
         registry.registerEvidence(CASE_001, MANIFEST_HASH_1, string(exact257));
     }
 
-    // =========================================================================
-    // G4-05 / G4-08: Custody Pagination Tests
-    // =========================================================================
+    // Custody Pagination Tests
 
     function test_CustodyPagination_EmptyHistory() public {
         uint256 eid = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, "evidence://case-001/manifest.json");

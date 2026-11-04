@@ -1,92 +1,145 @@
 ===============================================================================
-Blockchain + AI Digital Forensics P1-P6: Standalone Portable Distribution
-Release Version: v1.0.0
-Git Checkpoint:  checkpoint-g6c-verified / v1.0.0 (Release Candidate)
+Blockchain + AI Digital Forensics: Operational Academic Proof of Concept
+Authoritative Specification: AGENT.md v6.0 (Topic 8: Blockchain + AI Forensics)
+Release Version: v2.0.0 (Academic PoC)
+Git Checkpoint:  checkpoint-p1-p10-final / integration/p7-p10-dev
 ===============================================================================
 
 1. OVERVIEW
 -----------
-This standalone portable distribution contains the complete, production-ready
-Blockchain + AI Digital Forensics codebase (P1-P6):
-- Collector (P1): RPC collector, ETH/ERC-20 normalizer, checkpoint, 12-block reorg unwinder.
-- Evidence Integrity (P2): SHA-256 packaging, Merkle commitment, append-only SQLite store.
-- Smart Contracts (P3): EvidenceRegistry.sol (custody, idempotent registration, access control).
-- Rule Engine (P4): Heuristic detection rules R1-R4 on real Ethereum Mainnet datasets.
-- AI Investigator (P5): Bounded Pydantic AI investigator with 5-layer read-only SQLite,
-  sanitizer, reference validation (ref_checker), and offline deterministic FunctionModel.
-- Threat Intelligence & Evaluation (P6): Forta, MEW, and PTXPhish adapters, entity screening,
-  and multi-unit empirical evaluation engine (tx_unit, address_window_unit).
+This distribution contains the complete, verified, academic Proof of Concept (PoC)
+for an end-to-end verifiable digital forensics system under Topic 8 (Đề tài 8:
+Điều tra số kết hợp Blockchain và AI), strictly compliant with AGENT.md v6.0.
 
-All project guides, technical specifications, and historical reports are provided
-as clean, standalone plain text files (.txt) with zero external Markdown dependencies.
+In strict adherence to Requirement R4, all sequential phase labels (P1-P12)
+have been eradicated across maintained documentation, diagrams, interfaces,
+and components in favor of 12 descriptive functional components:
+
+[DATA INGESTION]
+- [C01] Blockchain Collector: EVM RPC client (ETH & ERC-20), reorg unwinder,
+  atomic checkpointing, raw SHA-256 preservation.
+- [C07] Endpoint Acquisition: ISO/IEC 27037 multi-source ingestion, live daemons
+  (osquery/WMI), static JSONL/EVTX, acquisition manifests, AI First Responder.
+
+[STORAGE & PACKAGING]
+- [C02] Evidence Store: Tamper-evident SQLite persistence, append-only journals,
+  canonical data stores, provenance and audit tracking.
+- [C03] Evidence Package: RFC 6962 Merkle tree commitments, canonical storage
+  URIs (evidence://sha256/...), cryptographically sealed manifests.
+
+[DETECTION & HEURISTICS]
+- [C04] Rule Engine: Deterministic heuristic rules (R1 Large Transfer, R2 High
+  Frequency, R3 Fan-In/Out, R4 Rapid Pass-Through) with evidence_refs.
+- [C08] Machine Learning & XAI: Compact MLP anomaly detector (ONNX sync),
+  decoupled ground truth, local SHAP attribution, grounded MITRE ATT&CK.
+
+[COGNITIVE INVESTIGATION & INTEL]
+- [C06] Threat Intelligence: Open-source threat intelligence adapters (Forta,
+  PTXPhish, MEW), Open World Assumption (OWA) screening, CSV anti-injection.
+- [C05] AI Investigator: Bounded Pydantic AI agent, 5-layer read-only SQLite,
+  38-pattern prompt injection sanitizer, 5-step budget, Ref Checker.
+
+[VERIFIABLE COMPUTATION & CUSTODY]
+- [C09] ZKML Verifiable Inference: Halo2 arithmetic circuits, KZG commitments,
+  real EZKL proofs (no mocks), 5-part binding digest, on-chain Anvil verifier.
+- [C10] Identity & Custody: Solidity 0.8.24 registry (EvidenceRegistryDID.sol),
+  W3C DID Core 1.0 (did:ethr/did:key), EIP-712 signatures, 2-actor handover.
+
+[EVALUATION & PORTABLE RELEASE]
+- [C11] Integration & Evaluation: D1 (EVM Replay), D2 (Host Replay per ISO 27037),
+  D3 (Multi-Gateway Adversarial Replay), end-to-end traceable forensic reports.
+- [C12] Portable Release: Standalone offline Windows distribution, PowerShell
+  automation, wheelhouse dependencies, SHA256SUMS.txt integrity verification.
+
+All technical specifications, architectural designs, and cross-reference tables
+are available in the docs/ directory:
+- docs/naming_cross_reference.md (Complete 12-component mapping to AGENT.md v6.0)
+- docs/architecture.md (Comprehensive system architecture and data flows)
 
 2. DIRECTORY STRUCTURE
 ----------------------
 .
-|-- collector.py              # Multi-chain transaction collector CLI
-|-- mock_rpc.py               # Local synthetic EVM RPC test harness
-|-- pytest.ini                # Pytest test discovery & execution configuration
-|-- requirements.txt          # 101 pinned Python dependencies
+|-- AGENT.md                  # Authoritative primary specification v6.0
+|-- README.txt                # This distribution overview and operational manual
+|-- PROJECT.txt               # Architecture, inventory, and milestone specifications
+|-- pytest.ini                # Pytest test discovery and execution configuration
+|-- requirements.txt          # Pinned Python dependencies
 |-- setup_env.bat             # Automated offline virtual environment installer
 |-- run_tests.bat             # Standalone test runner (Foundry + Pytest)
 |-- run_evaluation.bat        # Standalone empirical evaluation runner
-|-- README.txt                # This distribution documentation
-|-- PROJECT.txt               # Architecture, inventory, and milestone specifications
-|-- agent.txt                 # Technical forensic agent specification & manual
-|-- COMPLETION_REPORT.txt     # Authoritative engineering completion & acceptance report
-|-- P1_P6_STATUS_MATRIX.csv   # Traceability matrix mapping all P1-P6 and G0-G6 features
-|-- BACKUP_RESTORATION.txt    # Backup verification & disaster recovery manual
-|-- MANIFEST_SHA256.txt       # SHA-256 checksum manifest of all bundled files
-|-- MANIFEST_INFO.json        # Package build metadata, git commit, and provenance
-|-- contracts/                # Foundry smart contracts (EvidenceRegistry.sol, tests)
-|-- docs/                     # Technical documentation (limitations.txt, P4_P3_BRIDGE.txt)
-|-- forensics/                # Core forensic analysis, rule engine, and AI pipelines
-|-- scripts/                  # Standalone CLI tools (evaluate.py, portable.py, etc.)
-|-- tests/                    # 41 pytest test suites (1,119 tests)
-|-- tools/foundry/            # Bundled Foundry binaries (forge.exe, cast.exe, anvil.exe)
-|-- data/                     # Canonical SQLite databases (forensics.db, real_p4.db, benchmark_p6.db)
-`-- wheels/                   # 101 pre-downloaded offline Python wheels (CPython 3.13)
+|-- collector.py              # Multi-chain transaction collector CLI
+|-- mock_rpc.py               # Local synthetic EVM RPC test harness
+|-- contracts/                # Smart contracts and Foundry test suites
+|   |-- src/
+|   |   |-- EvidenceRegistry.sol      # Core chain of custody registry
+|   |   |-- EvidenceRegistryDID.sol   # ERC-1056 DID & EIP-712 custody extension
+|   |   `-- InferenceVerifier.sol     # ZKML on-chain verifier contract
+|   `-- test/                         # 112 Foundry forge smart contract tests
+|-- data/                     # Canonical immutable & operational databases
+|   |-- real_p4.db            # Canonical immutable ground truth (PROTECTED)
+|   |-- forensics.db          # Canonical evidence store (PROTECTED)
+|   |-- benchmark_p6.db       # Canonical public benchmark (PROTECTED)
+|   `-- endpoint_evidence.db  # Dedicated endpoint evidence store
+|-- docs/                     # Project documentation & architecture specifications
+|   |-- architecture.md       # Comprehensive system architecture & data flows
+|   |-- naming_cross_reference.md # 12-component naming cross-reference table
+|   |-- limitations.txt       # Technical system limitations record
+|   `-- legacy/               # Preserved historical specifications (agent_v5.1.txt)
+|-- forensics/                # Core forensic Python modules
+|   |-- ai/                   # AI Investigator, sanitizer, and ref checker
+|   |-- adapters/             # Threat intelligence feeds and benchmark runner
+|   |-- did/                  # W3C DID Core 1.0 resolver and EIP-712 client
+|   |-- endpoint/             # Endpoint acquisition, daemons, and first responder
+|   |-- ml/                   # ML anomaly detector, features, and local SHAP XAI
+|   |-- rules/                # Heuristic Rule Engine (R1-R4) and anchored bridge
+|   `-- zkml/                 # Real Halo2 / EZKL proving and verification engine
+|-- models/                   # Serialized ML models, ONNX graphs, and ZK circuits
+|-- reports/                  # Formal technical reports and baseline audits
+|-- scripts/                  # Operational, demo, and packaging CLI scripts
+|   |-- evaluate.py           # Threat intelligence and CTI evaluation CLI
+|   |-- portable.py           # Standalone release packager and verifier
+|   `-- verify_protected_hashes.py # Canonical database integrity verifier
+|-- tests/                    # 1,521 Pytest test cases across 55 test files
+`-- tools/foundry/            # Bundled Foundry binaries (forge, cast, anvil)
 
 3. SYSTEM PREREQUISITES
 -----------------------
 - Operating System: Microsoft Windows 10 or Windows 11 (64-bit AMD64)
 - Python Runtime:   Python 3.13 (64-bit) installed and accessible via PATH
-- Disk Space:       ~1.2 GB (package extraction + virtual environment)
+- Disk Space:       ~1.5 GB (package extraction + virtual environment + models)
 
 4. QUICK START INSTRUCTIONS
 ---------------------------
 Step 1: Setup Offline Virtual Environment
   Execute setup_env.bat in Command Prompt or PowerShell:
     .\setup_env.bat
-  This creates a local 'venv' and installs all 101 pinned packages from the 'wheels/' directory
-  without requiring an internet connection.
+  This creates a local 'venv' and installs all pinned packages from the local
+  wheelhouse without requiring an active internet connection.
 
 Step 2: Activate Environment
-  Command Prompt:
-    venv\Scripts\activate.bat
   PowerShell:
     .\venv\Scripts\Activate.ps1
+  Command Prompt:
+    venv\Scripts\activate.bat
 
 Step 3: Run Full Test Suite
   Execute run_tests.bat:
     .\run_tests.bat
   This executes:
-  - 56 Foundry smart contract tests via bundled tools\foundry\forge.exe (100% pass)
-  - 1,119 Pytest regression tests in isolated environment (1,119 passed, 1 authorized skip)
+  - 112 Foundry smart contract tests via forge.exe (100% pass)
+  - 1,521 Pytest regression and unit test cases (100% pass)
 
-Step 4: Run Empirical Evaluation
+Step 4: Verify Canonical Database Integrity
+  Verify that protected canonical databases have not been tampered with:
+    python scripts\verify_protected_hashes.py
+
+Step 5: Run Empirical Demos & Evaluation
   Execute run_evaluation.bat:
     .\run_evaluation.bat
-  This replays:
-  - Euler Finance DAI incident evaluation
-  - Curve alETH incident evaluation
-  - Synthetic benchmark regression evaluation
-  Outputs are saved to results\evaluation\
-
-Step 5: Run Multi-Chain Collector
-  python collector.py --help
-  python collector.py healthcheck
-  python collector.py verify
+  This executes:
+  - Demo D1: EVM Incident Case Replay
+  - Demo D2: Endpoint Host Log Replay per ISO/IEC 27037
+  - Demo D3: Multi-Gateway Adversarial Replay
 
 5. CANONICAL DATABASE CHECKSUMS (SHA-256)
 ----------------------------------------
@@ -97,40 +150,26 @@ The SQLite databases in data/ are cryptographically sealed. Verify with Get-File
   6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97
 - data/benchmark_p6.db:
   C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507
+- .env:
+  7FFFBBC5B0EEA7BC6F7D2A740C3D32C562479B30292B4136C737E90B04FD3F99
 
-6. INTEGRITY VERIFICATION
--------------------------
-To verify the complete package integrity against MANIFEST_SHA256.txt:
+6. INTEGRITY VERIFICATION & PORTABLE BUNDLING
+---------------------------------------------
+To verify the complete package integrity or bundle a new standalone release:
   python scripts\portable.py verify <path_to_zip>
+  python scripts\portable.py bundle --output dist\
 
-7. DOCUMENTED ACCEPTANCE PREREQUISITES & PRODUCTION READINESS (RULES 5 & 13)
-----------------------------------------------------------------------------
+7. DOCUMENTED ACCEPTANCE PREREQUISITES & SAFETY BOUNDS (RULES 5 & 13)
+---------------------------------------------------------------------
 MANDATORY INTEGRITY QUALIFICATION:
-In strict compliance with Rule 5, 100% test pass rate confirms offline functional
-correctness of P1-P6 modules but does NOT constitute live production deployment readiness.
-Untested live network components are NOT declared production-ready solely based on unit tests.
+The system is certified as 100% OFFLINE_VERIFIED. In strict compliance with
+academic honesty rules, 100% test pass rate confirms offline functional
+correctness but does NOT constitute live public production deployment readiness.
 
-The system is certified as 100% OFFLINE_VERIFIED. To transition this verified codebase
-into live public network operations, the operating organization must fulfill the following
-documented acceptance prerequisites:
-1. Google Gemini API Credentials:
-   - Environment Variable: GOOGLE_API_KEY or GEMINI_API_KEY
-   - Purpose: Required for live LLM reasoning in the AI Investigator.
-   - Offline Behavior: Operates against deterministic offline FunctionModel mock.
-2. Live Ethereum Execution RPC Endpoint:
-   - Environment Variable: RPC_URL or SEPOLIA_RPC_URL (e.g., Alchemy / Infura HTTPS/WSS)
-   - Purpose: Real-time transaction ingestion and block reorg tracking in collector.py.
-   - Offline Behavior: Operates against local Anvil loopback or mock_rpc.py.
-3. Etherscan API Key:
-   - Environment Variable: ETHERSCAN_API_KEY
-   - Purpose: Dynamic contract ABI retrieval and verified contract source validation.
-   - Offline Behavior: Operates against pre-compiled local ABI cache.
-4. Deployed Smart Contract Address:
-   - Environment Variable: EVIDENCE_REGISTRY_ADDRESS
-   - Purpose: Contract address of EvidenceRegistry.sol deployed on Ethereum Mainnet or Sepolia.
-   - Offline Behavior: Deploys ephemeral registry instances on local Anvil testnet.
-5. Funded Custodial Private Key:
-   - Environment Variable: ETH_PRIVATE_KEY or encrypted Cast keystore path
-   - Purpose: Authorizing and paying gas fees for on-chain cryptographic evidence custody.
-   - Offline Behavior: Uses standard Foundry pre-funded mnemonic accounts.
+Safety Invariants:
+1. Public Network Broadcast Disabled: Transactions are executed strictly on local
+    Anvil loopback (http://127.0.0.1:8545). Public chain broadcasts are blocked.
+2. Privacy & Key Safety: Zero private keys, raw PII, or internal prompts are
+    stored on-chain or leaked into logs.
+3. Scientific Honesty: Zero mock proofs are accepted for ZKML verification.
 ===============================================================================

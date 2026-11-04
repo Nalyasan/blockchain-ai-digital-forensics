@@ -106,9 +106,7 @@ class ReferenceCheckResult:
         }
 
 
-# ==============================================================================
 # Normalization Helpers
-# ==============================================================================
 
 
 def _normalize_tx(tx: Any) -> str:
@@ -212,9 +210,7 @@ def _parse_ref_entity(ref: str) -> tuple[str, str]:
     return ("unknown", ref_clean)
 
 
-# ==============================================================================
 # Database Query Helpers (Strict Read-Only)
-# ==============================================================================
 
 
 def _fetch_candidate_transfers(
@@ -354,9 +350,7 @@ def _check_endpoint_ref_exists(conn: sqlite3.Connection, rtype: str, rval: str) 
         return False
 
 
-# ==============================================================================
 # Stage 1: Reference Existence Verification
-# ==============================================================================
 
 
 def verify_references_existence(
@@ -410,7 +404,6 @@ def verify_references_existence(
     if not total_refs:
         return (0.0, [])
 
-    # Setup endpoint db if needed
     ep_conn = endpoint_db
     close_ep = False
     if any(r[0].startswith("endpoint") for r in total_refs) and ep_conn is None:
@@ -559,9 +552,7 @@ def verify_endpoint_artifacts(
     return mismatches
 
 
-# ==============================================================================
 # Stage 2: Content Match Verification
-# ==============================================================================
 
 
 def verify_single_fact(
@@ -1001,9 +992,7 @@ def _verify_evidence_refs_for_fact(
     return mismatches
 
 
-# ==============================================================================
 # Public Interface Functions
-# ==============================================================================
 
 
 def verify_observed_facts(
@@ -1140,7 +1129,6 @@ def check_investigation_output(
             elif rtype.startswith("endpoint"):
                 endpoint_candidates.add(str(r))
 
-    # From endpoint_artifacts
     for art in endpoint_artifacts:
         rec_id = art.get("record_id") if isinstance(art, dict) else getattr(art, "record_id", None)
         if rec_id:

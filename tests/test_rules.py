@@ -21,7 +21,7 @@ from forensics.rules.fan_in_out import FanInOutRule
 from forensics.rules.high_frequency import HighFrequencyRule
 from forensics.rules.large_transfer import LargeTransferRule
 from forensics.rules.rapid_pass_through import RapidPassThroughRule
-from tests.p4_fixtures import ETH, TOKEN, TOKEN2, ZERO, Dataset, addr, verify_refs
+from tests.rule_fixtures import ETH, TOKEN, TOKEN2, ZERO, Dataset, addr, verify_refs
 
 
 @pytest.fixture

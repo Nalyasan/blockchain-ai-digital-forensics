@@ -100,7 +100,6 @@ contract ChallengerDIDAdversarialTest {
         roleCustodian = registry.ROLE_CUSTODIAN();
     }
 
-    // Helper: compute transfer struct hash
     function _transferStructHash(
         uint256 evidenceId,
         address fromCust,
@@ -124,7 +123,6 @@ contract ChallengerDIDAdversarialTest {
         );
     }
 
-    // Helper: compute attestation struct hash
     function _attestationStructHash(
         uint256 evidenceId,
         address attestor,
@@ -148,13 +146,11 @@ contract ChallengerDIDAdversarialTest {
         );
     }
 
-    // Helper: sign digest
     function _signDigest(uint256 pk, bytes32 digest) internal returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return abi.encodePacked(r, s, v);
     }
 
-    // Helper: sign transfer
     function _signTransfer(
         uint256 pk,
         uint256 evidenceId,
@@ -170,7 +166,6 @@ contract ChallengerDIDAdversarialTest {
         return _signDigest(pk, digest);
     }
 
-    // Helper: sign attestation
     function _signAttestation(
         uint256 pk,
         uint256 evidenceId,
@@ -224,7 +219,6 @@ contract ChallengerDIDAdversarialTest {
         return abi.encodePacked(r, sPrime, vPrime);
     }
 
-    // Helper: setup Alice as evidence creator and custodian, Bob as custodian
     function _setupCustodiansAndEvidence() internal returns (uint256) {
         registry.grantRole(alice, roleCollector);
         registry.grantRole(alice, roleCustodian);
@@ -234,9 +228,7 @@ contract ChallengerDIDAdversarialTest {
         return registry.registerEvidence(CASE_001, MANIFEST_HASH, STORAGE_URI);
     }
 
-    // =========================================================================
     // Vector 1: Signature Malleability (High-S, non-canonical V, length check)
-    // =========================================================================
 
     function test_ADV_01_Transfer_HighS_Malleability_Reverts() public {
         uint256 evidenceId = _setupCustodiansAndEvidence();
@@ -311,9 +303,7 @@ contract ChallengerDIDAdversarialTest {
         registry.transferCustodyWithSig(evidenceId, alice, bob, ART_HASH, NOTE_HASH, 0, deadline, longSig);
     }
 
-    // =========================================================================
     // Vector 2: Cross-Chain & Cross-Contract Replay
-    // =========================================================================
 
     function test_ADV_06_CrossChain_Transfer_Replay_Reverts() public {
         uint256 evidenceId = _setupCustodiansAndEvidence();
@@ -399,19 +389,15 @@ contract ChallengerDIDAdversarialTest {
         registry.transferCustodyWithSig(evidenceId, alice, bob, ART_HASH, NOTE_HASH, 0, deadline, attestationSig);
     }
 
-    // =========================================================================
     // Vector 3: Nonce Reuse & Double Spending Defenses
-    // =========================================================================
 
     function test_ADV_10_NonceReuse_IdenticalCall_Reverts() public {
         uint256 evidenceId = _setupCustodiansAndEvidence();
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signTransfer(ALICE_PK, evidenceId, alice, bob, ART_HASH, NOTE_HASH, 0, deadline);
 
-        // 1st call passes
         registry.transferCustodyWithSig(evidenceId, alice, bob, ART_HASH, NOTE_HASH, 0, deadline, sig);
 
-        // 2nd call with same nonce must revert with InvalidNonce(expected 1, provided 0)
         vm.expectRevert(
             abi.encodeWithSelector(
                 EvidenceRegistryDID.InvalidNonce.selector,
@@ -430,7 +416,6 @@ contract ChallengerDIDAdversarialTest {
             ALICE_PK, evidenceId, alice, roleAnalyst, MODEL_HASH, XAI_DIGEST, 0, deadline
         );
 
-        // 1st call passes
         registry.recordAttestationWithSig(
             evidenceId, alice, roleAnalyst, MODEL_HASH, XAI_DIGEST, 0, deadline, sig
         );
@@ -486,9 +471,7 @@ contract ChallengerDIDAdversarialTest {
         registry.transferCustodyWithSig(evidenceId, alice, bob, ART_HASH, NOTE_HASH, 5, deadline, sig);
     }
 
-    // =========================================================================
     // Vector 4: Expired Deadline & Exact Boundary
-    // =========================================================================
 
     function test_ADV_14_Expired_Deadline_Transfer_Reverts() public {
         uint256 evidenceId = _setupCustodiansAndEvidence();
@@ -545,9 +528,7 @@ contract ChallengerDIDAdversarialTest {
         assertEq(registry.currentCustodians(evidenceId), bob);
     }
 
-    // =========================================================================
     // Vector 5: Role Privilege Escalation & Access Control
-    // =========================================================================
 
     function test_ADV_17_Transfer_From_Unauthorized_Sender_Reverts() public {
         uint256 evidenceId = _setupCustodiansAndEvidence();
@@ -736,9 +717,7 @@ contract ChallengerDIDAdversarialTest {
         registry.addDelegate(alice, keccak256("admin"), stranger, 1 days);
     }
 
-    // =========================================================================
     // Vector 6: Parameter Boundary & Zero-Value Attacks
-    // =========================================================================
 
     function test_ADV_26_Zero_Address_In_Transfer_Reverts() public {
         uint256 evidenceId = _setupCustodiansAndEvidence();

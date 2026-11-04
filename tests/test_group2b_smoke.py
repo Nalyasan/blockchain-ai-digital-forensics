@@ -12,7 +12,7 @@ def test_B08_C03_C10_C12_real_group2b_smoke(tmp_path):
     parent=Path(evidence_dir) if evidence_dir else (tmp_path/'2b_evidence')
     parent.mkdir(parents=True, exist_ok=True)
     output=parent/('anvil-2b-'+uuid.uuid4().hex)
-    cmd=[sys.executable,str(root/'scripts/run_p3_group2b_smoke.py'),'--output-dir',str(output)]
+    cmd=[sys.executable,str(root/'scripts/run_evidence_export_smoke.py'),'--output-dir',str(output)]
     roots_env=os.environ.get('P3_PROTECTED_ROOTS','["forensics", "contracts"]')
     for path in json.loads(roots_env):cmd+=['--protected-root',path]
     result=subprocess.run(cmd,capture_output=True,encoding='utf-8',errors='replace',timeout=240)

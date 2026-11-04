@@ -53,7 +53,6 @@ def main(argv=None):
                     raw = response.read(10_000_001)
                 if len(raw) > 10_000_000:
                     raise ValueError('LABEL_DOCUMENT_TOO_LARGE')
-                # Save to cache
                 try:
                     cached_file.write_bytes(raw)
                 except Exception:

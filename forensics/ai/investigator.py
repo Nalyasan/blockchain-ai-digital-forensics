@@ -119,9 +119,7 @@ CRITICAL SECURITY RULES:
 """
 
 
-# ==============================================================================
 # Domain Schemas & Fallback Models
-# ==============================================================================
 
 # Attempt imports from forensics.ai.schemas and forensics.ai.sanitizer/ref_checker
 try:
@@ -255,9 +253,7 @@ except ImportError:
         return ratio, mismatches
 
 
-# ==============================================================================
 # Exceptions & Context Data Structures
-# ==============================================================================
 
 
 class ContentMismatchError(ValueError):
@@ -296,9 +292,7 @@ class InvestigationResult:
     referenced_canonical_tx_count: int = 0
 
 
-# ==============================================================================
-# Database Persistence Layer (G5-02 Compliant)
-# ==============================================================================
+# Idempotent Database Persistence Layer
 
 
 def ensure_analysis_runs_table(conn: sqlite3.Connection) -> None:
@@ -359,9 +353,7 @@ def save_analysis_run(
         )
 
 
-# ==============================================================================
 # Deterministic Offline Forensic Model (Pydantic AI FunctionModel)
-# ==============================================================================
 
 _CASE_ID_LINE_RE = re.compile(r"Case Identifier:\s*([^\r\n]+)", re.IGNORECASE)
 _TX_HASH_RE = re.compile(r"0x[0-9a-fA-F]{64}")
@@ -854,9 +846,7 @@ def create_offline_forensic_model(
     return FunctionModel(_forensic_step_fn, model_name="deterministic-offline-forensic")
 
 
-# ==============================================================================
 # Forensic Investigator Coordinator
-# ==============================================================================
 
 
 class ForensicInvestigator:
@@ -945,7 +935,6 @@ class ForensicInvestigator:
             "get_ml_anomaly_analysis": get_ml_anomaly_analysis,
         }
 
-        # Initialize Pydantic AI Agent
         self.agent = Agent(
             self.model,
             deps_type=InvestigationDeps,
@@ -1172,7 +1161,7 @@ class ForensicInvestigator:
             f"Target References: {raw_refs_json}\n"
         )
 
-        # Step 2: Initialize Budget Tracker & Runtime Dependencies
+        # Initialize Budget Tracker & Runtime Dependencies
         tracker = ToolBudgetManager(max_steps=self.config.max_tool_steps)
         deps = InvestigationDeps(
             readonly_db=effective_ro_db,
@@ -1185,7 +1174,7 @@ class ForensicInvestigator:
 
         usage_limits = get_usage_limits(self.config)
 
-        # Step 3: Run Agent
+        # Execute Agent Inference Loop
         budget_exhausted = False
         output: Optional[ForensicInvestigationOutput] = None
 
@@ -1230,7 +1219,7 @@ class ForensicInvestigator:
             # Always preserve the requested case_id
             output.case_id = str(case_id).strip()
 
-        # Step 4: Independent Reference Checking (T10)
+        # Two-Stage Independent Reference Checking
         checked_facts_count = len(output.observed_facts)
         content_match_ratio, mismatches = verify_observed_facts(
             output.observed_facts, effective_ro_db
@@ -1298,7 +1287,7 @@ class ForensicInvestigator:
                 "(zero observed_facts produced; an empty investigation cannot pass strict reference verification)."
             )
 
-        # Step 5: Serialize Audit Logs & Persist to SQLite (G5-02 Compliant)
+        # Serialize Audit Logs & Persist to SQLite
         raw_tool_log_json = tracker.to_tool_calls_log()
         tool_log_dict = json.loads(raw_tool_log_json)
         output_json = output.model_dump_json()
@@ -1347,4 +1336,3 @@ class ForensicInvestigator:
         )
 
 
-# End of module

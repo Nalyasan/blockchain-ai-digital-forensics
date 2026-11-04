@@ -18,7 +18,6 @@ import sys
 import time
 from pathlib import Path
 
-# Paths
 REPO_ROOT = Path("D:/Projest/Blockchain").resolve()
 VERIF_DIR = REPO_ROOT / "results" / "verification"
 TMP_PYTEST = REPO_ROOT.parent / "tmp_pytest_workerG5"
@@ -151,9 +150,7 @@ def main():
     logs = []
     exec_commands = []
 
-    # ---------------------------------------------------------
-    # STEP 1: Pre-flight Process Hygiene & Environment
-    # ---------------------------------------------------------
+    # Pre-flight Process Hygiene & Environment
     step1_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
     logs.append({
         "timestamp_utc": step1_start,
@@ -179,9 +176,7 @@ def main():
         "log_anchor": "STEP 01: PRE-FLIGHT ENVIRONMENT INITIALIZATION",
     })
 
-    # ---------------------------------------------------------
-    # STEP 2: Pre-Execution Evidence Hash Manifest
-    # ---------------------------------------------------------
+    # Pre-Execution Evidence Hash Manifest
     pre_manifest_files = []
     all_pre_match = True
     for p in CANONICAL_FILES:
@@ -239,9 +234,7 @@ def main():
     if not all_pre_match:
         raise RuntimeError("Pre-execution evidence hash mismatch!")
 
-    # ---------------------------------------------------------
-    # STEP 3: Foundry Forge Test Suite
-    # ---------------------------------------------------------
+    # Foundry Forge Test Suite
     forge_proc, forge_dur, forge_out, forge_err = run_command(
         [str(FORGE_BIN), "test", "--root", "contracts"],
         env=test_env,
@@ -268,9 +261,7 @@ def main():
         forge_passed = 56
     forge_dur_ms = round(forge_dur * 1000.0, 2)
 
-    # ---------------------------------------------------------
-    # STEP 4: Full Python Pytest Suite (Isolated basetemp)
-    # ---------------------------------------------------------
+    # Full Python Pytest Suite (Isolated basetemp)
     pytest_cmd = [
         sys.executable,
         "-m",
@@ -298,9 +289,7 @@ def main():
     if pytest_proc.returncode != 0:
         raise RuntimeError(f"Pytest suite failed with code {pytest_proc.returncode}")
 
-    # ---------------------------------------------------------
-    # STEP 5: Empirical Incident Evaluation (Euler DAI)
-    # ---------------------------------------------------------
+    # Empirical Incident Evaluation (Euler DAI)
     euler_cmd = [
         sys.executable,
         "scripts/evaluate.py",
@@ -333,9 +322,7 @@ def main():
     if euler_proc.returncode != 0:
         raise RuntimeError("Euler evaluation failed!")
 
-    # ---------------------------------------------------------
-    # STEP 6: Empirical Incident Evaluation (Curve alETH)
-    # ---------------------------------------------------------
+    # Empirical Incident Evaluation (Curve alETH)
     curve_cmd = [
         sys.executable,
         "scripts/evaluate.py",
@@ -368,9 +355,7 @@ def main():
     if curve_proc.returncode != 0:
         raise RuntimeError("Curve evaluation failed!")
 
-    # ---------------------------------------------------------
-    # STEP 7: Benchmark Regression Evaluation
-    # ---------------------------------------------------------
+    # Benchmark Regression Evaluation
     bench_cmd = [
         sys.executable,
         "scripts/evaluate.py",
@@ -399,10 +384,8 @@ def main():
     if bench_proc.returncode != 0:
         raise RuntimeError("Benchmark evaluation failed!")
 
-    # ---------------------------------------------------------
-    # STEP 8: Phase 4 Rule Engine Smoke Suite
-    # ---------------------------------------------------------
-    smoke_cmd = [sys.executable, "scripts/run_p4_smoke.py"]
+    # Rule Engine Smoke Suite
+    smoke_cmd = [sys.executable, "scripts/run_rule_engine_smoke.py"]
     smoke_proc, smoke_dur, smoke_out, smoke_err = run_command(
         smoke_cmd,
         env=test_env,
@@ -412,7 +395,7 @@ def main():
     exec_commands.append({
         "step_id": "STEP_08",
         "name": "Phase 4 Rule Engine Smoke Suite",
-        "command_line": "python scripts/run_p4_smoke.py",
+        "command_line": "python scripts/run_rule_engine_smoke.py",
         "exit_code": smoke_proc.returncode,
         "duration_sec": smoke_dur,
         "status": "PASS" if smoke_proc.returncode == 0 else "FAIL",
@@ -421,9 +404,7 @@ def main():
     if smoke_proc.returncode != 0:
         raise RuntimeError("Rule engine smoke failed!")
 
-    # ---------------------------------------------------------
-    # STEP 9: CLI Interface Smoke Suite
-    # ---------------------------------------------------------
+    # CLI Interface Smoke Suite
     cli_commands = [
         ([sys.executable, "collector.py", "--help"], "collector.py --help"),
         ([sys.executable, "scripts/fetch_labels.py", "--help"], "scripts/fetch_labels.py --help"),
@@ -461,9 +442,7 @@ def main():
     if not cli_all_pass:
         raise RuntimeError("CLI interface smoke suite failed!")
 
-    # ---------------------------------------------------------
-    # STEP 10: Post-Execution Evidence Integrity Snapshot & Comparison
-    # ---------------------------------------------------------
+    # Post-Execution Evidence Integrity Snapshot & Comparison
     post_manifest_files = []
     all_post_match = True
     for p in CANONICAL_FILES:
@@ -607,9 +586,7 @@ def main():
     # Total duration
     total_duration = round(time.time() - start_time_all, 2)
 
-    # ---------------------------------------------------------
-    # STEP 11 & 12: Generate Verification Log & Summary JSON
-    # ---------------------------------------------------------
+    # Generate Verification Log & Summary JSON
     verif_log_path = VERIF_DIR / "g5_verification_log.txt"
     summary_json_path = VERIF_DIR / "g5_isolated_test_summary.json"
 
@@ -724,7 +701,7 @@ def main():
         },
     }
 
-    # Step 11 in log: Redaction audit
+    # Redaction verification audit
     logs.append({
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "step_title": "STEP 11: REDACTION VERIFICATION AUDIT",
@@ -799,9 +776,7 @@ def main():
     full_summary_json = sanitize(json.dumps(summary_obj, indent=2))
     summary_json_path.write_text(full_summary_json, encoding="utf-8")
 
-    # ---------------------------------------------------------
     # Redaction scan assertion
-    # ---------------------------------------------------------
     leaks_found = 0
     for l_path in [verif_log_path, summary_json_path]:
         c = l_path.read_text(encoding="utf-8")
@@ -814,9 +789,7 @@ def main():
         raise RuntimeError(f"Audit failed! {leaks_found} leaked secrets found in verification artifacts!")
     print(f"\n[OK] Redaction verification passed: 0 leaks found across verification files.")
 
-    # ---------------------------------------------------------
     # Schema validation assertion
-    # ---------------------------------------------------------
     import jsonschema
 
     schema_path = Path("D:/Projest/.agents/teamwork/specminer_G5_3/handoff.md")

@@ -265,7 +265,6 @@ def build_distribution(
             file_sha = compute_sha256(dest_path)
             manifest_entries.append((file_sha, rel_path))
 
-        # Write MANIFEST_INFO.json with packaging metadata
         total_uncompressed = sum((stage_dir / rel).stat().st_size for _, rel in manifest_entries if (stage_dir / rel).exists())
         commit_sha = "UNKNOWN"
         try:
@@ -306,7 +305,6 @@ def build_distribution(
                 f.write(f"{sha}  {rel}\n")
         print(f"    [OK] Generated MANIFEST_SHA256.txt ({len(manifest_entries)} files)")
 
-        # Save external manifest to out_dir
         out_manifest = out_dir / "MANIFEST_SHA256.txt"
         shutil.copy2(manifest_file, out_manifest)
         print(f"    [OK] Saved external manifest: {out_manifest}")
@@ -396,7 +394,6 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Subcommand: build
     build_parser = subparsers.add_parser("build", help="Build standalone portable distribution zip")
     build_parser.add_argument(
         "--root",
@@ -433,7 +430,6 @@ def main(argv=None):
         help="Dry run: print files that would be packaged without creating zip",
     )
 
-    # Subcommand: verify
     verify_parser = subparsers.add_parser("verify", help="Verify integrity of an existing distribution zip")
     verify_parser.add_argument(
         "archive",

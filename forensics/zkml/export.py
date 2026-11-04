@@ -52,7 +52,6 @@ def export_model_to_zkml_onnx(
     w3_flat = [float(v) for row in model.w3 for v in row]
     b3_flat = [float(v) for v in model.b3]
 
-    # Initializers
     t_w1 = helper.make_tensor("w1", TensorProto.FLOAT, [model.hidden1, model.input_dim], w1_flat)
     t_b1 = helper.make_tensor("b1", TensorProto.FLOAT, [model.hidden1], b1_flat)
     t_w2 = helper.make_tensor("w2", TensorProto.FLOAT, [model.hidden2, model.hidden1], w2_flat)

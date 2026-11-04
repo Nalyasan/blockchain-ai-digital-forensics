@@ -11,7 +11,7 @@ directory (D:/Projest/clean_build_test_G6C) directly from the standalone portabl
 6. Bundled Foundry Smart Contract test suite (56 passed)
 7. Python Pytest regression suite with isolated basetemp (1,119 passed, 1 authorized skip)
 8. Empirical incident evaluation replays (Euler DAI, Curve alETH, Synthetic Benchmark)
-9. CLI entrypoint smoke tests (collector, fetch_labels, generate_benchmark, run_real_rules, run_p4_smoke)
+9. CLI entrypoint smoke tests (collector, fetch_labels, generate_benchmark, run_real_rules, run_rule_engine_smoke)
 10. Standalone git-free evidence exporter provenance test (MANIFEST_INFO.json fallback)
 11. Post-execution hash snapshots (assert 100.0% bitwise parity, zero database mutation)
 12. Credential leak scan & schema-compliant audit summary output
@@ -30,7 +30,6 @@ import time
 import zipfile
 from pathlib import Path
 
-# Paths
 REPO_ROOT = Path("D:/Projest/Blockchain").resolve()
 ARCHIVE_PATH = REPO_ROOT / "dist" / "blockchain_ai_forensics_portable_v1.0.0.zip"
 CLEAN_BUILD_DIR = Path("D:/Projest/clean_build_test_G6C").resolve()
@@ -160,7 +159,7 @@ def main():
     archive_size = ARCHIVE_PATH.stat().st_size
     print(f"[*] Package verified: {archive_size:,} bytes, SHA-256: {archive_sha256}")
 
-    # Step 0: Clean target directory
+    # Clean target directory
     print(f"[*] Preparing clean extraction directory: {CLEAN_BUILD_DIR}...")
     if CLEAN_BUILD_DIR.exists():
         shutil.rmtree(CLEAN_BUILD_DIR, ignore_errors=True)
@@ -170,7 +169,7 @@ def main():
         shutil.rmtree(TMP_PYTEST_DIR, ignore_errors=True)
     TMP_PYTEST_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Step 1: Extract standalone archive
+    # Extract standalone archive
     print(f"[*] Extracting {ARCHIVE_PATH.name} into {CLEAN_BUILD_DIR}...")
     with zipfile.ZipFile(ARCHIVE_PATH, "r") as zf:
         zf.extractall(CLEAN_BUILD_DIR)
@@ -183,7 +182,7 @@ def main():
         shutil.copy2(src_env, dest_env)
         print(f"    [OK] Copied baseline .env for invariant testing.")
 
-    # Step 2: Markdown Zero Count Assertion (Rule 10 & R5)
+    # Markdown Zero Count Assertion
     print(f"[*] STEP 01: Asserting zero project Markdown files...")
     md_files = [
         p.relative_to(CLEAN_BUILD_DIR).as_posix()
@@ -197,7 +196,7 @@ def main():
     else:
         print(f"    [PASS] Exactly 0 Markdown files found in extracted tree.")
 
-    # Step 3: Pre-Execution Hash Snapshot of Canonical Databases
+    # Pre-Execution Hash Snapshot of Canonical Databases
     print(f"[*] STEP 02: Pre-execution canonical asset hash snapshot...")
     pre_hashes = {}
     for rel_path, exp_hash in CANONICAL_HASHES.items():
@@ -223,7 +222,7 @@ def main():
             failures.append(f"Pre-hash mismatch on {rel_path}: {act_hash} vs {exp_hash}")
             print(f"    [FAIL] {rel_path}: {act_hash} != {exp_hash}")
 
-    # Step 4: Environment Guard Initialization & Process Hygiene
+    # Environment Guard Initialization & Process Hygiene
     print(f"[*] STEP 03 & 04: Environment Guard Initialization & Process Hygiene...")
     kill_orphaned_anvil()
     test_env = os.environ.copy()
@@ -235,7 +234,7 @@ def main():
         "FORENSICS_DATA_DIR": str(CLEAN_BUILD_DIR / "data"),
     })
 
-    # Step 5: Bundled Foundry Smart Contract Suite
+    # Bundled Foundry Smart Contract Suite
     print(f"[*] STEP 05: Compiling and running Foundry Smart Contract test suite...")
     forge_bin = CLEAN_BUILD_DIR / "tools" / "foundry" / "forge.exe"
     execute_step(
@@ -262,7 +261,7 @@ def main():
         failures.append(f"Forge test failed or unexpected output: code={code}")
         print(f"    [FAIL] Forge test suite failure.")
 
-    # Step 6: Pytest Suite with Isolated Basetemp
+    # Pytest Suite with Isolated Basetemp
     print(f"[*] STEP 06: Running Python Pytest regression suite...")
     code, stdout, stderr, dur = execute_step(
         [sys.executable, "-m", "pytest", "tests", f"--basetemp={TMP_PYTEST_DIR}", "-q"],
@@ -354,14 +353,14 @@ def main():
     else:
         failures.append("Benchmark evaluation replay failed")
 
-    # Step 10: CLI Entrypoint Smoke Suite
+    # CLI Entrypoint Smoke Suite
     print(f"[*] STEP 10: CLI Entrypoint Smoke Suite...")
     smoke_commands = [
         ([sys.executable, "collector.py", "--help"], "collector.py --help"),
         ([sys.executable, "scripts/fetch_labels.py", "--help"], "fetch_labels.py --help"),
         ([sys.executable, "scripts/generate_benchmark.py", "--help"], "generate_benchmark.py --help"),
         ([sys.executable, "scripts/run_real_rules.py", "--help"], "run_real_rules.py --help"),
-        ([sys.executable, "scripts/run_p4_smoke.py"], "run_p4_smoke.py"),
+        ([sys.executable, "scripts/run_rule_engine_smoke.py"], "run_rule_engine_smoke.py"),
     ]
     for cmd, sname in smoke_commands:
         code, stdout, stderr, dur = execute_step(
@@ -374,7 +373,7 @@ def main():
         if code != 0:
             failures.append(f"CLI smoke test failed: {sname}")
 
-    # Step 11: Standalone Git-Free Evidence Exporter Test
+    # Standalone Git-Free Evidence Exporter Test
     print(f"[*] STEP 11: Standalone Git-Free Exporter Provenance Fallback Test...")
     exporter_test_script = """
 import sys
@@ -401,7 +400,7 @@ print('PASS: Standalone git-free provenance fallback operational!')
     else:
         failures.append("Git-free exporter fallback test failed")
 
-    # Step 12: Post-Execution Hash Snapshot of Canonical Databases
+    # Post-Execution Hash Snapshot of Canonical Databases
     print(f"[*] STEP 12: Post-execution canonical asset hash snapshot (immutability check)...")
     post_hashes = {}
     for rel_path, exp_hash in CANONICAL_HASHES.items():
@@ -425,7 +424,7 @@ print('PASS: Standalone git-free provenance fallback operational!')
             failures.append(f"Post-test mutation on {rel_path}: pre={pre_hash}, post={act_hash}")
             print(f"    [FAIL] {rel_path} mutated during execution!")
 
-    # Step 13: Credential Leak Scan across all logs and outputs
+    # Credential Leak Scan across all logs and outputs
     print(f"[*] STEP 13: Scanning for secret leaks...")
     leaks_found = []
     combined_log_text = "\n".join(
@@ -441,7 +440,7 @@ print('PASS: Standalone git-free provenance fallback operational!')
     else:
         print(f"    [PASS] Exactly 0 credential leaks detected.")
 
-    # Step 14: Compile Summary Manifest
+    # Compile Summary Manifest
     t_end = time.time()
     total_duration = round(t_end - t_start, 2)
     overall_status = "PASS" if not failures else "FAIL"
@@ -500,7 +499,7 @@ print('PASS: Standalone git-free provenance fallback operational!')
                 "fetch_labels_help": "PASS",
                 "generate_benchmark_help": "PASS",
                 "run_real_rules_help": "PASS",
-                "run_p4_smoke": "PASS",
+                "run_rule_engine_smoke": "PASS",
             },
             "git_free_provenance_fallback": "PASS",
         },
@@ -537,7 +536,6 @@ print('PASS: Standalone git-free provenance fallback operational!')
         "failures": failures,
     }
 
-    # Write summary json and log text
     summary_json_str = json.dumps(summary_data, indent=2)
     log_text_lines = [
         f"================================================================================",
@@ -564,12 +562,10 @@ print('PASS: Standalone git-free provenance fallback operational!')
 
     log_text = "\n".join(log_text_lines)
 
-    # Save into clean build directory
     (CLEAN_BUILD_DIR / "results" / "verification").mkdir(parents=True, exist_ok=True)
     (CLEAN_BUILD_DIR / "results" / "verification" / "g6c_clean_build_summary.json").write_text(summary_json_str, encoding="utf-8")
     (CLEAN_BUILD_DIR / "results" / "verification" / "g6c_clean_build_log.txt").write_text(log_text, encoding="utf-8")
 
-    # Save into repository results/verification directory
     VERIF_DIR.mkdir(parents=True, exist_ok=True)
     (VERIF_DIR / "g6c_clean_build_summary.json").write_text(summary_json_str, encoding="utf-8")
     (VERIF_DIR / "g6c_clean_build_log.txt").write_text(log_text, encoding="utf-8")

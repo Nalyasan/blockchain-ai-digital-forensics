@@ -72,11 +72,6 @@ DEFAULT_REQUEST_LIMIT: int = 8
 DEFAULT_OFFLINE_FALLBACK: bool = True
 
 
-# ==============================================================================
-# Error Classes
-# ==============================================================================
-
-
 class ProviderError(Exception):
     """Base exception for forensics AI provider errors."""
 
@@ -93,9 +88,7 @@ class InvalidConfigurationError(ProviderError):
     """Raised when provider configuration parameters fail validation."""
 
 
-# ==============================================================================
 # Credential Security & Redaction
-# ==============================================================================
 
 
 def resolve_api_key(override_key: Optional[str] = None) -> Tuple[Optional[str], str]:
@@ -140,9 +133,7 @@ def mask_api_key(key: Optional[str]) -> str:
     return f"{cleaned[:4]}...{cleaned[-4:]}"
 
 
-# ==============================================================================
 # Configuration Schema
-# ==============================================================================
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -242,9 +233,7 @@ def get_usage_limits(
     return UsageLimits(request_limit=effective_limit)
 
 
-# ==============================================================================
 # Model & Provider Factories
-# ==============================================================================
 
 
 def create_gemini_provider(

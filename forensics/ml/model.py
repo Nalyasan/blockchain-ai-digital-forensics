@@ -67,7 +67,6 @@ class CompactAnomalyMLP:
         self.model_id = model_id
         self.model_sha256 = ""
 
-        # Initialize weights with standard symmetric Xavier/He uniform distribution
         rng = random.Random(seed)
 
         # Layer 1: (hidden1, input_dim)

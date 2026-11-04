@@ -1,4 +1,4 @@
-"""Real Ethereum Dataset Anomaly Detection Rule Runner (Phase 4).
+"""Real Ethereum Dataset Anomaly Detection Rule Runner.
 
 Executes detection rules R1–R4 over verified real Mainnet incident datasets:
 - Euler Finance DAI window:
@@ -132,9 +132,7 @@ def execute_real_rules(
 
     run_start_time = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    # --------------------------------------------------------------------------
     # 1. Euler Finance DAI Window Execution
-    # --------------------------------------------------------------------------
     log.info("Running Euler DAI detection window...")
     with RuleEngine(db_file, chain_id=chain_id) as engine_euler:
         cals_euler = engine_euler.calibrate(
@@ -151,9 +149,7 @@ def execute_real_rules(
             persist=persist,
         )
 
-    # --------------------------------------------------------------------------
     # 2. Curve / Alchemix alETH Window Execution
-    # --------------------------------------------------------------------------
     log.info("Running Curve alETH detection window...")
     with RuleEngine(db_file, chain_id=chain_id) as engine_curve:
         cals_curve = engine_curve.calibrate(
@@ -178,9 +174,7 @@ def execute_real_rules(
         len(all_alerts),
     )
 
-    # --------------------------------------------------------------------------
     # 3. Alert Integrity & Schema Verification
-    # --------------------------------------------------------------------------
     all_violations: dict[str, list[str]] = {}
     for alert in all_alerts:
         v = verify_alert_integrity(alert)
@@ -192,9 +186,7 @@ def execute_real_rules(
             f"Alert integrity verification failed for {len(all_violations)} alerts: {all_violations}"
         )
 
-    # --------------------------------------------------------------------------
     # 4. Incident Cross-Referencing
-    # --------------------------------------------------------------------------
     euler_c310_alerts = [
         a for a in alerts_euler
         if any(EULER_FRONTRUN_TX.lower() in r["tx_hash"].lower() for r in a.evidence_refs)
@@ -341,9 +333,7 @@ def execute_real_rules(
         "alerts": [a.to_dict() for a in all_alerts],
     }
 
-    # --------------------------------------------------------------------------
     # 5. Export JSON
-    # --------------------------------------------------------------------------
     if out_json:
         out_path = Path(out_json)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -360,7 +350,7 @@ def main() -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     parser = argparse.ArgumentParser(
-        description="Run Phase 4 detection rules R1-R4 on real Ethereum incident dataset."
+        description="Run detection rules R1-R4 on real Ethereum incident dataset."
     )
     parser.add_argument(
         "--db",
@@ -389,7 +379,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print("=" * 78)
-    print("PHASE 4 DETECTION RULES EXECUTION: REAL DATASET (EULER DAI & CURVE ALETH)")
+    print("DETECTION RULES EXECUTION: REAL DATASET (EULER DAI & CURVE ALETH)")
     print("=" * 78)
     print(f"Database: {args.db}")
     print(f"Persist:  {not args.no_persist}")

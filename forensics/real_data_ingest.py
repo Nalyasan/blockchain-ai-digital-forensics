@@ -221,7 +221,6 @@ def ingest_real_dataset(
             to_addr = r["to_address"].strip().lower()
             amount_raw = str(r["amount_wei"]).strip()
 
-            # Assign per-transaction distinct negative log_index
             internal_idx = tx_internal_counters.get(tx_hash, 0)
             tx_internal_counters[tx_hash] = internal_idx + 1
             assigned_log_index = -100 - internal_idx

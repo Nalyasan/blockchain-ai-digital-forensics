@@ -1,103 +1,182 @@
-# Project: P3 Group 3 — Blockchain + AI Digital Forensics
+# Project: Blockchain + AI Digital Forensics PoC (AGENT.md v6.0)
 
-## Architecture
-- **Layer 1: Identity & Privacy Layer (`forensics/evidence_identity.py`)**
-  * Hashing: SHA-256 UTF-8 of `case_id` and `note` (no filesystem probing).
-  * Canonical URI format: `evidence://sha256/<case_hash>/<manifest_hash>/manifest.json` (exact 161 bytes, max 256 bytes).
-  * Manifest hash: calculated from verified manifest bytes without self-referential cycles.
-  * Privacy guardrails: zero raw `case_id` or `note` exposure in chain events, logs, CLI output, or sidecar files.
-  * Legacy read-only verification: strictly opt-in via `--legacy-case-encoding` or `legacy_uri=True`.
+## 1. Architecture Overview
+The system implements an academic Proof of Concept (PoC) for an end-to-end
+verifiable digital forensics architecture across 12 standardized functional
+components, strictly adhering to AGENT.md v6.0 (Topic 8: Blockchain + AI Forensics):
 
-- **Layer 2: SQLite Persistence & Custody Layer (`forensics/schemas.py`, `forensics/onchain_store.py`)**
-  * Additive schema migrations: `anchor_links`, `onchain_operations`, `onchain_operation_events`.
-  * Event identity tuple: `(chain_id, contract_address, tx_hash, log_index)`.
-  * Complete prohibition of `INSERT OR REPLACE` (prevents history clobbering).
-  * Pure insert and atomic verification update: `verified=1` only after verifying receipt, event log, and state.
-  * Fail-fast: pre-send DB readiness check refuses transaction dispatch if DB missing or read-only.
++---------------------------------------------------------------------------------------------------+
+|                                        DATA INGESTION                                             |
+|  [Blockchain Collector] (EVM blocks/txs/logs, reorg handling, RPC failover)                       |
+|  [Endpoint Acquisition] (ISO/IEC 27037, osquery/WMI, static EVTX/JSONL, acquisition_manifest.json)|
++-------------------------------------------------+-------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|                                        EVIDENCE STORE                                             |
+|  [Evidence Store] (SQLite tamper-evident stores, SHA-256 payload digests, append-only journals)   |
+|  - data/real_p4.db (canonical immutable), data/forensics.db, data/endpoint_evidence.db           |
++-------------------------------------------------+-------------------------------------------------+
+                         |                                                |
+                         v                                                v
++-------------------------------------------------+  +----------------------------------------------+
+|             DETERMINISTIC DETECTION             |  |               MACHINE LEARNING               |
+|  [Rule Engine]                                  |  |  [ML/XAI]                                    |
+|  - Heuristics: Burst, Fan-In/Out, Pass-Through, |  |  - Chronological train/val/test split        |
+|    Approval Poisoning                           |  |  - Decoupled labels (no rule-engine leak)    |
+|  - Output: alerts with evidence_refs            |  |  - Unit-safe normalized asset amounts        |
+|                                                 |  |  - Compact MLP Anomaly Detector (ONNX sync)  |
+|                                                 |  |  - Local XAI (SHAP fidelity & stability)     |
+|                                                 |  |  - MITRE ATT&CK with required evidence &     |
+|                                                 |  |    NOT_MAPPED / abstain mechanism             |
++-------------------------------------------------+  +----------------------------------------------+
+                         \                                                /
+                          \                                              /
+                           v                                            v
++---------------------------------------------------------------------------------------------------+
+|                                  COGNITIVE INVESTIGATION & SAFETY                                 |
+|  [Threat Intelligence] (Known attacker sets, honeypots, contract signatures, MITRE knowledgebase)  |
+|  [AI Investigator] (Pydantic AI agent, 5-layer read-only SQLite, 38-pattern prompt injection      |
+|    sanitizer, 5-step budget, Ref Checker verifying ObservedFact vs ExternalThreatLabel)           |
++-------------------------------------------------+-------------------------------------------------+
+                         |                                                |
+                         v                                                v
++-------------------------------------------------+  +----------------------------------------------+
+|              VERIFIABLE COMPUTATION             |  |             EVIDENCE PACKAGING               |
+|  [ZKML]                                         |  |  [Evidence Package]                          |
+|  - PyTorch -> ONNX export                       |  |  - RFC 6962 Merkle tree commitments          |
+|  - Halo2 arithmetic circuit with KZG commitment |  |  - Evidence manifest with SHA-256 digests    |
+|  - Real EZKL witness & proof generation (no mock)  - Dual-read validation from Custody store      |
+|  - Cryptographic binding (model/circuit/proof)  +----------------------------------------------+
+|  - On-Chain Anvil Verifier (InferenceVerifier)  |
++-------------------------------------------------+
+                         \                                                /
+                          \                                              /
+                           v                                            v
++---------------------------------------------------------------------------------------------------+
+|                                    CHAIN OF CUSTODY & IDENTITY                                    |
+|  [Identity & Custody]                                                                             |
+|  - EvidenceRegistry.sol & EvidenceRegistryDID.sol (Solidity 0.8.24)                                |
+|  - W3C DID Core 1.0 (did:ethr / did:key), Granular RBAC (Collector, Analyst, Custodian, ZKML)    |
+|  - EIP-712 typed off-chain signatures, anti-replay, nonce tracking, receipt reconciliation       |
+|  - ISO/IEC 27037 compliant 2-actor transfer demonstration                                         |
++-------------------------------------------------+-------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|                                   EVALUATION & PORTABLE RELEASE                                   |
+|  [Integration & Evaluation] (D1 EVM Replay, D2 Host Log Replay, D3 Multi-Gateway Adversarial Replay)|
+|  [Portable Release] (Standalone Windows bundle, wheelhouse, SHA256SUMS, zero hardcoded paths)     |
++---------------------------------------------------------------------------------------------------+
 
-- **Layer 3: Idempotency & Recovery Layer (`forensics/onchain_store.py`)**
-  * Canonical immutable intent and fingerprinting.
-  * Atomic send claim: `BEGIN IMMEDIATE` + CAS `UPDATE onchain_operations SET state='SEND_STARTED' WHERE operation_id=? AND state='READY' AND tx_hash IS NULL` verifying `cur.rowcount == 1`.
-  * Zero automatic retries: on timeout, crash, or UNKNOWN state, marks UNKNOWN and writes redacted sidecar without retrying.
-  * Read-only reconciliation: synchronizes state by querying blockchain receipt and updating DB.
+## 2. Feature Inventory
+Every feature and technical requirement from AGENT.md v6.0 and ORIGINAL_REQUEST.md
+is cataloged across the 12 functional components:
 
-- **Layer 4: Integration & CLI Layer (`forensics/onchain.py`, `forensics/cli.py`)**
-  * Re-exports `compute_file_sha256` and `init_db` to fix regressions.
-  * Refactors `anchor_evidence` and `record_custody_action` to consume `evidence_identity` and `onchain_store`.
-  * CLI integration: supports `--legacy-case-encoding`, `reconcile` command, and sanitizes output.
-  * Smoke test harnesses: P3 1b, P3 2A, P3 2B, and P3 Group 3 (`scripts/run_p3_group3_smoke.py`).
+| # | Feature / Component | Description | Milestone | Source |
+|---|---------------------|-------------|-----------|--------|
+| 1 | Baseline Repository Audit | Record git branch, HEAD commit, worktrees, uncommitted changes, tools | M0 | R1, AGENT.md s0 |
+| 2 | Canonical Data Preservation | 100% SHA-256 bitwise match for real_p4.db, forensics.db, benchmark_p6.db, .env | M0 | R1, AGENT.md s0 |
+| 3 | Primary Specification Setup | Establish AGENT.md v6.0 as sole primary specification; backup legacy | M0 | R1 |
+| 4 | Initial T01-T25 Gap Matrix | Formulate formal gap matrix classifying all 25 test scenarios | M0 | R2 |
+| 5 | Component Renaming (P1-P12) | Eradicate P1-P12 labels across maintained code, CLI, docs -> 12 functional names | M1 | R4, AGENT.md s13 |
+| 6 | Import & Path Standardization | Synchronize imports, module paths, scripts, and packaging configs | M1 | R4 |
+| 7 | Clean Code Conventions | Prune redundant/echo comments, preserve security/design rationale, docstrings | M1 | R4 |
+| 8 | Regression Safety Verification | Verify all 1,521+ tests and 112 contract tests pass with zero regressions | M1 | R4 |
+| 9 | ML Label Decoupling | Decouple training labels from Rule Engine alerts table; independent ground truth | M2 | R3, AGENT.md s6.1 |
+| 10 | Address Window Grouping Fix | Prevent address-level alerts from globally corrupting labels across windows | M2 | R3, AGENT.md s6.1 |
+| 11 | Scaler Data Leakage Prevention | Chronological train/val/test splits; scaler MUST fit ONLY on train split | M2 | R3, AGENT.md s6.1 |
+| 12 | Unit-Safe Asset Volume Handling | Prevent direct addition of raw token quantities with divergent decimals | M2 | R3, AGENT.md s6.1 |
+| 13 | Training/Inference/ONNX Sync | Enforce bitwise consistency between PyTorch model weights and exported ONNX | M2 | R3, AGENT.md s6.1 |
+| 14 | Dataset & Model Provenance | Store dataset manifest, feature schema, model SHA-256 hash, and metadata | M2 | R3, AGENT.md s6.1 |
+| 15 | Local Quantitative XAI Metrics | Implement SHAP local feature attribution with fidelity and stability metrics | M2 | R3, AGENT.md s6.2 |
+| 16 | MITRE ATT&CK Grounded Mapping | Add tactic_id, required_evidence, mapping version, and NOT_MAPPED logic | M2 | R3, AGENT.md s6.3 |
+| 17 | Real ZKML Halo2/EZKL Proving | Genuine Halo2 arithmetic circuit, KZG commitments, and proof generation (no mock)| M3 | R3, AGENT.md s7.1 |
+| 18 | Cryptographic Binding | Bind model_hash, circuit_version, input/output commitments, inference_record_id | M3 | R3, AGENT.md s7.1 |
+| 19 | Automated Tamper Rejection | Verify automated rejection of altered proof bytes, missing public signals | M3 | R3, AGENT.md s7.2 |
+| 20 | On-Chain Anvil Verifier Contract | Create, compile (--via-ir), and deploy InferenceVerifier.sol on local Anvil (T22)| M3 | R3, AGENT.md s7.3 |
+| 21 | Verifier Gas & Receipt Logging | Log gas consumption, synthetic tx hash, and receipt for on-chain proof verification | M3 | R3, AGENT.md s7.3 |
+| 22 | Endpoint Source Adapter | Implement EvidenceSourceAdapter interface for modular EVM and host log ingestion | M4 | R3, AGENT.md s5.1 |
+| 23 | Endpoint Metadata & Provenance | Record consent_scope, original/copy SHA-256, UTC timestamp, and audit trail | M4 | R3, AGENT.md s5.1 |
+| 24 | Static Host Log File Ingestion | Ingest static JSONL and EVTX log exports with canonical schema mapping | M4 | R3, AGENT.md s5.1 |
+| 25 | Acquisition Manifest Schema | Generate standardized acquisition_manifest.json complying with ISO/IEC 27037 | M4 | R3, AGENT.md s5.1 |
+| 26 | AI First Responder Security Bounds | Enforce hard policy guards: NO arbitrary shell, NO log deletion, NO ACL edits | M4 | R3, AGENT.md s5.2 |
+| 27 | DID & Key & Role Binding | Enforce W3C DID Core 1.0 (did:ethr/did:key), RBAC, and EIP-712 verification | M4 | R3, AGENT.md s8.1 |
+| 28 | 2-Actor Custody Handover Demo | Automated custody transfer between 2 actors on live Anvil with receipt & hash | M4 | R3, AGENT.md s8.2 |
+| 29 | Fail-Closed Custody Rejections | Strictly reject invalid role, invalid chain ID, signature replay, missing receipt | M4 | R3, AGENT.md s8.2 |
+| 30 | Integration Demo D1 (EVM Replay) | End-to-end replay of EVM incident: Collector -> Store -> Rules/ML -> Custody | M5 | R2, R3, AGENT.md s9.1 |
+| 31 | Integration Demo D2 (Host Replay) | End-to-end replay of Host incident per ISO 27037: Acquisition -> Store -> Custody| M5 | R2, R3, AGENT.md s9.1 |
+| 32 | Integration Demo D3 (Adversarial) | Multi-gateway adversarial replay verifying robust rejection across all layers | M5 | R2, R3, AGENT.md s9.1 |
+| 33 | Traceable Forensic Report Generator| Generate audit reports with end-to-end trace from evidence to alerts to custody | M5 | R3, AGENT.md s9.2 |
+| 34 | Safe Cleanup & Manifest | Prune verified caches/temps into cleanup_manifest.json whitelisting canonical data | M6 | R5, AGENT.md s10 |
+| 35 | Standalone Portable Packaging | Bundle portable distribution with .ps1 scripts, wheelhouse, and SHA256SUMS.txt | M6 | R3, R5, AGENT.md s10 |
+| 36 | Hardcoded Path Elimination | Eliminate all hardcoded D:\Projest and user paths across code and scripts | M6 | R3, AGENT.md s10 |
+| 37 | Clean Directory Extraction Gate | Standalone extraction and test execution in a clean isolated directory (Gate T25)| M6 | R3, AGENT.md s10, s11 |
+| 38 | 7 Mandatory Deliverables | Complete compilation of the 7 formal deliverables per Section 6 of user request | M6 | R5 |
 
-## Feature Inventory
-| # | Feature | Description | Milestone | Source |
-|---|---------|-------------|-----------|--------|
-| 1 | Gate 0 Checkpoint & Recovery | Read-only git audit, leftover state preservation, external checkpoint, recovery report | M0 (Gate 0) | R1 / Plan v2 |
-| 2 | Case ID UTF-8 SHA-256 Hashing | SHA-256 UTF-8 hash for case ID; bytes32 representation; zero raw case ID leakage | M1 (Worker A) | R2 / G3-05, G3-06 |
-| 3 | Note UTF-8 SHA-256 Hashing | SHA-256 UTF-8 note hash; non-empty validation; zero filesystem probing | M1 (Worker A) | R2 / G3-06 |
-| 4 | Canonical Storage URI | Format `evidence://sha256/<case_hash>/<manifest_hash>/manifest.json` (<= 256 bytes) | M1 (Worker A) | R2 / G3-07, G3-15 |
-| 5 | Legacy Read-Only Verification | Explicit opt-in verification of historical unhashed case IDs and legacy URIs | M1 (Worker A) | R2 / G3-07, G3-12 |
-| 6 | Privacy Guardrails & Sanitization | Prevent raw case_id or note in logs, CLI, exceptions, and sidecar files | M1 (Worker A) | R2 / G3-12, G3-15 |
-| 7 | Additive SQLite Migration | `GROUP3_SCHEMA` creating `anchor_links`, operations, journal tables without data loss | M2 (Worker B) | R3 / G3-01, G3-11 |
-| 8 | Event Identity & Collision Prevention | Unique index on `(chain_id, contract_address, tx_hash, log_index)` | M2 (Worker B) | R3 / G3-02 |
-| 9 | Zero INSERT OR REPLACE | Eliminate all `INSERT OR REPLACE` in `custody_events` and store operations | M2 (Worker B) | R3 / G3-03 |
-| 10 | Strict Verification Pre-verified=1 | Mark `verified=1` only after verifying receipt, event topic, and block number | M2 (Worker B) | R3 / G3-03, G3-04 |
-| 11 | Pre-send Fail-Fast DB Check | Refuse transaction send if DB missing, locked, or read-only | M2 (Worker B) | R3 / G3-04, G3-11 |
-| 12 | Event Distinction | Clearly distinguish `EvidenceRegistered` vs `CustodyRecorded` by event signature | M2 (Worker B) | R3 / G3-14 |
-| 13 | Canonical Immutable Intent | Canonical JSON serialization and SHA-256 intent fingerprinting | M3 (Worker C) | R4 / G3-08 |
-| 14 | Operation Journal & Transitions | Track `READY` -> `SEND_STARTED` -> `BROADCAST` -> `CONFIRMED`/`UNKNOWN`/`FAILED` | M3 (Worker C) | R4 / G3-09 |
-| 15 | Atomic Send Claim (CAS) | `BEGIN IMMEDIATE` + conditional UPDATE with `rowcount==1` check; dual-process lock | M3 (Worker C) | R4 / G3-10, G3-16 |
-| 16 | Zero Automatic Retries | On timeout/crash/exception, fail-closed to UNKNOWN; never resend | M3 (Worker C) | R4 / G3-09, G3-17 |
-| 17 | Read-only Reconcile | Verify transaction on-chain and sync DB state without resending | M3 (Worker C) | R4 / G3-10 |
-| 18 | Redacted Recovery Sidecar | Write `.recovery.jsonl` on DB failure, strictly excluding credentials & raw secrets | M3 (Worker C) | R4 / G3-12 |
-| 19 | Onchain Integration & Import Fix | Re-export `compute_file_sha256` and `init_db` in `onchain.py`; fix 161 test errors | M4 (Lead Agent) | R5 / G3-13 |
-| 20 | Custody Routine Refactoring | Refactor `record_custody_action` to use `onchain_store` and eliminate `INSERT OR REPLACE` | M4 (Lead Agent) | R5 / G3-02, G3-03 |
-| 21 | CLI & Exporter Integration | Add `--legacy-case-encoding` and `reconcile` subcommands to `forensics/cli.py` | M4 (Lead Agent) | R5 / G3-13 |
-| 22 | Smoke Test Suite Group 3 | Create `scripts/run_p3_group3_smoke.py` and `tests/test_onchain_group3_smoke.py` | M4 (Lead Agent) | R5 / G3-13 |
-| 23 | Full 17 Gates Acceptance & Regression | Run and pass all 17 gates G3-01..G3-17, full pytest suite, forge test, regression | M5 (Final Gates) | Acceptance Criteria |
-| 24 | Final Deliverables & Reporting | Author `P3_GROUP3_REPORT.txt` and commit with clean audit trail | M6 (Deliverables) | R5 / Deliverables |
-
-## Milestones
+## 3. Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M0 | Gate 0 Recovery & Checkpoint | Git audit, backup checkpoint outside repo, `P3_GROUP3_HANDOFF_RECOVERY.txt` | none | DONE |
-| M1 | H6/M5 Identity & Privacy | `forensics/evidence_identity.py`, `tests/test_evidence_identity.py` (G3-05, G3-06, G3-07, G3-12, G3-15) | M0 | DONE |
-| M2 | H5 SQLite & Custody | `forensics/schemas.py`, `forensics/onchain_store.py`, `tests/test_onchain_store.py` (G3-01..G3-04, G3-11, G3-14) | M0 | DONE |
-| M3 | M4 Idempotency & Recovery | `forensics/onchain_store.py`, `tests/test_onchain_group3.py` (G3-08..G3-10, G3-16, G3-17) | M2 | DONE |
-| M4 | Lead Integration & Regression | `forensics/onchain.py`, `forensics/cli.py`, smoke scripts, full test fixes | M1, M2, M3 | DONE |
-| M5 | Final Acceptance & Adversarial Hardening | Full 17 gates (G3-01..G3-17) validation, adversarial verification, forensic audit | M4 | DONE |
-| M6 | Deliverables & Handoff | `P3_GROUP3_REPORT.txt`, git commit, victory report | M5 | DONE |
+| M0 | Baseline Audit, Invariance & Spec Setup | Repo audit, canonical hashes, backup legacy spec, install AGENT.md v6.0 | None | DONE |
+| M1 | Component Renaming & Code Conventions | Eradicate P1-P12 labels; adopt 12 functional names; clean echo comments | M0 | IN_PROGRESS |
+| M2 | ML/XAI Pipeline & MITRE Remediation | Decouple ground truth, fix window grouping, prevent scaler leak, local SHAP | M1 | PLANNED |
+| M3 | ZKML On-Chain Verifier & Gate T22 | Compile/deploy InferenceVerifier.sol on Anvil; real proof verification | M2 | PLANNED |
+| M4 | Endpoint Acquisition & Custody/DID | EvidenceSourceAdapter, ISO 27037 manifests, first responder bounds, 2-actor demo| M1 | PLANNED |
+| M5 | End-to-End Real Demos & Adversarial Replay | Execute D1, D2, D3 demos; generate traceable forensic reports linking pipeline | M3, M4 | PLANNED |
+| M6 | Safe Cleanup, Portable Release & Handover | Prune caches, eliminate hardcoded paths, build portable package, 7 deliverables | M5 | PLANNED |
 
-## Interface Contracts
-### `forensics/evidence_identity.py`
-- `sha256_utf8(text: str) -> str`: Returns 64-char hex SHA-256 digest of UTF-8 encoded string.
-- `case_id_digest(case_id: str) -> str`: Validates `case_id` format and returns 64-char hex SHA-256 digest.
-- `case_id_hash_bytes32(case_id: str) -> str`: Returns `0x` + 64-hex digest.
-- `note_hash_bytes32(note: str) -> str`: Validates non-empty note and returns `0x` + 64-hex digest of UTF-8 note.
-- `canonical_storage_uri(case_digest: str, manifest_digest: str) -> str`: Returns `evidence://sha256/<case_digest>/<manifest_digest>/manifest.json` (exact 161 bytes). Validates ASCII and length <= 256 bytes.
-- `identity_for_verify(case_id: str, manifest_sha256: str, legacy_case_encoding: bool = False) -> tuple[str, str]`: Returns `(case_id_b32, storage_uri)`. If `legacy_case_encoding=True`, returns legacy `(string_to_bytes32_hex(case_id), f"evidence://{case_id}/manifest.json")`.
+## 4. Interface Contracts
+1. Endpoint Acquisition <-> Evidence Store:
+   forensics.endpoint.schemas.EvidenceSourceAdapter emitting AcquisitionResult
+   (source_id, consent_scope, original_sha256, copy_sha256, timestamp_utc, records).
+   Append-only persistence into data/endpoint_evidence.db.
+2. Evidence Store <-> ML/XAI & Rule Engine:
+   Independent ground truth without alerts table leakage. Normalized amounts:
+   normalized_amount = raw_amount / (10 ** token_decimals). Isolated temporal windows.
+3. ML/XAI <-> AI Investigator:
+   MLAnomalyDetection schema (score, confidence, model_hash, top_features, fidelity).
+   MITREMapping schema (technique_id, tactic_id, required_evidence, status: MAPPED/NOT_MAPPED).
+4. ML/XAI <-> ZKML Engine:
+   ONNX opset 14/15. Binding hash = sha256(model_hash || circuit_version || input_commitment
+   || output_commitment || inference_record_id).
+5. ZKML Engine <-> Smart Contract Verifier (InferenceVerifier.sol):
+   verifyInference(bytes proof, uint256[] publicSignals, bytes32 modelHash, bytes32 recordId).
+6. Evidence Package <-> Custody & Identity (EvidenceRegistryDID.sol):
+   logEvidenceWithSignature(bytes32 evidenceHash, string did, uint8 role, uint256 nonce,
+   uint256 deadline, bytes signature). EIP-712 domain: EvidenceRegistryDID v1.
+7. Evaluation Demos Entry Points:
+   scripts/demo_d1_evm.py, scripts/demo_d2_host.py, scripts/demo_d3_adversarial.py.
+8. Portable Release Bundle:
+   Standalone directory with setup.ps1, smoke_test.ps1, run_full_tests.ps1,
+   verify_integrity.ps1, SHA256SUMS.txt, and wheelhouse dependencies.
 
-### `forensics/onchain_store.py`
-- `open_existing_rw(db_path: Path | str, migrate_before_send: bool = False) -> sqlite3.Connection`: Connects with `?mode=rw` and verifies `group3_schema_present`.
-- `register_intent(db_path: Path | str, intent: dict) -> str`: Inserts intent with state `READY` if not present; returns `operation_id`.
-- `claim_send(db_path: Path | str, intent: dict) -> tuple[str, bool, str]`: Executes `BEGIN IMMEDIATE`, atomic CAS update `state='SEND_STARTED' WHERE operation_id=? AND state='READY' AND tx_hash IS NULL`. Returns `(operation_id, can_send, current_state)`.
-- `record_broadcast(db_path: Path | str, operation_id: str, tx_hash: str) -> None`: Updates state to `BROADCAST`.
-- `persist_verified_event(db_path: Path | str, operation_id: str, event_data: dict) -> None`: Inserts into `custody_events` and `anchor_links`, updates state to `CONFIRMED`, commits atomically.
-- `mark_unknown(db_path: Path | str, operation_id: str, code: str) -> None`: Transitions operation to `UNKNOWN` or writes sidecar on DB error.
-- `write_sidecar(db_path: Path | str, payload: dict) -> None`: Writes to `.recovery.jsonl`, strictly sanitizing sensitive keys.
-- `reconcile_operation(db_path: Path | str, operation_id: str, rpc_client) -> dict`: Read-only queries blockchain for tx receipt and events; updates DB state accordingly.
-
-## Code Layout
-```
-forensics/
-├── evidence_identity.py       # [Worker A] Case ID/Note SHA-256, canonical URI, legacy verification router
-├── schemas.py                 # [Worker B] GROUP3_SCHEMA, additive migration, index
-├── onchain_store.py           # [Worker B & C] Unified store: open_rw, persist, claim_send, journal, reconcile
-├── onchain.py                 # [Lead Agent] Orchestrates send, verification, re-exports compute_file_sha256
-├── cli.py                     # [Lead Agent] CLI commands: anchor, custody, verify-onchain, reconcile
-tests/
-├── test_evidence_identity.py  # [Worker A] Tests G3-05, G3-06, G3-07, G3-12, G3-15
-├── test_onchain_store.py      # [Worker B] Tests G3-01, G3-02, G3-03, G3-04, G3-11, G3-14
-├── test_onchain_group3.py     # [Worker C] Tests G3-08, G3-09, G3-10, G3-16 (multiprocess), G3-17 (crash recovery)
-├── test_onchain_group3_smoke.py # [Lead Agent] Smoke integration test
-scripts/
-└── run_p3_group3_smoke.py     # [Lead Agent] Standalone smoke test runner
-```
+## 5. Code Layout
+Blockchain/
+|-- AGENT.md                           # Authoritative primary specification v6.0
+|-- contracts/                         # Smart contracts (Solidity 0.8.24)
+|   |-- src/
+|   |   |-- EvidenceRegistry.sol       # Core chain of custody registry
+|   |   |-- EvidenceRegistryDID.sol    # ERC-1056 DID & EIP-712 custody extension
+|   |   `-- InferenceVerifier.sol      # ZKML on-chain verifier contract
+|   `-- test/                          # Foundry test suites (112 tests)
+|-- data/                              # Canonical & operational databases
+|   |-- real_p4.db                     # Canonical immutable ground truth (PROTECTED)
+|   |-- forensics.db                   # Canonical evidence store (PROTECTED)
+|   |-- benchmark_p6.db                # Canonical public benchmark (PROTECTED)
+|   `-- endpoint_evidence.db           # Dedicated endpoint evidence store
+|-- docs/                              # Project documentation
+|   |-- architecture.md                # System architecture documentation
+|   |-- naming_cross_reference.md      # Functional naming vs legacy P1-P12 mapping
+|   `-- legacy/agent_v5.1.txt          # Preserved historical specification
+|-- forensics/                         # Standardized functional Python modules
+|   |-- ai/                            # [C05] AI Investigator
+|   |-- adapters/                      # [C06] Threat Intelligence
+|   |-- did/                           # [C10] Identity & Custody (DID / EIP-712)
+|   |-- endpoint/                      # [C07] Endpoint Acquisition
+|   |-- ml/                            # [C08] Machine Learning & XAI
+|   |-- rules/                         # [C04] Rule Engine
+|   `-- zkml/                          # [C09] ZKML Verifiable Inference
+|-- models/                            # Models, ONNX graphs, and ZK circuits
+|-- reports/                           # Formal domain verification reports
+|-- scripts/                           # Operational and evaluation demo scripts
+`-- tests/                             # Comprehensive test suites (1,521 tests)

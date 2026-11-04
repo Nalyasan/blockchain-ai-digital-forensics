@@ -85,7 +85,6 @@ contract EvidenceRegistryDIDTest {
 
     uint256 constant SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
 
-    // Events for expectEmit
     event EvidenceRegistered(
         uint256 indexed evidenceId,
         bytes32 indexed caseId,
@@ -131,9 +130,7 @@ contract EvidenceRegistryDIDTest {
         registry = new EvidenceRegistryDID();
     }
 
-    // =========================================================================
-    // 1. Initial State & Backward Compatibility (P3 Invariance)
-    // =========================================================================
+    // 1. Initial State & Core Custody Invariance
 
     function test_InitialState_DeployerHasAllRoles() public view {
         assertEq(registry.owner(), deployer);
@@ -193,9 +190,7 @@ contract EvidenceRegistryDIDTest {
         assertFalse(registry.authorizedInvestigators(deployer));
     }
 
-    // =========================================================================
     // 2. ERC-1056 Decentralized Identity (DID) Lifecycle
-    // =========================================================================
 
     function test_DID_FormatCanonical() public view {
         string memory did = registry.getDID(alice);
@@ -267,9 +262,7 @@ contract EvidenceRegistryDIDTest {
         registry.revokeAttribute(alice, attrName, attrVal);
     }
 
-    // =========================================================================
     // 3. Granular Forensic Roles & Bidirectional Synchronization
-    // =========================================================================
 
     function test_Roles_GrantAndRevoke() public {
         bytes32 roleCol = registry.ROLE_COLLECTOR();
@@ -307,7 +300,7 @@ contract EvidenceRegistryDIDTest {
     }
 
     function test_Roles_LegacyInvestigator_RecognizedInHasForensicRole() public {
-        // Owner uses legacy P3 method setInvestigator
+        // Owner uses legacy method setInvestigator
         registry.setInvestigator(bob, true);
         assertTrue(registry.authorizedInvestigators(bob));
 
@@ -331,9 +324,7 @@ contract EvidenceRegistryDIDTest {
         registry.grantRole(address(0), role);
     }
 
-    // =========================================================================
     // 4. EIP-712 Typed Signatures: Custody Transfer
-    // =========================================================================
 
     function _signDigest(uint256 pk, bytes32 digest) internal returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
@@ -633,9 +624,7 @@ contract EvidenceRegistryDIDTest {
         registry.transferCustodyWithSig(evidenceId, alice, bob, ART_HASH, NOTE_HASH, 0, deadline, sig);
     }
 
-    // =========================================================================
     // 5. EIP-712 Typed Signatures: Forensic Attestation
-    // =========================================================================
 
     function _signAttestation(
         uint256 pk,
@@ -736,9 +725,7 @@ contract EvidenceRegistryDIDTest {
         assertEq(records[0].zkmlProofHash, ZKML_PROOF_HASH);
     }
 
-    // =========================================================================
     // 6. ISO/IEC 27037 Lifecycle & Forensic Anchoring
-    // =========================================================================
 
     function test_ISO27037_AnchorForensicEvidence_FullFlow() public {
         uint256 evidenceId = registry.registerEvidence(CASE_001, MANIFEST_HASH_1, STORAGE_URI);

@@ -84,7 +84,6 @@ DATASETS_CONFIG = [
 def run_validation():
     print(f"[{current_iso_utc()}] Starting Gate P6-02 Data Adapter Import Validation...")
 
-    # Load manifest hashes
     with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
         manifest_data = json.load(f)
 

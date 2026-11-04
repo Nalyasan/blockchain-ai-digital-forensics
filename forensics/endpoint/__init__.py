@@ -69,7 +69,6 @@ __all__ = [
     "MockTelemetryProvider",
     "get_default_provider",
     "query_endpoint",
-    # Store
     "EndpointEvidenceStore",
     "get_readonly_endpoint_connection",
     "init_endpoint_db",

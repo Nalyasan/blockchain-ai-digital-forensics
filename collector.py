@@ -45,12 +45,11 @@ TIMEOUT = float(os.getenv("TIMEOUT", "15"))
 RATE_LIMIT_RPS = float(os.getenv("RATE_LIMIT_RPS", "10"))
 RPC_SYNTHETIC = os.getenv("RPC_SYNTHETIC", "false").lower() in ("true", "1", "yes")
 RPC_FORK_BLOCK = int(os.getenv("RPC_FORK_BLOCK")) if os.getenv("RPC_FORK_BLOCK") else None
-VERSION = "collector-0.2-p1"
+VERSION = "collector-1.0.0"
 ERC20_TRANSFER_TOPIC0 = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
 log = logging.getLogger("collector")
 
-# Metrics phiên chạy
 _stats = {"retries": 0}
 _last_rpc_time = 0.0
 

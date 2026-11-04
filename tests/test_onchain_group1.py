@@ -11,7 +11,7 @@ import pytest
 
 from forensics import onchain as oc
 from forensics.schemas import init_db
-from test_evidence_p2 import populate_sample_db
+from test_evidence_package import populate_sample_db
 from forensics.evidence import export_evidence
 from test_onchain_2b import complete_receipt, registry_reply
 

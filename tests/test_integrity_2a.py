@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 from forensics import evidence as ev
-from test_evidence_p2 import populate_sample_db
+from test_evidence_package import populate_sample_db
 
 
 @pytest.fixture

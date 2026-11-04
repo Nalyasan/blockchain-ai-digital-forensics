@@ -101,7 +101,7 @@ AUTHORIZED_TOOLS: frozenset[str] = frozenset({
 
 P6_AUTHORIZED_TOOLS: frozenset[str] = frozenset(AUTHORIZED_TOOLS | {"get_threat_intel"})
 
-# Canonical rule aliases matching Phase 4 Rule Engine
+# Canonical rule aliases matching Rule Engine heuristics
 RULE_ALIASES: dict[str, str] = {
     "r1": "large_transfer",
     "r2": "high_frequency",
@@ -174,9 +174,7 @@ CASE_DEFINITIONS: dict[str, dict[str, Any]] = {
 }
 
 
-# ==============================================================================
 # Custom Exceptions
-# ==============================================================================
 
 
 class RangeLimitExceeded(ValueError):
@@ -199,9 +197,7 @@ class ProductionDatabaseMutationError(PermissionError):
     """Raised when an attempt is made to collect into a production/canonical database."""
 
 
-# ==============================================================================
 # Budget Management & Audit Logging
-# ==============================================================================
 
 
 @dataclass
@@ -306,11 +302,6 @@ class ToolCallBudgetTracker:
 
 class ToolBudgetManager(ToolCallBudgetTracker):
     """Alias and primary manager class for tool execution budget and limits."""
-
-
-# ==============================================================================
-# Helper Functions
-# ==============================================================================
 
 
 def _parse_timestamp(val: Union[int, str, None]) -> int | None:
@@ -464,9 +455,7 @@ def get_staging_connection(db_path: Union[str, Path, None] = None) -> sqlite3.Co
     return conn
 
 
-# ==============================================================================
 # Authorized Tool 1: get_alerts (Read-Only)
-# ==============================================================================
 
 
 def get_alerts(
@@ -532,9 +521,7 @@ def get_alerts(
     return results
 
 
-# ==============================================================================
 # Authorized Tool 2: get_tx (Read-Only)
-# ==============================================================================
 
 
 def get_tx(db: sqlite3.Connection, tx_hash: str) -> dict[str, Any] | None:
@@ -607,9 +594,7 @@ def get_tx(db: sqlite3.Connection, tx_hash: str) -> dict[str, Any] | None:
     }
 
 
-# ==============================================================================
 # Authorized Tool 3: get_address_history (Read-Only)
-# ==============================================================================
 
 
 def get_address_history(
@@ -657,9 +642,7 @@ def get_address_history(
     return results
 
 
-# ==============================================================================
 # Authorized Tool 4: get_counterparties (Read-Only)
-# ==============================================================================
 
 
 def get_counterparties(
@@ -771,9 +754,7 @@ def get_counterparties(
     return results
 
 
-# ==============================================================================
 # Authorized Tool 5: get_timeline (Read-Only)
-# ==============================================================================
 
 
 def get_timeline(
@@ -996,9 +977,7 @@ def get_timeline(
     return timeline[:bounded_limit]
 
 
-# ==============================================================================
 # Authorized Tool 6: collect_missing_range (Staging Only)
-# ==============================================================================
 
 
 def collect_missing_range(
@@ -1107,9 +1086,7 @@ def collect_missing_range(
     }
 
 
-# ==============================================================================
 # Authorized Tool: get_threat_intel (Offline Benchmark Threat Intelligence)
-# ==============================================================================
 
 
 def get_threat_intel(
@@ -1314,7 +1291,7 @@ def get_ml_anomaly_analysis(
         # 4. Quantitative XAI local attribution
         xai_res = explain_instance(model=model, features=scaled_vec, entity_address=norm_addr)
 
-        # 5. Rule Engine P4 corroboration
+        # Corroborate anomaly scores with Rule Engine alerts
         corroborator = DualEngineCorroborator(db_path_or_conn=conn)
         rule_alerts = corroborator.get_alerts_for_address(norm_addr)
         corroboration = corroborator.corroborate(
@@ -1353,9 +1330,7 @@ def get_ml_anomaly_analysis(
             conn.close()
 
 
-# ==============================================================================
 # Authorized Tool 8 & 9: query_endpoint_telemetry & run_safe_endpoint_triage
-# ==============================================================================
 
 
 def query_endpoint_telemetry(
@@ -1555,9 +1530,7 @@ def run_safe_endpoint_triage(
     }
 
 
-# ==============================================================================
 # Security Guardrails & Dispatch Wrapper
-# ==============================================================================
 
 
 def execute_guarded_tool(

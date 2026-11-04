@@ -115,10 +115,8 @@ def recover_numeric_address(val: Any) -> Optional[str]:
     val_str = str(val).strip()
     if is_valid_eth_address(val_str):
         return normalize_eth_address(val_str)
-    # Check if string without 0x is 40 hex chars
     if len(val_str) == 40 and re.match(r"^[0-9a-fA-F]{40}$", val_str):
         return f"0x{val_str.lower()}"
-    # Check if number coerced by spreadsheet
     try:
         if isinstance(val, (int, float)) or (isinstance(val_str, str) and ("e+" in val_str.lower() or val_str.isdigit())):
             int_val = int(float(val_str))
@@ -278,7 +276,6 @@ def parse_ptxphish_matrix(
                     # Treat hyperlinks and URLs as inert text
                     source_url = sanitize_formula_injection(str(source_val).strip())
 
-            # Check if value is a 64-hex transaction hash or a 40-hex address
             is_tx = is_valid_tx_hash(val_str)
             is_addr = is_valid_eth_address(val_str)
 
@@ -559,7 +556,6 @@ def parse_ptxphish_xlsx(
             sheet_cells[sname] = cells
         wb.close()
     else:
-        # Standard library OpenXML fallback
         reader = OpenXMLFallbackWorkbook(path)
         for sname in reader.sheetnames:
             cells = {}

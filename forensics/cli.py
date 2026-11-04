@@ -1,10 +1,12 @@
-"""Giao diện dòng lệnh CLI cho hệ thống Forensics (Mục 6.2, 6.3 & P2).
+"""Giao diện dòng lệnh CLI cho hệ thống Digital Forensics (Evidence Package, On-Chain Registry, Rule Engine, AI Investigator).
 Hỗ trợ:
 - export-evidence
 - verify-local
 - verify-manifest
 - verify-rpc
 - verify-derived
+- analyze
+- investigate
 """
 import sys
 if hasattr(sys.stdout, "reconfigure"):
@@ -208,8 +210,8 @@ def cli_migrate_db(args):
         return 1
 
 def cli_analyze(args):
-    """Lệnh phân tích phát hiện bất thường bằng Rule Engine (Phase 4)."""
-    if getattr(args, "p3_manifest", None):
+    """Lệnh phân tích phát hiện bất thường bằng Rule Engine."""
+    if getattr(args, "anchored_manifest", None) or getattr(args, "p3_manifest", None):
         from forensics.rules.anchored import cli_analyze_p3
         return cli_analyze_p3(args)
     from forensics.rules.engine import RuleEngine
@@ -269,7 +271,7 @@ def cli_analyze(args):
         return 1
 
 def cli_investigate(args):
-    """Lệnh điều tra pháp y tự động bằng P5 AI Investigator (Pydantic AI + Gemini Flash)."""
+    """Lệnh điều tra pháp y tự động bằng AI Investigator (Pydantic AI + Gemini Flash)."""
     from forensics.ai.db_readonly import readonly_connection
     from forensics.ai.investigator import ForensicInvestigator
     from forensics.ai.provider import get_ai_config
@@ -439,16 +441,16 @@ def build_parser():
     pan.add_argument("--out", default=None, help="Đường dẫn file xuất kết quả (.json hoặc .csv)")
     pan.add_argument("--format", choices=["json", "csv"], default=None, help="Định dạng xuất file")
     pan.add_argument("--no-persist", action="store_false", dest="persist", default=True, help="Không lưu alerts vào SQLite")
+    pan.add_argument("--anchored-manifest", "--p3-manifest", dest="anchored_manifest", help="Đọc gói chứng cứ đã neo (Chain of Custody / On-chain Registry) trực tiếp vào Rule Engine")
+    pan.add_argument("--custody-contract", "--p3-contract", dest="custody_contract", help="Địa chỉ hợp đồng EvidenceRegistry on-chain")
+    pan.add_argument("--custody-rpc-url", "--p3-rpc-url", dest="custody_rpc_url", help="RPC URL kết nối on-chain registry")
+    pan.add_argument("--custody-chain-id", "--p3-anchor-chain-id", dest="custody_chain_id", type=int, help="Chain ID của mạng lưu ký on-chain")
+    pan.add_argument("--custody-db", "--p3-custody-db", dest="custody_db", help="Đọc lịch sử custody từ SQLite (chế độ chỉ đọc)")
+    pan.add_argument("--custody-require-verified", "--p3-require-verified", dest="custody_require_verified", action="store_true", help="Tùy chọn: chỉ phân tích khi xác minh on-chain khớp 100%")
     pan.set_defaults(func=cli_analyze)
-    pan.add_argument("--p3-manifest", help="Đọc gói chứng cứ P3 trực tiếp vào Rule Engine")
-    pan.add_argument("--p3-contract")
-    pan.add_argument("--p3-rpc-url")
-    pan.add_argument("--p3-anchor-chain-id", type=int)
-    pan.add_argument("--p3-custody-db", help="Đọc lịch sử custody P3 từ SQLite, không ghi")
-    pan.add_argument("--p3-require-verified", action="store_true", help="Tùy chọn: chỉ phân tích khi P3 khớp")
 
-    # 12. investigate (P5 AI Investigator)
-    pinv = sub.add_parser("investigate", help="Điều tra pháp y tự động bằng P5 AI Investigator (Pydantic AI + Gemini Flash)")
+    # AI Investigator CLI Command
+    pinv = sub.add_parser("investigate", help="Điều tra pháp y tự động bằng AI Investigator (Pydantic AI + Gemini Flash)")
     pinv.add_argument("--case-id", required=True, help="Mã vụ việc điều tra (ví dụ: euler-finance, curve-alchemix)")
     pinv.add_argument("--db", default=None, help="Đường dẫn database SQLite chứng cứ (chỉ đọc)")
     pinv.add_argument("--query", default=None, help="Chỉ thị điều tra tùy chọn")

@@ -7,7 +7,7 @@ import sys
 
 
 def test_real_anvil_collector_export_integrity():
-    script = Path(__file__).resolve().parents[1]/'scripts/run_p3_group2a_smoke.py'
+    script = Path(__file__).resolve().parents[1]/'scripts/run_collector_export_smoke.py'
     result = subprocess.run([sys.executable, str(script)], capture_output=True,
                             encoding='utf-8', errors='replace', timeout=240)
     if os.environ.get('P3_2A_EVIDENCE_DIR'):

@@ -1064,7 +1064,7 @@ def persist_verified_event(
     case_digest_val = str(case_digest).lower() if case_digest else None
     action_val = int(data.get("action", 0))
 
-    # Strict Verification Before verified=1 (Gate G3-04 & G3-03)
+    # Strict Verification Before verified=1
     # A valid transaction receipt is strictly mandatory.
     # Self-declared block_number or topic0 is strictly rejected.
     receipt = data.get("receipt")
@@ -1120,7 +1120,7 @@ def persist_verified_event(
     try:
         conn.execute("BEGIN IMMEDIATE")
 
-        # PURE INSERT into custody_events — zero clobbering (Gate G3-03)
+        # PURE INSERT into custody_events — immutable append-only
         conn.execute(
             "INSERT INTO custody_events("
             "event_id, evidence_id, case_id, action, actor_address, artifact_sha256, "
@@ -1145,7 +1145,7 @@ def persist_verified_event(
             ),
         )
 
-        # Multi-Manifest Same Case Linkage into anchor_links (Gate G3-01, G3-14)
+        # Multi-Manifest Same Case Linkage into anchor_links
         if event_type == EVENT_TYPE_EVIDENCE_REGISTERED:
             if not manifest_sha256_val:
                 raise RuntimeError("POST_SEND_DB_FAILED: manifest_sha256 is required for EvidenceRegistered")
@@ -1525,7 +1525,6 @@ def reconcile_operation(
                 legacy_case_encoding=bool(intent.get("legacy_case_encoding", False)),
             )
     except RuntimeError as e:
-        # Check if reverted
         status_val = receipt.get("status")
         if status_val in (0, "0", "0x0", False):
             apply_reconcile_result(

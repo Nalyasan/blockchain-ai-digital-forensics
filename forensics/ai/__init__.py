@@ -159,7 +159,7 @@ __all__ = [
     "sanitize_onchain_dict",
     "sanitize_onchain_list",
     "sanitize_onchain_string",
-    # Reference Checker (T10)
+    # Independent Reference Checker
     "ReferenceCheckResult",
     "RefMismatch",
     "check_investigation_output",

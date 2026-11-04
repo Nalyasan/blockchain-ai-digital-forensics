@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="module")
 def group3_smoke_result():
-    """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
-    smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+    """Run scripts/run_onchain_journal_smoke.py once for this module and return parsed report."""
+    smoke_script = ROOT / "scripts" / "run_onchain_journal_smoke.py"
     res = subprocess.run(
         [sys.executable, str(smoke_script)],
         capture_output=True,
