@@ -209,6 +209,9 @@ def cli_migrate_db(args):
 
 def cli_analyze(args):
     """Lệnh phân tích phát hiện bất thường bằng Rule Engine (Phase 4)."""
+    if getattr(args, "p3_manifest", None):
+        from forensics.rules.anchored import cli_analyze_p3
+        return cli_analyze_p3(args)
     from forensics.rules.engine import RuleEngine
     db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
     if not os.path.exists(db_file):
@@ -437,6 +440,12 @@ def build_parser():
     pan.add_argument("--format", choices=["json", "csv"], default=None, help="Định dạng xuất file")
     pan.add_argument("--no-persist", action="store_false", dest="persist", default=True, help="Không lưu alerts vào SQLite")
     pan.set_defaults(func=cli_analyze)
+    pan.add_argument("--p3-manifest", help="Đọc gói chứng cứ P3 trực tiếp vào Rule Engine")
+    pan.add_argument("--p3-contract")
+    pan.add_argument("--p3-rpc-url")
+    pan.add_argument("--p3-anchor-chain-id", type=int)
+    pan.add_argument("--p3-custody-db", help="Đọc lịch sử custody P3 từ SQLite, không ghi")
+    pan.add_argument("--p3-require-verified", action="store_true", help="Tùy chọn: chỉ phân tích khi P3 khớp")
 
     # 12. investigate (P5 AI Investigator)
     pinv = sub.add_parser("investigate", help="Điều tra pháp y tự động bằng P5 AI Investigator (Pydantic AI + Gemini Flash)")

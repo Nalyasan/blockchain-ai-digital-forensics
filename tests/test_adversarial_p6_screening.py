@@ -51,8 +51,11 @@ from forensics.adapters.screening import (
 
 logger = logging.getLogger(__name__)
 
-BENCHMARK_METRICS_PATH = Path("D:/Projest/p6_public_benchmark/results/benchmark_metrics.json")
-AUTHENTIC_BENCH_DB_PATH = Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
+from forensics.paths import BENCHMARK_DB as CANONICAL_BENCH_DB, PROJECT_ROOT
+
+_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark" if (PROJECT_ROOT.parent / "p6_public_benchmark").exists() else Path("D:/Projest/p6_public_benchmark")
+BENCHMARK_METRICS_PATH = _P6_BENCH_ROOT / "results" / "benchmark_metrics.json"
+AUTHENTIC_BENCH_DB_PATH = CANONICAL_BENCH_DB if CANONICAL_BENCH_DB.exists() else Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
 
 
 @pytest.fixture
@@ -268,7 +271,7 @@ def test_positive_match_against_authentic_benchmark_db():
     if not AUTHENTIC_BENCH_DB_PATH.exists():
         pytest.skip(f"Authentic benchmark database {AUTHENTIC_BENCH_DB_PATH} not found.")
 
-    conn = sqlite3.connect(f"file:///{AUTHENTIC_BENCH_DB_PATH.as_posix()}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:///{AUTHENTIC_BENCH_DB_PATH.as_posix()}?mode=ro&immutable=1", uri=True)
     try:
         # Select 20 authentic addresses across different datasets
         query = """
@@ -537,7 +540,7 @@ def test_verify_incident_screening_live_reproducibility():
         pytest.skip(f"Benchmark database {AUTHENTIC_BENCH_DB_PATH} not found.")
 
     p4_conn = get_readonly_p4_connection(DEFAULT_REAL_P4_DB_PATH)
-    bench_conn = sqlite3.connect(f"file:///{AUTHENTIC_BENCH_DB_PATH.as_posix()}?mode=ro", uri=True)
+    bench_conn = sqlite3.connect(f"file:///{AUTHENTIC_BENCH_DB_PATH.as_posix()}?mode=ro&immutable=1", uri=True)
 
     try:
         # 1. Euler Finance Counterparties

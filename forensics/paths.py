@@ -7,6 +7,7 @@ DATASETS_DIR = PROJECT_ROOT / 'datasets'
 TOOLS_DIR = PROJECT_ROOT / 'tools'
 REAL_P4_DB = DATA_DIR / 'real_p4.db'
 BENCHMARK_DB = DATA_DIR / 'benchmark_p6.db'
+FORENSICS_DB = DATA_DIR / 'forensics.db'
 
 
 def get_project_root() -> Path:
@@ -19,4 +20,16 @@ def get_data_dir() -> Path:
 
 def get_tools_dir() -> Path:
     return PROJECT_ROOT / 'tools'
+
+
+def get_forensics_db() -> Path:
+    return FORENSICS_DB
+
+
+def get_real_p4_db() -> Path:
+    return REAL_P4_DB
+
+
+def get_benchmark_db() -> Path:
+    return BENCHMARK_DB
 

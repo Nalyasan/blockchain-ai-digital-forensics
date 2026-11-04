@@ -42,10 +42,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
 
 from forensics.ai.db_readonly import get_readonly_connection
+from forensics.paths import BENCHMARK_DB
 
 logger = logging.getLogger("forensics.ai.tools")
 
-DEFAULT_BENCHMARK_DB_PATH: Path = Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
+DEFAULT_BENCHMARK_DB_PATH: Path = BENCHMARK_DB if BENCHMARK_DB.exists() else Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
 
 __all__ = [
     "AUTHORIZED_TOOLS",

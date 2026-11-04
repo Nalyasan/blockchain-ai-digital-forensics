@@ -30,9 +30,10 @@ from forensics.ai.db_readonly import (
     get_readonly_connection,
     readonly_connection,
 )
+from forensics.paths import DATA_DIR, REAL_P4_DB as CANONICAL_REAL_P4_DB
 
-REAL_P4_DB = Path(r"D:\Projest\worktrees\p4_real_integration\data\real_p4.db")
-REAL_P4_DATA_DIR = Path(r"D:\Projest\worktrees\p4_real_integration\data")
+REAL_P4_DB = CANONICAL_REAL_P4_DB if CANONICAL_REAL_P4_DB.exists() else Path(r"D:\Projest\worktrees\p4_real_integration\data\real_p4.db")
+REAL_P4_DATA_DIR = DATA_DIR if DATA_DIR.exists() else Path(r"D:\Projest\worktrees\p4_real_integration\data")
 
 
 # Helper top-level function for multiprocessing (must be pickleable)
@@ -104,8 +105,8 @@ class TestAdversarialConcurrency:
 
         assert not errors, f"Errors encountered during concurrent thread execution: {errors}"
         # Assert no lock files were generated in data directory
-        data_files = [f.name for f in REAL_P4_DATA_DIR.iterdir()]
-        assert data_files == ["real_p4.db"], f"Lock files found in {REAL_P4_DATA_DIR}: {data_files}"
+        lock_files = [f.name for f in REAL_P4_DATA_DIR.iterdir() if f.name.endswith(("-wal", "-shm", "-journal", ".lock"))]
+        assert not lock_files, f"Lock files found in {REAL_P4_DATA_DIR}: {lock_files}"
         print(f"\n[PASS] 50 threads executed {total_queries} queries in {elapsed:.2f}s (0 errors)")
 
     def test_high_thread_volume_100_threads(self):
@@ -245,15 +246,16 @@ class TestLockFileInvariants:
             pytest.skip("real_p4 data dir not found")
 
         # Record initial state
-        initial_files = sorted(f.name for f in REAL_P4_DATA_DIR.iterdir())
-        assert initial_files == ["real_p4.db"], f"Initial data dir has unexpected files: {initial_files}"
+        initial_files = set(f.name for f in REAL_P4_DATA_DIR.iterdir())
+        initial_lock_files = [f for f in initial_files if f.endswith(("-wal", "-shm", "-journal", ".lock"))]
+        assert not initial_lock_files, f"Initial data dir has unexpected lock files: {initial_lock_files}"
 
         observed_extra_files = []
         stop_monitoring = threading.Event()
 
         def directory_monitor():
             while not stop_monitoring.is_set():
-                current_files = [f.name for f in REAL_P4_DATA_DIR.iterdir() if f.name != "real_p4.db"]
+                current_files = [f.name for f in REAL_P4_DATA_DIR.iterdir() if f.name not in initial_files]
                 if current_files:
                     observed_extra_files.extend(current_files)
                 time.sleep(0.005)
@@ -272,8 +274,9 @@ class TestLockFileInvariants:
             stop_monitoring.set()
             mon_thread.join()
 
-        final_files = sorted(f.name for f in REAL_P4_DATA_DIR.iterdir())
-        assert final_files == ["real_p4.db"], f"Lock files found after test: {final_files}"
+        final_files = set(f.name for f in REAL_P4_DATA_DIR.iterdir())
+        final_lock_files = [f for f in final_files if f not in initial_files or f.endswith(("-wal", "-shm", "-journal", ".lock"))]
+        assert not final_lock_files, f"Lock files found after test: {final_lock_files}"
         assert not observed_extra_files, f"Lock files observed during test: {observed_extra_files}"
 
     def test_immutable_prevents_wal_and_shm_even_on_wal_configured_db(self, tmp_path):
@@ -457,7 +460,8 @@ class TestAdversarialSQLBypass:
             # In immutable mode, SQLite treats journal_mode change as no-op or returns current mode
             res = conn.execute("PRAGMA journal_mode = DELETE;").fetchone()
             # Verify no journal files were created in data directory
-            assert [f.name for f in REAL_P4_DATA_DIR.iterdir()] == ["real_p4.db"]
+            journal_files = [f.name for f in REAL_P4_DATA_DIR.iterdir() if f.name.endswith(("-wal", "-shm", "-journal", ".lock"))]
+            assert not journal_files, f"Journal/lock files found in {REAL_P4_DATA_DIR}: {journal_files}"
 
     def test_database_remains_unmutated_after_attacks(self):
         """Proof: After all adversarial attacks, real_p4.db canonical counts are untouched."""
@@ -473,4 +477,4 @@ class TestAdversarialSQLBypass:
 
 
 if __name__ == "__main__":
-    pytest.main(["-v", __file__, "--basetemp=C:\\Users\\Naly\\p5_tmp"])
+    pytest.main(["-v", __file__])

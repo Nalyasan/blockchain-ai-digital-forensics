@@ -1,0 +1,57 @@
+P4 reads P3-verified evidence packages
+====================================
+
+Scope: additive entrypoint. Existing analyze CLI, RuleEngine, P3 verifier,
+P5, packaging and G5/G6 files are unchanged. No default behavior is replaced.
+Use this new entrypoint when analysis must be bound to P3-anchored evidence.
+
+Flow:
+  Capture package bytes -> P3 verify_onchain_evidence -> require MATCH
+  -> bind captured manifest SHA-256 to P3 result
+  -> construct private in-memory SQLite from authenticated package bytes
+  -> existing R1-R4 with persist=False -> JSON report on stdout.
+
+Example (replace placeholders with real registered evidence context):
+  python -m forensics.rules.anchored --manifest <package-directory> --contract <registry-address> --rpc-url http://127.0.0.1:8545 --anchor-chain-id 31337 --test <start> <end> --calibration <start> <end>
+
+Optional: --evidence-id <id>, --rules large_transfer high_frequency fan_in_out rapid_pass_through.
+Both calibration bounds must be supplied together. Calibration must precede
+test. Both windows must be contained in the anchored package's block range.
+Source chain comes from the authenticated manifest; anchor chain is separate.
+The Python API additionally accepts token_thresholds.
+
+Requirements:
+- A FULL package supported by the existing P3 verifier, including
+  asset_transfers.csv and raw_blocks.jsonl, already registered on-chain.
+- Authentic Git objects required by existing P3 provenance checks.
+- An explicitly supplied reachable RPC and matching registry/anchor chain.
+- Package legacy encodings are not opted into by this entrypoint.
+
+This is read-only chain verification. It never deploys, signs, sends a
+transaction, writes custody, modifies the source DB or creates alert rows
+in the source DB. RPC calls still contact the explicitly provided endpoint.
+Unavailable RPC, missing registration, provenance failure, mismatch, invalid
+schema or invalid windows fail closed (CLI exit 1), never fall back to DB.
+Successful reports include evidence ID, manifest hash, chain context and
+registration transaction from P3, alongside alerts. They attest the P3
+package check, not human ownership or completeness of custody history.
+
+Validation on isolated source copy:
+  python -B -m pytest tests/test_p4_anchored_package.py tests/test_rules.py -q -o addopts= -p no:cacheprovider --basetemp=<new-isolated-temp-directory>
+  Result: 47 passed (15 bridge cases + 32 existing rule tests).
+Bridge positive tests stub the P3 boundary and run real R1-R4. Negative tests
+cover P3 failure, altered bytes, changed manifest digest, chain mismatch,
+range checks, snapshot stability and CLI secret-safe errors. One negative
+test uses real P3 verification of an invalid package with RPC prohibited.
+No live registered-contract success test was executed in this work session.
+A local Anvil integration test remains necessary before release acceptance.
+
+Integration with concurrent Antigravity G5/G6:
+Prepared on independent clone based on 5f24c09eb9dd7ebf0f11f6bab93c87af65ea19bf.
+Only three new files; no shared checkout or agent status files were edited.
+Apply after the active G5/G6 checkpoint. Check the current branch and tree,
+run git apply --check on the supplied patch, then git apply. Do not force
+apply if paths already exist. Re-run the targeted tests and include this
+module in the final portable package. Previous G5 results do not cover it.
+The old analyze entrypoint remains an unverified DB analysis path; callers
+requiring P3 proof must select forensics.rules.anchored explicitly.

@@ -28,3 +28,7 @@ out/
 cache/
 contracts/out/
 contracts/cache/
+
+# Distribution & Temporary Run Dirs
+dist/
+tmp_pytest_run/

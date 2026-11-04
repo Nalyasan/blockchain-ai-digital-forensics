@@ -20,12 +20,14 @@ from forensics.adapters.persistence_benchmark import (
     insert_intel_batch,
 )
 from forensics.adapters.xlsx_adapter import parse_ptxphish_xlsx
+from forensics.paths import BENCHMARK_DB, PROJECT_ROOT
 
-WORKSPACE_DIR = Path("D:/Projest/p6_public_benchmark")
+_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark" if (PROJECT_ROOT.parent / "p6_public_benchmark").exists() else Path("D:/Projest/p6_public_benchmark")
+WORKSPACE_DIR = _P6_BENCH_ROOT
 WORKING_DIR = WORKSPACE_DIR / "datasets" / "working"
 MANIFEST_PATH = WORKSPACE_DIR / "audit" / "dataset_manifest.json"
 OUTPUT_JSON_PATH = WORKSPACE_DIR / "results" / "import_validation.json"
-DB_PATH = WORKSPACE_DIR / "data" / "benchmark_p6.db"
+DB_PATH = BENCHMARK_DB if BENCHMARK_DB.exists() else WORKSPACE_DIR / "data" / "benchmark_p6.db"
 
 DATASETS_CONFIG = [
     {

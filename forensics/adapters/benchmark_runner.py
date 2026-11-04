@@ -57,13 +57,15 @@ from forensics.adapters.screening import (
     screen_addresses,
 )
 from forensics.adapters.xlsx_adapter import parse_ptxphish_xlsx
+from forensics.paths import DATASETS_DIR, PROJECT_ROOT
 from forensics.persistence import insert_verified
 
 logger = logging.getLogger("forensics.adapters.benchmark_runner")
 
-DEFAULT_DATASETS_DIR = Path("D:/Projest/p6_public_benchmark/datasets/working")
-DEFAULT_RESULTS_DIR = Path("D:/Projest/p6_public_benchmark/results")
-DEFAULT_REPORTS_DIR = Path("D:/Projest/p6_public_benchmark/reports")
+_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark" if (PROJECT_ROOT.parent / "p6_public_benchmark").exists() else Path("D:/Projest/p6_public_benchmark")
+DEFAULT_DATASETS_DIR = _P6_BENCH_ROOT / "datasets" / "working"
+DEFAULT_RESULTS_DIR = _P6_BENCH_ROOT / "results"
+DEFAULT_REPORTS_DIR = _P6_BENCH_ROOT / "reports"
 
 
 def parse_all_authentic_datasets(

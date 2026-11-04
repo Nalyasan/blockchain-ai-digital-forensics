@@ -21,8 +21,9 @@ from forensics.ai.db_readonly import (
     get_readonly_connection,
     readonly_connection,
 )
+from forensics.paths import REAL_P4_DB as CANONICAL_REAL_P4_DB
 
-REAL_P4_DB = Path(r"D:\Projest\worktrees\p4_real_integration\data\real_p4.db")
+REAL_P4_DB = CANONICAL_REAL_P4_DB if CANONICAL_REAL_P4_DB.exists() else Path(r"D:\Projest\worktrees\p4_real_integration\data\real_p4.db")
 
 
 class TestDBReadOnlyConnection:

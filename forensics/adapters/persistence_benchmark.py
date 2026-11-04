@@ -14,9 +14,10 @@ import sqlite3
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from forensics.adapters.base import ThreatIntelBatch, ThreatIntelRecord, current_iso_utc
+from forensics.paths import BENCHMARK_DB
 from forensics.persistence import EvidenceConflictError, insert_verified
 
-DEFAULT_BENCHMARK_DB_PATH = Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
+DEFAULT_BENCHMARK_DB_PATH = BENCHMARK_DB if BENCHMARK_DB.exists() else Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
 
 # Prohibited database targets for strict physical database isolation
 FORBIDDEN_DB_NAMES = ("real_p4.db", "forensics.db", "real_p4", "forensics")

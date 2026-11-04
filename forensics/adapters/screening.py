@@ -31,12 +31,13 @@ from forensics.adapters.persistence_benchmark import (
     DEFAULT_BENCHMARK_DB_PATH,
     assert_database_isolation,
 )
+from forensics.paths import REAL_P4_DB
 from forensics.persistence import EvidenceConflictError, insert_verified
 
 logger = logging.getLogger("forensics.adapters.screening")
 
 # Canonical default paths
-DEFAULT_REAL_P4_DB_PATH = Path("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
+DEFAULT_REAL_P4_DB_PATH = REAL_P4_DB if REAL_P4_DB.exists() else Path("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
 
 # Non-overlapping window boundaries established during Phase 4 baseline
 INCIDENT_BOUNDS: dict[str, tuple[int, int]] = {
