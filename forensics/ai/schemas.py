@@ -25,6 +25,7 @@ EVIDENCE_REF_REGEX = re.compile(
 
 # Words indicating subjective speculation or interpretation rather than objective physical on-chain fact
 SPECULATIVE_WORDS = {
+    # Subjective/Analyst Speculation
     "suspect",
     "suspected",
     "suspects",
@@ -46,6 +47,22 @@ SPECULATIVE_WORDS = {
     "victim",
     "stolen",
     "malicious",
+    # ML & MITRE Interpretations (Field Separation Protection)
+    "anomaly",
+    "anomalous",
+    "predicted",
+    "prediction",
+    "probability",
+    "mitre",
+    "t1027",
+    "t1566",
+    "t1048",
+    "t1499",
+    "t1565",
+    "shap",
+    "phishing",
+    "exfiltration",
+    "obfuscation",
 }
 
 
@@ -137,11 +154,11 @@ class ObservedFact(BaseModel):
     def validate_factual_purity(cls, v: str) -> str:
         """Enforces field separation: prevents subjective speculation from polluting facts."""
         v_lower = v.lower()
-        words = set(re.findall(r"\b[a-z]+\b", v_lower))
+        words = set(re.findall(r"\b[a-z0-9]+\b", v_lower))
         found_speculative = words.intersection(SPECULATIVE_WORDS)
         if found_speculative:
             raise ValueError(
-                f"Field separation violation: ObservedFact.statement contains speculative/interpretive vocabulary: {sorted(found_speculative)}. Hypotheses and behavioral attributions must be placed in AnalystInterpretation."
+                f"Field separation violation: ObservedFact.statement contains speculative/interpretive vocabulary: {sorted(found_speculative)}. Hypotheses and behavioral attributions must be placed in AnalystInterpretation, MLAnomalyDetection, or MitreAttackMapping."
             )
         return v.strip()
 
@@ -285,6 +302,61 @@ class AnalystInterpretation(BaseModel):
     )
 
 
+class MLAnomalyDetection(BaseModel):
+    """Machine learning anomaly detection output with quantitative explainability."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str = Field(..., description="Unique model identifier, e.g. 'anomaly_detector_v1'")
+    model_sha256: str = Field(..., description="SHA-256 hash of the model weights artifact")
+    entity_address: str = Field(..., description="Target address evaluated")
+    score: float = Field(..., ge=0.0, le=1.0, description="Normalized anomaly score")
+    classification: Literal["normal", "suspicious", "anomalous"] = Field(
+        ..., description="Discrete classification bucket"
+    )
+    top_features: list[str] = Field(default_factory=list, description="Top feature drivers from XAI")
+    xai_attributions: dict[str, float] = Field(
+        default_factory=dict, description="SHAP feature attribution values"
+    )
+    mitre_techniques: list[str] = Field(
+        default_factory=list, description="Associated MITRE technique IDs"
+    )
+    evidence_refs: list[str] = Field(
+        default_factory=list, description="Canonical evidence references supporting this detection"
+    )
+
+    @field_validator("entity_address")
+    @classmethod
+    def validate_entity_address(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not HEX_ADDRESS_REGEX.match(v):
+            raise ValueError(f"Invalid entity_address: {v!r}. Must be 0x followed by 40 hex characters.")
+        return v
+
+
+class MitreAttackMapping(BaseModel):
+    """Formal MITRE ATT&CK mapping with mandatory documented evidence citations."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    technique_id: str = Field(..., description="e.g. 'T1027', 'T1566.002', 'T1048.003', 'T1499.004'")
+    technique_name: str = Field(..., description="Descriptive name of the technique")
+    tactic: str = Field(..., description="e.g. 'Defense Evasion', 'Initial Access', 'Exfiltration', 'Impact'")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
+    evidence_refs: list[str] = Field(
+        ..., min_length=1, description="Must cite at least 1 verified canonical on-chain evidence reference"
+    )
+    rationale: str = Field(..., min_length=10, description="Technical rationale grounded in evidence")
+
+    @field_validator("evidence_refs")
+    @classmethod
+    def validate_evidence_refs(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("MitreAttackMapping must cite at least 1 evidence reference.")
+        cleaned = [str(r).strip() for r in v if str(r).strip()]
+        if not cleaned:
+            raise ValueError("MitreAttackMapping must cite at least 1 non-empty evidence reference.")
+        return cleaned
+
+
 class ForensicInvestigationOutput(BaseModel):
     """Complete structured forensic investigation output schema for P5 AI Investigator.
     
@@ -293,10 +365,12 @@ class ForensicInvestigationOutput(BaseModel):
     2. `rule_detections`: Deterministic Rule Engine triggers.
     3. `external_labels`: Third-party intelligence claims.
     4. `analyst_interpretations`: Model-generated analytical hypotheses.
-    5. `chronological_timeline`: Ordered event summaries grounded in evidence.
-    6. `investigative_observations`: General factual observations from tool queries.
-    7. `conclusions`: Synthesized case findings supported by evidence.
-    8. `uncertainty_and_limitations`: Explicit boundaries and missing evidence warnings.
+    5. `ml_detections`: Machine learning anomaly detections with quantitative XAI attributions.
+    6. `mitre_mappings`: Formal MITRE ATT&CK taxonomy mappings substantiated by evidence refs.
+    7. `chronological_timeline`: Ordered event summaries grounded in evidence.
+    8. `investigative_observations`: General factual observations from tool queries.
+    9. `conclusions`: Synthesized case findings supported by evidence.
+    10. `uncertainty_and_limitations`: Explicit boundaries and missing evidence warnings.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -322,6 +396,14 @@ class ForensicInvestigationOutput(BaseModel):
     analyst_interpretations: list[AnalystInterpretation] = Field(
         default_factory=list,
         description="Model analytical hypotheses and behavioral explanations with explicit confidence scores.",
+    )
+    ml_detections: list[MLAnomalyDetection] = Field(
+        default_factory=list,
+        description="Machine learning anomaly detections with quantitative XAI attributions.",
+    )
+    mitre_mappings: list[MitreAttackMapping] = Field(
+        default_factory=list,
+        description="Formal MITRE ATT&CK taxonomy mappings substantiated by canonical evidence refs.",
     )
     chronological_timeline: list[Union[dict[str, Any], str]] = Field(
         default_factory=list,

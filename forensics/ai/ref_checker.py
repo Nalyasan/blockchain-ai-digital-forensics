@@ -868,6 +868,28 @@ def check_investigation_output(
             elif rtype == "alert":
                 alert_candidates.add(rval)
 
+    # From ml_detections
+    ml_detections = output.get("ml_detections", []) if isinstance(output, dict) else getattr(output, "ml_detections", [])
+    for m in ml_detections:
+        refs = m.get("evidence_refs", []) if isinstance(m, dict) else getattr(m, "evidence_refs", [])
+        for r in refs:
+            rtype, rval = _parse_ref_entity(str(r))
+            if rtype == "tx":
+                tx_candidates.add(rval)
+            elif rtype == "alert":
+                alert_candidates.add(rval)
+
+    # From mitre_mappings
+    mitre_mappings = output.get("mitre_mappings", []) if isinstance(output, dict) else getattr(output, "mitre_mappings", [])
+    for mm in mitre_mappings:
+        refs = mm.get("evidence_refs", []) if isinstance(mm, dict) else getattr(mm, "evidence_refs", [])
+        for r in refs:
+            rtype, rval = _parse_ref_entity(str(r))
+            if rtype == "tx":
+                tx_candidates.add(rval)
+            elif rtype == "alert":
+                alert_candidates.add(rval)
+
     # From optional input_refs
     if input_refs:
         for r in input_refs:

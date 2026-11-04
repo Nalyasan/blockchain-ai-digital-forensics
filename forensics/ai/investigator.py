@@ -66,6 +66,7 @@ from forensics.ai.tools import (
     get_threat_intel,
     get_timeline,
     get_tx,
+    get_ml_anomaly_analysis,
 )
 
 logger = logging.getLogger("forensics.ai.investigator")
@@ -531,6 +532,20 @@ def create_offline_forensic_model(
                 )
                 rem_budget -= 1
 
+            if (
+                "tool_get_ml_anomaly_analysis" in registered_tool_names
+                and seed_addr
+                and rem_budget >= 1
+                and "tool_get_ml_anomaly_analysis" not in called_tools
+            ):
+                turn2_calls.append(
+                    ToolCallPart(
+                        tool_name="tool_get_ml_anomaly_analysis",
+                        args={"entity_address": str(seed_addr)},
+                    )
+                )
+                rem_budget -= 1
+
             if turn2_calls:
                 return ModelResponse(parts=turn2_calls)
 
@@ -541,6 +556,7 @@ def create_offline_forensic_model(
         tx_raw = (tool_returns.get("tool_get_tx") or [None])[0]
         counterparties_raw = (tool_returns.get("tool_get_counterparties") or [[]])[0] or []
         threat_raw = (tool_returns.get("tool_get_threat_intel") or [[]])[0] or []
+        ml_raw = (tool_returns.get("tool_get_ml_anomaly_analysis") or [None])[0]
 
         all_alerts: list[dict[str, Any]] = [
             a for a in (alerts_raw if isinstance(alerts_raw, list) else []) if isinstance(a, dict)
@@ -776,6 +792,31 @@ def create_offline_forensic_model(
                             "notes": "Offline threat intel from benchmark_p6.db",
                         })
 
+        ml_detections: list[dict[str, Any]] = []
+        mitre_mappings: list[dict[str, Any]] = []
+        if isinstance(ml_raw, dict) and not ml_raw.get("error"):
+            e_addr = str(ml_raw.get("entity_address") or seed_addr).strip().lower()
+            if not (e_addr.startswith("0x") and len(e_addr) == 42):
+                e_addr = "0x" + "0" * 40
+            ml_detections.append({
+                "model_id": str(ml_raw.get("model_id") or "anomaly_detector_v1"),
+                "model_sha256": str(ml_raw.get("model_sha256") or "0" * 64),
+                "entity_address": e_addr,
+                "score": float(ml_raw.get("score", 0.0)),
+                "classification": str(ml_raw.get("classification", "normal")),
+                "top_features": list(ml_raw.get("top_features") or []),
+                "xai_attributions": dict(ml_raw.get("xai_attributions") or {}),
+                "mitre_techniques": [
+                    str(m.get("technique_id"))
+                    for m in (ml_raw.get("mitre_mappings") or [])
+                    if isinstance(m, dict) and m.get("technique_id")
+                ],
+                "evidence_refs": list(ml_raw.get("evidence_refs") or []),
+            })
+            for mm in (ml_raw.get("mitre_mappings") or []):
+                if isinstance(mm, dict) and mm.get("technique_id") and mm.get("evidence_refs"):
+                    mitre_mappings.append(mm)
+
         out_tool_name = info.output_tools[0].name if info.output_tools else "final_result"
         output_payload = {
             "case_id": case_id,
@@ -783,6 +824,8 @@ def create_offline_forensic_model(
             "rule_detections": rule_detections,
             "external_labels": external_labels,
             "analyst_interpretations": interpretations,
+            "ml_detections": ml_detections,
+            "mitre_mappings": mitre_mappings,
             "chronological_timeline": timeline_entries,
             "investigative_observations": [
                 f"Executed {len(called_tools)} read-only forensic tool steps within budget MAX_AI_TOOL_STEPS={bounded_max}.",
@@ -837,6 +880,7 @@ class ForensicInvestigator:
         persistence_db: Optional[sqlite3.Connection] = None,
         benchmark_db: Optional[sqlite3.Connection] = None,
         enable_threat_intel: bool = False,
+        enable_ml_analysis: bool = False,
         prompt_version: str = DEFAULT_PROMPT_VERSION,
         system_prompt: Optional[str] = None,
         strict_ref_checker: bool = False,
@@ -853,6 +897,7 @@ class ForensicInvestigator:
         self.persistence_db = persistence_db
         self.benchmark_db = benchmark_db
         self.enable_threat_intel = enable_threat_intel
+        self.enable_ml_analysis = enable_ml_analysis
 
         # Model instantiation
         if model is not None:
@@ -897,6 +942,7 @@ class ForensicInvestigator:
             "get_timeline": get_timeline,
             "collect_missing_range": collect_missing_range,
             "get_threat_intel": get_threat_intel,
+            "get_ml_anomaly_analysis": get_ml_anomaly_analysis,
         }
 
         # Initialize Pydantic AI Agent
@@ -1034,6 +1080,26 @@ class ForensicInvestigator:
                 {"collect_missing_range": _dispatch},
                 ctx.deps.tracker,
             )
+
+        if self.enable_ml_analysis:
+            @self.agent.tool
+            async def tool_get_ml_anomaly_analysis(
+                ctx: RunContext[InvestigationDeps],
+                entity_address: str,
+            ) -> dict[str, Any]:
+                """Query machine learning anomaly detection, SHAP local attributions, and MITRE mapping."""
+                def _dispatch(entity_address):
+                    return get_ml_anomaly_analysis(
+                        entity_address=entity_address,
+                        db=ctx.deps.readonly_db,
+                    )
+
+                return execute_guarded_tool(
+                    "get_ml_anomaly_analysis",
+                    {"entity_address": entity_address},
+                    {"get_ml_anomaly_analysis": _dispatch},
+                    ctx.deps.tracker,
+                )
 
         if self.benchmark_db is not None or self.enable_threat_intel:
             @self.agent.tool

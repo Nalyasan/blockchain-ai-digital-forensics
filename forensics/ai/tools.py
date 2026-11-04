@@ -70,6 +70,7 @@ __all__ = [
     "get_address_history",
     "get_alerts",
     "get_counterparties",
+    "get_ml_anomaly_analysis",
     "get_staging_connection",
     "get_threat_intel",
     "get_timeline",
@@ -91,6 +92,7 @@ AUTHORIZED_TOOLS: frozenset[str] = frozenset({
     "get_counterparties",
     "get_timeline",
     "collect_missing_range",
+    "get_ml_anomaly_analysis",
 })
 
 P6_AUTHORIZED_TOOLS: frozenset[str] = frozenset(AUTHORIZED_TOOLS | {"get_threat_intel"})
@@ -1235,6 +1237,113 @@ def get_threat_intel(
             results.append(record)
 
         return results
+    finally:
+        if close_conn and conn is not None:
+            conn.close()
+
+
+def get_ml_anomaly_analysis(
+    entity_address: str,
+    db: Optional[sqlite3.Connection] = None,
+    db_path: Optional[Union[str, Path]] = None,
+) -> dict[str, Any]:
+    """Query machine learning anomaly detection, SHAP local attributions, and MITRE mapping.
+
+    Guarantees:
+    - Strictly read-only execution against evidence database (PRAGMA query_only = ON).
+    - Preserves exact arbitrary precision; handles zero transactions safely.
+    - Grounded MITRE mapping citing verified on-chain evidence references.
+    """
+    if not entity_address or not isinstance(entity_address, str):
+        return {"error": "Invalid entity_address: must be a non-empty string"}
+
+    norm_addr = entity_address.strip().lower()
+    if not (norm_addr.startswith("0x") and len(norm_addr) == 42):
+        return {"error": f"Invalid address format: {entity_address}. Must be 0x followed by 40 hex characters."}
+
+    from forensics.paths import REAL_P4_DB
+    from forensics.ml.features import FEATURE_NAMES, extract_single_address_features
+    from forensics.ml.model import load_default_model
+    from forensics.ml.registry import load_model_metadata
+    from forensics.ml.dataset import RobustFeatureScaler
+    from forensics.ml.xai import explain_instance
+    from forensics.ml.corroboration import DualEngineCorroborator
+    from forensics.ml.mitre import MitreMappingEngine
+
+    conn = None
+    close_conn = False
+
+    try:
+        if db is not None:
+            conn = db
+            close_conn = False
+        elif db_path is not None:
+            conn = get_readonly_connection(db_path)
+            close_conn = True
+        else:
+            conn = get_readonly_connection(REAL_P4_DB)
+            close_conn = True
+
+        # 1. Extract raw 10 features
+        features_dict = extract_single_address_features(db=conn, address=norm_addr)
+
+        # 2. Load model and metadata
+        model = load_default_model()
+        scaler = None
+        try:
+            meta = load_model_metadata(model.model_id)
+            scaler_dict = meta.get("scaler")
+            if scaler_dict:
+                scaler = RobustFeatureScaler.from_dict(scaler_dict)
+        except Exception:
+            scaler = None
+
+        raw_vec = [features_dict.get(name, 0.0) for name in FEATURE_NAMES]
+        if scaler and scaler.is_fitted:
+            scaled_vec = scaler.transform([raw_vec])[0]
+        else:
+            scaled_vec = raw_vec
+
+        # 3. Model inference
+        score = model.predict_score(scaled_vec)
+
+        # 4. Quantitative XAI local attribution
+        xai_res = explain_instance(model=model, features=scaled_vec, entity_address=norm_addr)
+
+        # 5. Rule Engine P4 corroboration
+        corroborator = DualEngineCorroborator(db_path_or_conn=conn)
+        rule_alerts = corroborator.get_alerts_for_address(norm_addr)
+        corroboration = corroborator.corroborate(
+            entity_address=norm_addr,
+            ml_score=score,
+            xai_top_drivers=xai_res.get("top_drivers", []),
+            rule_alerts=rule_alerts,
+        )
+
+        # 6. Evidence-grounded MITRE mapping
+        mitre_engine = MitreMappingEngine(strict_evidence=False)
+        mitre_mappings = mitre_engine.map_anomaly(
+            features=features_dict,
+            anomaly_score=score,
+            rule_alerts=rule_alerts,
+            evidence_refs=corroboration.evidence_refs,
+        )
+
+        classification = "anomalous" if score >= 0.65 else ("suspicious" if score >= 0.40 else "normal")
+
+        return {
+            "entity_address": norm_addr,
+            "model_id": getattr(model, "model_id", "anomaly_detector_v1"),
+            "model_sha256": getattr(model, "model_sha256", ""),
+            "score": round(float(score), 4),
+            "classification": classification,
+            "features": {k: round(v, 4) for k, v in features_dict.items()},
+            "top_features": xai_res.get("top_drivers", []),
+            "xai_attributions": {k: round(v, 6) for k, v in xai_res.get("attributions", {}).items()},
+            "rule_corroboration": corroboration.to_dict(),
+            "mitre_mappings": mitre_mappings,
+            "evidence_refs": sorted(list(set(corroboration.evidence_refs)))[:20],
+        }
     finally:
         if close_conn and conn is not None:
             conn.close()
