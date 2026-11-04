@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from forensics.rules.anchored import read_custody
-from test_anchored_evidence_package import package, run
+from tests.test_anchored_evidence_package import package, run
 
 
 def test_unavailable_p3_continues(package):

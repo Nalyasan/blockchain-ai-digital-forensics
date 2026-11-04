@@ -446,7 +446,7 @@ def build_parser():
     pan.add_argument("--custody-rpc-url", "--p3-rpc-url", dest="custody_rpc_url", help="RPC URL kết nối on-chain registry")
     pan.add_argument("--custody-chain-id", "--p3-anchor-chain-id", dest="custody_chain_id", type=int, help="Chain ID của mạng lưu ký on-chain")
     pan.add_argument("--custody-db", "--p3-custody-db", dest="custody_db", help="Đọc lịch sử custody từ SQLite (chế độ chỉ đọc)")
-    pan.add_argument("--custody-require-verified", "--p3-require-verified", dest="custody_require_verified", action="store_true", help="Tùy chọn: chỉ phân tích khi xác minh on-chain khớp 100%")
+    pan.add_argument("--custody-require-verified", "--p3-require-verified", dest="custody_require_verified", action="store_true", help="Tùy chọn: chỉ phân tích khi xác minh on-chain khớp 100%%")
     pan.set_defaults(func=cli_analyze)
 
     # AI Investigator CLI Command
