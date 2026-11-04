@@ -56,9 +56,11 @@ Trong khuôn khổ Giai đoạn P7 (Đề tài 8), hệ thống giám định k�
    - Nâng cấp Bộ kiểm tra tham chiếu độc lập hai giai đoạn (`ref_checker.py`), tự động phát hiện và đánh trượt các mã định danh tiến trình hoặc sự kiện bị mô hình AI ảo giác.
 
 7. **Kết quả Kiểm nghiệm Toàn diện**:
-   - **105/105** ca kiểm thử chuyên biệt Giai đoạn P7 (`test_p7_endpoint.py`, `test_p7_first_responder_safety.py`) đạt **100% PASS** trong **6.02 giây**.
-   - **109/109** ca kiểm thử hồi quy P1–P6 & P8 ML đạt **100% PASS** trong **3.13 giây**.
-   - **56/56** ca kiểm thử hợp đồng thông minh Foundry Forge đạt **100% PASS** trong **28.76 ms**.
+   - **105/105** ca kiểm thử chuyên biệt Giai đoạn P7 (`test_p7_endpoint.py`, `test_p7_first_responder_safety.py`) đạt **100% PASS** trong **4.42 giây**.
+   - **48/48** ca kiểm thử đối kháng Adversarial Challenger (`test_p7_adversarial_challenger.py`) đạt **100% PASS** trong **0.72 giây**.
+   - **109/109** ca kiểm thử hồi quy P1–P6 & P8 ML đạt **100% PASS** trong **2.41 giây**.
+   - **56/56** ca kiểm thử hợp đồng thông minh Foundry Forge đạt **100% PASS** trong **19.38 ms**.
+   - **Tổng cộng 318/318 ca kiểm thử trên toàn hệ thống đạt 100% PASS**.
    - Cơ sở dữ liệu gốc `real_p4.db` và `forensics.db` được bảo toàn nguyên vẹn 100%, mã băm SHA-256 khớp tuyệt đối với bản lưu trữ chuẩn `D:\Projest_backup_G0\MANIFEST_SHA256.txt`.
 
 ---
@@ -338,11 +340,34 @@ Một trong những yêu cầu cốt lõi của Đề tài 8 là: **Trí tuệ N
      - Chặn các công cụ ký hoặc gửi giao dịch chuỗi khối: `cast send`, `cast mktx`, `eth_sendRawTransaction`, `eth_sign`, `personal_sign`, `sign_transaction`.
      - Chặn việc truyền các chuỗi khóa bí mật 64 ký tự hex thô trong tham số yêu cầu.
 
-### 4.2 Cơ chế Chặn Lập trình (`SafetyGuard`) & Thứ tự Ưu tiên Đánh giá
-Để tránh hiện tượng phân loại nhầm lệnh domain-specific (ví dụ: `Disable-NetAdapter -Confirm:$false` bị gán nhầm thành `ARBITRARY_SHELL` do có ký tự `$`), `SafetyGuard.evaluate()` áp dụng quy tắc ưu tiên nghiêm ngặt:
-1. Đánh giá các danh mục đặc thù trước: **Category 5** (Khóa bí mật) $\to$ **Category 4** (Cô lập mạng) $\to$ **Category 3** (ACL) $\to$ **Category 2** (Xóa log).
-2. Đánh giá **Category 1** (Cú pháp Shell tùy ý) sau cùng. Ký tự `$` chỉ bị chặn khi đi kèm dấu ngoặc thay thế lệnh `\$\(`.
-3. Khi phát hiện vi phạm, phương thức `SafetyGuard.assert_safe()` lập tức kích hoạt ngoại lệ `DangerousActionError(category, command_or_action, reason)` và trả về cấu trúc kết quả kiểm toán `ActionBlockedResult`.
+### 4.2 Cơ chế Chặn Lập trình (`SafetyGuard`) & Tăng cường Phòng thủ Đối kháng (Security Hardening)
+Nhằm chống lại các kỹ thuật lẩn tránh đối kháng tinh vi (Adversarial Evasion), `SafetyGuard` được nâng cấp toàn diện với kiến trúc phòng thủ đa tầng:
+
+1. **Thứ tự Ưu tiên Đánh giá Ngữ nghĩa (Strict Semantic Precedence Order)**:
+   Để triệt tiêu hiện tượng phân loại sai danh mục (Misattribution) — ví dụ lệnh `Remove-Item *.evtx`, `iptables -A INPUT -j DROP`, hay `read private_key` bị gán nhầm thành `ARBITRARY_SHELL` do cơ chế fallback whitelist — `SafetyGuard.evaluate()` áp dụng quy tắc ưu tiên 6 tầng:
+   - **Tầng 1 — Category 5 (Khóa bí mật & Ví EVM)**: Kiểm tra `_FORBIDDEN_KEY_RE` đầu tiên để bảo vệ tài sản mật mã với độ ưu tiên cao nhất (`private_key`, `id_rsa`, `keystore`, `.env`, chữ ký ví, mã băm 64-hex).
+   - **Tầng 2 — Category 4 (Cô lập mạng tự động)**: Kiểm tra `_FORBIDDEN_ISOLATION_RE` (gồm cả Windows `netsh`/`Disable-NetAdapter` và Linux `iptables`/`ufw`/`nftables`).
+   - **Tầng 3 — Category 3 (Sửa đổi ACL/Quyền hạn)**: Kiểm tra `_FORBIDDEN_ACL_RE` (`icacls`, `takeown`, `Set-Acl`, `chmod`, `chown`).
+   - **Tầng 4 — Category 2 (Xóa/Can thiệp Nhật ký)**: Kiểm tra `_FORBIDDEN_LOG_RE` (`wevtutil cl`, `Clear-EventLog`, `Remove-Item *.evtx`, xóa tệp `.evtx`).
+   - **Tầng 5 — Category 1 (Thực thi Shell tùy ý)**: Kiểm tra `_FORBIDDEN_SHELL_RE` (trình thông dịch shell, bí danh `iex`, `Invoke-Expression`, cờ `-encoded`, biểu thức con PowerShell, toán tử nối lệnh/đường ống `;&|><`).
+   - **Tầng 6 — Danh mục Ủy quyền (Authorized Playbook Whitelist)**: Xác thực tên hành động thuộc danh mục 5 playbook hợp lệ `TriagePlaybookType`. Nếu không khớp, từ chối với `ARBITRARY_SHELL`.
+
+2. **Cơ chế Phẳng hóa Tham số Đệ quy (`_flatten_payload`) Chống Parameter Injection**:
+   Kẻ tấn công có thể cố gắng lẩn tránh bộ lọc bằng cách nhúng các vector tấn công vào tham số của playbook hợp lệ (ví dụ: `triage_running_processes(filter="iex calc.exe")` hoặc `triage_running_processes(log_del="Remove-Item *.evtx")`).
+   Hàm `_flatten_payload()` đệ quy duyệt qua mọi cấu trúc dữ liệu tham số (`dict`, `list`, `set`, `tuple`, `bytes`, `str`) để trích xuất toàn bộ khóa và giá trị thành các chuỗi riêng biệt, bảo đảm 100% dữ liệu đầu vào đều được quét qua ma trận quy tắc bảo mật trước khi cho phép thực thi.
+
+3. **Chặn Đứng Biểu thức Con PowerShell (PowerShell Subexpression Infiltration Defense)**:
+   PowerShell cho phép đánh giá nội tuyến các biểu thức đặt trong dấu ngoặc đơn `(...)` trước khi truyền vào tham số lệnh (ví dụ: `Get-WinEvent -LogName (whoami)`).
+   Biểu thức chính quy `\((?!\s*(?:x86|x64|\d+)\s*\))[\$a-zA-Z_][^)]*\)` chặn đứng toàn bộ các biểu thức con độc hại (`(whoami)`, `(Get-Date)`), đồng thời sử dụng cơ chế Negative Lookahead để loại trừ an toàn các đường dẫn tệp thông thường chứa `(x86)`, `(x64)` hoặc dấu ngoặc số thứ tự bản sao `(\d+)`.
+
+4. **Kiểm định Chuyên biệt Tham số Đường dẫn Tệp (`file_path` Validation trong `triage_hash_verification`)**:
+   Để vừa cho phép giám định băm các tệp thực thi hệ thống chuẩn (ví dụ: `C:\Windows\System32\cmd.exe`, `sample_binary.exe`) mà không bị `_FORBIDDEN_SHELL_RE` chặn nhầm, vừa ngăn chặn tuyệt đối việc AI bị khai thác để đọc trộm khóa bí mật:
+   - Tham số `file_path` trong `triage_hash_verification` được kiểm tra độc lập qua `_FORBIDDEN_KEY_RE` (nếu phát hiện đường dẫn `.env`, `id_rsa`, `keystore.json`, `private_key.pem`, kích hoạt ngay ngoại lệ `DangerousActionError` thuộc danh mục `KEY_SIGNING`).
+   - Kiểm tra ký tự chèn lệnh shell qua `_SHELL_INJECTION_RE` (`;&|><$()` v.v.) kích hoạt `ARBITRARY_SHELL`.
+   - Bổ sung kiểm định phòng thủ chiều sâu (Defense-in-Depth) trực tiếp tại đầu hàm `triage_hash_verification()`.
+
+5. **Lọc Tham số Kênh Nhật ký An toàn tại Bộ Thu thập (`daemon.py`)**:
+   Tại `WMIPowerShellFallbackProvider.query_events` và `query_endpoint`, tham số `channel` bắt buộc phải khớp với biểu thức quy chuẩn `_SAFE_CHANNEL_RE = ^[A-Za-z0-9_.\- /]{1,255}$` và được bọc trong dấu nháy đơn có cơ chế thoát ký tự an toàn (`'{safe_channel}'`), triệt tiêu hoàn toàn nguy cơ Command Injection qua giao diện dòng lệnh PowerShell.
 
 ### 4.3 Tuân thủ Tiêu chuẩn ISO/IEC 27037 & NIST SP 800-86
 - **Nguyên tắc Không can thiệp (Principle of Non-Interference)**: Đảm bảo thiết bị gốc được duy trì ở trạng thái tĩnh nhất có thể.
@@ -452,8 +477,23 @@ Toàn bộ hệ thống đã được kiểm thử toàn diện trên môi trư�
 | Phân hệ / Bộ kiểm thử | Mục tiêu kiểm định | Số ca kiểm thử | Kết quả | Thời gian |
 |---|---|---|---|---|
 | `tests/test_p7_endpoint.py` | Schema chính tắc, daemon, WMI fallback, mock, `endpoint_evidence.db` append-only, phát hiện xung đột, kết nối chỉ-đọc 5 lớp, cách ly dữ liệu, tích hợp AI Investigator, ngân sách 5 bước, và hai giai đoạn ref_checker | 29 | **29 PASS / 0 FAIL** | 1.82 s |
-| `tests/test_p7_first_responder_safety.py` | Kiểm thử đối kháng toàn diện 5 danh mục cấm: Shell tùy ý (cmd, powershell, pipe, redirect), Xóa log (wevtutil, Clear-EventLog), Sửa ACL (icacls, takeown, Set-Acl), Cô lập mạng (Disable-NetAdapter, HITL recommendation), Truy cập ví/khóa (cast, keystore, seed phrase) và thực thi 5 kịch bản phân loại sự cố | 76 | **76 PASS / 0 FAIL** | 4.20 s |
-| **Tổng kiểm thử mới P7** | **Toàn bộ chức năng Endpoint Ingestion, Store, SafetyGuard & AI Integration** | **105** | **105 PASS (100%)** | **6.02 s** |
+| `tests/test_p7_first_responder_safety.py` | Kiểm thử an toàn 5 danh mục cấm: Shell tùy ý, Xóa log, Sửa ACL, Cô lập mạng, Truy cập ví/khóa và thực thi 5 kịch bản phân loại sự cố chuẩn | 76 | **76 PASS / 0 FAIL** | 2.60 s |
+| `tests/test_p7_adversarial_challenger.py` | Kiểm thử đối kháng thách thức khắc nghiệt (Challenger Suite): lẩn tránh tham số, bí danh iex/Invoke-Expression, cờ mã hóa -encoded, biểu thức con PowerShell (whoami)/(Get-Date), phân loại đúng danh mục, chặn truy cập tệp nhạy cảm trong hash verification | 48 | **48 PASS / 0 FAIL** | 0.72 s |
+| **Tổng kiểm thử chuyên biệt P7** | **Toàn bộ chức năng Endpoint Ingestion, Store, SafetyGuard Hardening & Adversarial Challenger** | **153** | **153 PASS (100%)** | **5.14 s** |
+
+#### 7.1.1 Chi tiết Ma trận Thử thách Đối kháng (Adversarial Challenger Breakdown)
+Nhằm kiểm chứng tính vững chắc trước các kỹ thuật tấn công tinh vi, bộ kiểm thử `tests/test_p7_adversarial_challenger.py` phân tích 5 kịch bản tấn công đối kháng:
+1. `TestShellExecutionBypasses` (**17/17 PASS**):
+   - 12 ca kiểm thử trực tiếp: Cờ mã hóa Base64 (`-EncodedCommand`, `-encoded`, `-enc`, `-e`), cờ cmd (`/c`, `/k`), bash (`-c`), backtick obfuscation (``powershell `whoami` ``), command substitution (`$(whoami)`), bí danh gọi thực thi (`iex`, `&`, `Invoke-Expression`).
+   - 5 ca kiểm thử chèn tham số (Parameter Injection into valid playbooks): Nhúng `iex calc.exe`, `Invoke-Expression`, cờ `-encoded` vào `triage_running_processes`; nhúng biểu thức con PowerShell `(whoami)`, `(Get-Date)` vào tham số `channel` của `triage_recent_system_events`.
+2. `TestForbiddenActionsAndAttribution` (**15/15 PASS**):
+   - Kiểm tra phân loại chính xác danh mục cấm: `Remove-Item *.evtx` $\to$ `EVENT_LOG_CLEARING`; `iptables -A INPUT -j DROP`, `iptables -F` $\to$ `AUTOMATED_NETWORK_ISOLATION`; `read private_key`, `echo private_key=0x123` $\to$ `KEY_SIGNING`. Triệt tiêu hoàn toàn hiện tượng misattribution.
+3. `TestParameterInjectionsIntoAuthorizedPlaybooks` (**7/7 PASS**):
+   - Ngăn chặn triệt để kỹ thuật nhúng tham số xóa log, sửa quyền ACL, cô lập mạng iptables, trích xuất tệp `.env` hoặc đọc khóa bí mật vào các lệnh playbook hợp lệ.
+4. `TestTriageHashVerificationSafety` (**5/5 PASS**):
+   - Chặn đứng 100% các yêu cầu băm hoặc đọc nội dung các tệp nhạy cảm: `.env`, `id_rsa`, `keystore.json`, `~/.ssh/id_rsa`, `private_key.pem`, kích hoạt ngoại lệ `DangerousActionError(category=KEY_SIGNING)`.
+5. `TestIsolationRecommendationHITL` (**4/4 PASS**):
+   - Bảo đảm cấu trúc khuyến nghị cô lập mạng bắt buộc có chữ ký con người (`requires_human_signature=True`) và mã băm SHA-256 xác định.
 
 ### 7.2 Ma trận Kiểm thử Hồi quy Hệ thống (Regression Suites)
 
@@ -465,8 +505,8 @@ Toàn bộ hệ thống đã được kiểm thử toàn diện trên môi trư�
 | `tests/test_real_data_rules.py` | Động cơ Quy tắc P4 trên dữ liệu thực tế Euler và Curve | 10 | **10 PASS / 0 FAIL** | 0.22 s |
 | `tests/test_p3_p4_flow.py` | Luồng xử lý chứng cứ P3-P4 kết nối chuỗi khối | 4 | **4 PASS / 0 FAIL** | 0.12 s |
 | `tests/test_ai_security.py` | An toàn AI P5 (Prompt injection sanitizer, read-only DB, ref_checker) | 46 | **46 PASS / 0 FAIL** | 0.84 s |
-| `tests/test_ai_investigator.py` | Tác nhân điều tra AI Investigator và trần ngân sách 5 bước | 13 | **13 PASS / 0 FAIL** | 1.13 s |
-| **Tổng kiểm thử hồi quy** | **Bảo toàn toàn bộ hệ thống nền tảng P1–P6 & P8** | **108** | **108 PASS (100%)** | **3.13 s** |
+| `tests/test_ai_investigator.py` | Tác nhân điều tra AI Investigator và trần ngân sách 5 bước | 14 | **14 PASS / 0 FAIL** | 1.13 s |
+| **Tổng kiểm thử hồi quy** | **Bảo toàn toàn bộ hệ thống nền tảng P1–P6 & P8** | **109** | **109 PASS (100%)** | **2.41 s** |
 
 ### 7.3 Ma trận Kiểm thử Hợp đồng Thông minh Foundry Forge
 
@@ -508,7 +548,7 @@ Phân hệ P7 hoàn thành cung cấp nền tảng vững chắc cho các giai �
 Giai đoạn P7 (AI First Responder & Endpoint Evidence Acquisition) đã hoàn thành xuất sắc 100% các mục tiêu kỹ thuật đề ra:
 - Xây dựng thành công bộ thu thập viễn thông hai chế độ (osquery CLI + native Windows CIM/WMI fallback + mock provider).
 - Thiết lập cơ sở dữ liệu chứng cứ endpoint chuyên biệt `endpoint_evidence.db` với ngữ nghĩa chỉ-thêm bất biến và kết nối chỉ-đọc 5 lớp bảo vệ.
-- Thực thi ranh giới an toàn nghiêm ngặt 100% đối với 5 danh mục hành vi bị cấm của AI First Responder.
+- Thực thi ranh giới an toàn nghiêm ngặt 100% đối với 5 danh mục hành vi bị cấm của AI First Responder, gia cố bảo vệ đối kháng toàn diện với phẳng hóa tham số và chặn biểu thức con PowerShell.
 - Triển khai 5 kịch bản phân loại sự cố không phá hủy tuân thủ thứ tự suy giảm tính khả biến.
 - Tích hợp an toàn vào AI Investigator P5 với bộ kiểm tra tham chiếu chống ảo giác hai giai đoạn.
-- Đạt tỷ lệ vượt qua kiểm thử tuyệt đối: **105/105 ca kiểm thử P7**, **109/109 ca kiểm thử hồi quy**, và **56/56 ca kiểm thử hợp đồng Solidity**, bảo toàn trọn vẹn dữ liệu chuỗi khối gốc. Hệ thống sẵn sàng cho việc nghiệm thu kỹ thuật và chuyển tiếp sang các giai đoạn tiếp theo.
+- Đạt tỷ lệ vượt qua kiểm thử tuyệt đối: **153/153 ca kiểm thử P7 (105 ca P7 gốc + 48 ca Adversarial Challenger)**, **109/109 ca kiểm thử hồi quy**, và **56/56 ca kiểm thử hợp đồng Solidity** (Tổng cộng **318/318 PASS 100%**), bảo toàn trọn vẹn dữ liệu chuỗi khối gốc. Hệ thống sẵn sàng cho việc nghiệm thu kỹ thuật và chuyển tiếp sang các giai đoạn tiếp theo.

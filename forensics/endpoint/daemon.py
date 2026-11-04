@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -47,6 +48,8 @@ TCP_STATE_MAP: dict[int, str] = {
     11: "TimeWait",
     12: "DeleteTCB",
 }
+
+_SAFE_CHANNEL_RE = re.compile(r"^[A-Za-z0-9_.\- /]{1,255}$")
 
 
 class TelemetryProvider(ABC):
@@ -354,8 +357,16 @@ class WMIPowerShellFallbackProvider(TelemetryProvider):
     def query_events(
         self, channel: str = "System", max_events: int = 50
     ) -> list[EventRecord]:
+        clean_channel = str(channel).strip() if channel is not None else ""
+        if not clean_channel or not _SAFE_CHANNEL_RE.match(clean_channel):
+            raise ValueError(
+                f"Invalid event log channel '{channel}'. "
+                "Channel name must only contain alphanumeric characters, spaces, dots, hyphens, underscores, or slashes (1-255 chars)."
+            )
+        safe_channel = clean_channel.replace("'", "''")
+        safe_max = max(1, min(int(max_events), 5000))
         script = (
-            f"Get-WinEvent -LogName {channel} -MaxEvents {int(max_events)} "
+            f"Get-WinEvent -LogName '{safe_channel}' -MaxEvents {safe_max} "
             "-ErrorAction SilentlyContinue | Select-Object Id, ProviderName, "
             "LogName, @{Name='TimeCreated'; Expression={$_.TimeCreated.ToUniversalTime().ToString('o')}}, "
             "Message, LevelDisplayName | ConvertTo-Json -Compress"
@@ -623,8 +634,11 @@ def query_endpoint(
         return list(prov.query_sockets(limit=limit))
     elif query_type == "events":
         channel = kwargs.get("channel", "System")
+        clean_channel = str(channel).strip() if channel is not None else ""
+        if not clean_channel or not _SAFE_CHANNEL_RE.match(clean_channel):
+            raise ValueError(f"Invalid event log channel '{channel}'")
         max_events = kwargs.get("max_events", 50)
-        return list(prov.query_events(channel=channel, max_events=max_events))
+        return list(prov.query_events(channel=clean_channel, max_events=max_events))
     elif query_type == "system_info":
         return [prov.query_system_info()]
     else:

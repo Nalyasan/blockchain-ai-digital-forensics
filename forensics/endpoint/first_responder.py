@@ -201,15 +201,44 @@ class HashVerificationResult(BaseModel):
     matched_threat_label: Optional[str] = None
 
 
+def _flatten_payload(val: Any) -> list[str]:
+    """Recursively flattens complex parameter arguments into individual strings."""
+    strings: list[str] = []
+    if isinstance(val, (str, bytes)):
+        s = val.decode("utf-8", errors="replace") if isinstance(val, bytes) else val
+        strings.append(s)
+    elif isinstance(val, (int, float, bool)) or val is None:
+        strings.append(str(val))
+    elif isinstance(val, Path):
+        strings.append(str(val))
+    elif isinstance(val, (list, tuple, set)):
+        for item in val:
+            strings.extend(_flatten_payload(item))
+    elif isinstance(val, dict):
+        for k, v in val.items():
+            strings.append(str(k))
+            strings.extend(_flatten_payload(v))
+    else:
+        strings.append(str(val))
+    return strings
+
+
+_SAFE_CHANNEL_RE = re.compile(r"^[A-Za-z0-9_.\- /]{1,255}$")
+
+
 class SafetyGuard:
     """Multi-layered safety policy validator enforcing NIST SP 800-86 and ISO 27037 boundaries."""
 
     # 1. Arbitrary shell regex
     _FORBIDDEN_SHELL_RE = re.compile(
-        r"\b(cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?|bash|sh|zsh|cscript(?:\.exe)?|wscript(?:\.exe)?|mshta(?:\.exe)?)\b"
-        r"|\b(?:-[eE](?:nc(?:odedcommand)?)?|-[cCdD](?:ommand)?|-executionpolicy\s+bypass)\b"
+        r"\b(?:cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?|bash|sh|zsh|cscript(?:\.exe)?|wscript(?:\.exe)?|mshta(?:\.exe)?)\b"
+        r"|\b(?:iex|Invoke-Expression|Invoke-Command|Start-Process|New-Object)\b"
+        r"|(?<!\w)-(?:e(?:nc(?:oded\w*)?)?|c(?:ommand)?|executionpolicy\s+bypass)\b"
+        r"|(?<!\w)/[ck]\b"
         r"|\b(?:subprocess\.(?:Popen|run|call|check_output)|os\.system|exec\(|eval\()\b"
-        r"|[;&|`><]|\$\(",
+        r"|[;&|`><]"
+        r"|\$\([^)]+\)|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)[\$a-zA-Z_][^)]*\)"
+        r"|^\s*&(?:\s+|$)",
         re.IGNORECASE,
     )
 
@@ -219,7 +248,9 @@ class SafetyGuard:
         r"|\b(?:Clear-EventLog|Remove-EventLog|Limit-EventLog)\b"
         r"|\b(?:Win32_NTEventlogFile.*ClearEventlog)\b"
         r"|\b(?:EvtClearLog|ClearEventLog[AW])\b"
-        r"|(?:winevt[\\/]logs[\\/].*\.evtx)",
+        r"|\b(?:Remove-Item|del|rmdir|erase|rm)\b.*\.evtx"
+        r"|(?:winevt[\\/]logs[\\/].*\.evtx)"
+        r"|(?:\*\.evtx)",
         re.IGNORECASE,
     )
 
@@ -237,16 +268,25 @@ class SafetyGuard:
         r"\b(?:netsh(?:\.exe)?\s+advfirewall\s+(?:set|firewall\s+add|firewall\s+set))\b"
         r"|\b(?:New-NetFirewallRule|Set-NetFirewallRule|Set-NetFirewallProfile|Disable-NetAdapter|Remove-NetRoute)\b"
         r"|\b(?:route(?:\.exe)?\s+delete\s+0\.0\.0\.0)\b"
-        r"|\b(?:ipconfig(?:\.exe)?\s+/(?:release|renew))\b",
+        r"|\b(?:ipconfig(?:\.exe)?\s+/(?:release|renew))\b"
+        r"|\b(?:iptables|ip6tables|nftables|nft|ufw|firewall-cmd)\b"
+        r"|\b(?:ifconfig\s+\w+\s+down|ip\s+link\s+set\s+\w+\s+down)\b",
         re.IGNORECASE,
     )
 
     # 5. Private key and wallet signing regex
     _FORBIDDEN_KEY_RE = re.compile(
         r"\b(?:cast\s+send|cast\s+mktx|eth_sign|personal_sign|eth_sendRawTransaction|sign_transaction)\b"
-        r"|(?:\.ethereum[\\/]keystore|keystore\.json|id_rsa|\.env)"
+        r"|\b(?:private[_-]?key(?:\.pem)?|privkey|id_rsa|id_ecdsa|id_ed25519|keystore(?:\.json)?|wallet\.dat)\b"
+        r"|(?<!\w)\.env\b"
+        r"|(?:\.ethereum[\\/]keystore)"
         r"|\b0x[a-fA-F0-9]{64}\b",
         re.IGNORECASE,
+    )
+
+    # Dedicated shell injection metacharacter check for file_path
+    _SHELL_INJECTION_RE = re.compile(
+        r"[;&|`><]|\$\(|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)[\$a-zA-Z_][^)]*\)|\n|\r"
     )
 
     @classmethod
@@ -257,15 +297,36 @@ class SafetyGuard:
 
         Returns (is_safe, forbidden_category, reason).
         """
-        candidate_strings = [str(action_name)]
+        norm_action = action_name.strip()
+        tokens = [str(action_name)]
+
+        # Dedicated validation for triage_hash_verification file_path
+        if norm_action == "triage_hash_verification" and params:
+            file_path = str(params.get("file_path", "")).strip()
+            if file_path:
+                if cls._FORBIDDEN_KEY_RE.search(file_path):
+                    return (
+                        False,
+                        ForbiddenActionCategory.KEY_SIGNING,
+                        "Autonomous private key, keystore, or credential file access is strictly prohibited in hash verification.",
+                    )
+                if cls._SHELL_INJECTION_RE.search(file_path):
+                    return (
+                        False,
+                        ForbiddenActionCategory.ARBITRARY_SHELL,
+                        "Shell command injection or metacharacters detected in file_path.",
+                    )
+
         if params:
             for k, v in params.items():
-                # Allow benign file_path inspect in triage_hash_verification
-                if k == "file_path" and action_name.strip() == "triage_hash_verification":
+                # file_path in triage_hash_verification is validated above; do not add to candidate_strings
+                # to prevent legitimate system binaries (e.g. cmd.exe) from being blocked by _FORBIDDEN_SHELL_RE
+                if k == "file_path" and norm_action == "triage_hash_verification":
                     continue
-                candidate_strings.append(f"{k}={v}")
+                tokens.append(str(k))
+                tokens.extend(_flatten_payload(v))
 
-        full_text = " ".join(candidate_strings)
+        full_text = " ".join(tokens)
 
         # Check Category 5: Autonomous private key access or transaction signing (most sensitive)
         if cls._FORBIDDEN_KEY_RE.search(full_text):
@@ -308,9 +369,8 @@ class SafetyGuard:
             )
 
         # Verify action is in authorized playbooks enum
-        normalized = action_name.strip()
         valid_actions = {p.value for p in TriagePlaybookType}
-        if normalized not in valid_actions:
+        if norm_action not in valid_actions:
             return (
                 False,
                 ForbiddenActionCategory.ARBITRARY_SHELL,
@@ -446,6 +506,13 @@ def triage_recent_system_events(
     Order of Volatility: Rank 3 (NIST SP 800-86 §4.2).
     Extracts events from Windows Event Log channels with bounded time parameters.
     """
+    clean_channel = str(channel).strip() if channel is not None else ""
+    if not clean_channel or not _SAFE_CHANNEL_RE.match(clean_channel):
+        raise ValueError(
+            f"Invalid event log channel '{channel}'. "
+            "Channel must only contain alphanumeric characters, spaces, dots, hyphens, underscores, or slashes."
+        )
+
     if start_time_utc and end_time_utc:
         dt_start = (
             datetime.fromisoformat(start_time_utc.replace("Z", "+00:00"))
@@ -462,7 +529,7 @@ def triage_recent_system_events(
                 f"start_time_utc ({start_time_utc}) must be <= end_time_utc ({end_time_utc})"
             )
 
-    records = query_endpoint("events", provider=provider, channel=channel, max_events=limit)
+    records = query_endpoint("events", provider=provider, channel=clean_channel, max_events=limit)
     filtered: list[dict[str, Any]] = []
 
     for r in records:
@@ -572,6 +639,8 @@ def triage_hash_verification(
     Order of Volatility: Rank 5 (Disk Media, Least Volatile).
     Streaming non-destructive calculation of SHA-256 and SHA-1 on disk binaries.
     """
+    SafetyGuard.validate_action("triage_hash_verification", {"file_path": str(file_path)})
+
     p = Path(file_path).resolve()
     if not p.is_file():
         raise FileNotFoundError(f"Target binary file not found for hash verification: {p}")
