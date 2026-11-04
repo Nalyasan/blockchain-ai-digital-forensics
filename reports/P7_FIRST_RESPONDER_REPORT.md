@@ -57,10 +57,11 @@ Trong khuôn khổ Giai đoạn P7 (Đề tài 8), hệ thống giám định k�
 
 7. **Kết quả Kiểm nghiệm Toàn diện**:
    - **105/105** ca kiểm thử chuyên biệt Giai đoạn P7 (`test_p7_endpoint.py`, `test_p7_first_responder_safety.py`) đạt **100% PASS** trong **4.42 giây**.
-   - **48/48** ca kiểm thử đối kháng Adversarial Challenger (`test_p7_adversarial_challenger.py`) đạt **100% PASS** trong **0.72 giây**.
+   - **48/48** ca kiểm thử đối kháng Adversarial Challenger Iteration 1 (`test_p7_adversarial_challenger.py`) đạt **100% PASS** trong **0.72 giây**.
+   - **111/111** ca kiểm thử đối kháng nâng cao Empirical Challenger Iteration 2/3 (`test_empirical_challenger_iter2.py`) đạt **100% PASS** trong **0.84 giây**.
    - **109/109** ca kiểm thử hồi quy P1–P6 & P8 ML đạt **100% PASS** trong **2.41 giây**.
    - **56/56** ca kiểm thử hợp đồng thông minh Foundry Forge đạt **100% PASS** trong **19.38 ms**.
-   - **Tổng cộng 318/318 ca kiểm thử trên toàn hệ thống đạt 100% PASS**.
+   - **Tổng cộng 429/429 ca kiểm thử trên toàn hệ thống đạt 100% PASS** (264 ca P7 chuyên biệt + 109 ca hồi quy + 56 ca hợp đồng thông minh).
    - Cơ sở dữ liệu gốc `real_p4.db` và `forensics.db` được bảo toàn nguyên vẹn 100%, mã băm SHA-256 khớp tuyệt đối với bản lưu trữ chuẩn `D:\Projest_backup_G0\MANIFEST_SHA256.txt`.
 
 ---
@@ -356,9 +357,10 @@ Nhằm chống lại các kỹ thuật lẩn tránh đối kháng tinh vi (Adver
    Kẻ tấn công có thể cố gắng lẩn tránh bộ lọc bằng cách nhúng các vector tấn công vào tham số của playbook hợp lệ (ví dụ: `triage_running_processes(filter="iex calc.exe")` hoặc `triage_running_processes(log_del="Remove-Item *.evtx")`).
    Hàm `_flatten_payload()` đệ quy duyệt qua mọi cấu trúc dữ liệu tham số (`dict`, `list`, `set`, `tuple`, `bytes`, `str`) để trích xuất toàn bộ khóa và giá trị thành các chuỗi riêng biệt, bảo đảm 100% dữ liệu đầu vào đều được quét qua ma trận quy tắc bảo mật trước khi cho phép thực thi.
 
-3. **Chặn Đứng Biểu thức Con PowerShell (PowerShell Subexpression Infiltration Defense)**:
-   PowerShell cho phép đánh giá nội tuyến các biểu thức đặt trong dấu ngoặc đơn `(...)` trước khi truyền vào tham số lệnh (ví dụ: `Get-WinEvent -LogName (whoami)`).
-   Biểu thức chính quy `\((?!\s*(?:x86|x64|\d+)\s*\))[\$a-zA-Z_][^)]*\)` chặn đứng toàn bộ các biểu thức con độc hại (`(whoami)`, `(Get-Date)`), đồng thời sử dụng cơ chế Negative Lookahead để loại trừ an toàn các đường dẫn tệp thông thường chứa `(x86)`, `(x64)` hoặc dấu ngoặc số thứ tự bản sao `(\d+)`.
+3. **Chặn Đứng Biểu thức Con PowerShell và Gia cố Khoảng trắng (PowerShell Subexpression Whitespace Hardening)**:
+   PowerShell cho phép đánh giá nội tuyến các biểu thức đặt trong dấu ngoặc đơn `(...)` trước khi truyền vào tham số lệnh (ví dụ: `Get-WinEvent -LogName (whoami)`). Kẻ tấn công có thể chèn khoảng trắng hoặc ký tự tab bên trong dấu ngoặc nhằm lẩn tránh bộ lọc (ví dụ: `( whoami )`, `(  Get-Date  )`, `(( whoami ))`, `(\tGet-Date)`).
+   Biểu thức chính quy được nâng cấp và gia cố: `\((?!\s*(?:x86|x64|\d+)\s*\)\s*)\s*[\$a-zA-Z_][^)]*\)` chặn đứng 100% các biến thể biểu thức con có khoảng trắng, lồng nhau hoặc ký tự điều khiển, đồng thời duy trì cơ chế Negative Lookahead loại trừ an toàn các đường dẫn nhị phân thông thường chứa `(x86)`, `(x64)` hoặc dấu ngoặc số thứ tự bản sao `(\d+)`.
+   Đồng thời, quy tắc cô lập mạng Linux `_FORBIDDEN_ISOLATION_RE` được gia cố với mẫu `ip link set (?:dev\s+)?\S+ down` nhằm chặn đứng hoàn toàn kỹ thuật chèn từ khóa giao diện `dev` (ví dụ: `ip link set dev eth0 down`).
 
 4. **Kiểm định Chuyên biệt Tham số Đường dẫn Tệp (`file_path` Validation trong `triage_hash_verification`)**:
    Để vừa cho phép giám định băm các tệp thực thi hệ thống chuẩn (ví dụ: `C:\Windows\System32\cmd.exe`, `sample_binary.exe`) mà không bị `_FORBIDDEN_SHELL_RE` chặn nhầm, vừa ngăn chặn tuyệt đối việc AI bị khai thác để đọc trộm khóa bí mật:
@@ -479,7 +481,8 @@ Toàn bộ hệ thống đã được kiểm thử toàn diện trên môi trư�
 | `tests/test_p7_endpoint.py` | Schema chính tắc, daemon, WMI fallback, mock, `endpoint_evidence.db` append-only, phát hiện xung đột, kết nối chỉ-đọc 5 lớp, cách ly dữ liệu, tích hợp AI Investigator, ngân sách 5 bước, và hai giai đoạn ref_checker | 29 | **29 PASS / 0 FAIL** | 1.82 s |
 | `tests/test_p7_first_responder_safety.py` | Kiểm thử an toàn 5 danh mục cấm: Shell tùy ý, Xóa log, Sửa ACL, Cô lập mạng, Truy cập ví/khóa và thực thi 5 kịch bản phân loại sự cố chuẩn | 76 | **76 PASS / 0 FAIL** | 2.60 s |
 | `tests/test_p7_adversarial_challenger.py` | Kiểm thử đối kháng thách thức khắc nghiệt (Challenger Suite): lẩn tránh tham số, bí danh iex/Invoke-Expression, cờ mã hóa -encoded, biểu thức con PowerShell (whoami)/(Get-Date), phân loại đúng danh mục, chặn truy cập tệp nhạy cảm trong hash verification | 48 | **48 PASS / 0 FAIL** | 0.72 s |
-| **Tổng kiểm thử chuyên biệt P7** | **Toàn bộ chức năng Endpoint Ingestion, Store, SafetyGuard Hardening & Adversarial Challenger** | **153** | **153 PASS (100%)** | **5.14 s** |
+| `tests/test_empirical_challenger_iter2.py` | Kiểm thử đối kháng thực nghiệm nâng cao (Empirical Challenger): Biểu thức con chứa khoảng trắng, lồng nhau, kiểm tra toàn diện tham số lồng đệ quy, đường dẫn băm nhị phân, và ma trận gán đúng 5 danh mục cấm | 111 | **111 PASS / 0 FAIL** | 0.85 s |
+| **Tổng kiểm thử chuyên biệt P7** | **Toàn bộ chức năng Endpoint Ingestion, Store, SafetyGuard Hardening & Adversarial Challenger Suites** | **264** | **264 PASS (100%)** | **5.99 s** |
 
 #### 7.1.1 Chi tiết Ma trận Thử thách Đối kháng (Adversarial Challenger Breakdown)
 Nhằm kiểm chứng tính vững chắc trước các kỹ thuật tấn công tinh vi, bộ kiểm thử `tests/test_p7_adversarial_challenger.py` phân tích 5 kịch bản tấn công đối kháng:
@@ -494,6 +497,24 @@ Nhằm kiểm chứng tính vững chắc trước các kỹ thuật tấn công
    - Chặn đứng 100% các yêu cầu băm hoặc đọc nội dung các tệp nhạy cảm: `.env`, `id_rsa`, `keystore.json`, `~/.ssh/id_rsa`, `private_key.pem`, kích hoạt ngoại lệ `DangerousActionError(category=KEY_SIGNING)`.
 5. `TestIsolationRecommendationHITL` (**4/4 PASS**):
    - Bảo đảm cấu trúc khuyến nghị cô lập mạng bắt buộc có chữ ký con người (`requires_human_signature=True`) và mã băm SHA-256 xác định.
+
+#### 7.1.2 Chi tiết Ma trận Thử thách Thực nghiệm Iteration 2/3 (Empirical Challenger Breakdown)
+Bộ kiểm thử `tests/test_empirical_challenger_iter2.py` thực hiện 111 ca thử thách đối kháng chuyên sâu:
+1. `TestSubexpressionVariations` (**15/15 PASS**):
+   - 6 ca biểu thức con trực tiếp: `((whoami))`, `(whoami)`, `(Get-Process | Out-String)`, `(calc.exe)`, `(ls)`, `(dir)`.
+   - 9 ca biểu thức con chứa khoảng trắng và lồng nhau: `(  Get-Date  )`, `( Get-Date )`, `( Get-Process )`, `( whoami )`, `(( whoami ))`, `(  calc.exe  )`, `(\tGet-Date)`, `( ls )`, `( dir )`.
+2. `TestNestedParameterInjection` (**4/4 PASS**):
+   - Đệ quy kiểm tra injection qua từ điển đa tầng (3 levels), tuples/lists lồng nhau, sets nhị phân chứa lệnh xóa log, và xác thực dữ liệu số an toàn.
+3. `TestTriageHashVerificationPaths` (**23/23 PASS**):
+   - 15 ca kiểm tra đường dẫn nguy hiểm và metacharacter chèn lệnh: `.env`, `id_rsa`, `private_key.pem`, `calc.exe; whoami`, `test.exe | whoami`, `$(whoami).exe`, `test>out.txt`.
+   - 3 ca biểu thức con có khoảng trắng trong đường dẫn: `(  whoami  )`, `(  Get-Date  )`, `(( whoami ))`.
+   - 5 ca kiểm tra nhị phân hệ thống và đường dẫn chứa ngoặc đơn hợp lệ: `C:\Program Files (x86)\...`, `C:\Program Files (x64)\...`, `sample (1)\tool.exe`, `cmd.exe`, `calc.exe` (100% an toàn, 0 false positive).
+4. `TestCategoryAttributionComprehensive` (**69/69 PASS**):
+   - 9 ca Event Log Clearing (`wevtutil`, `Clear-EventLog`, `Remove-Item *.evtx`, `del *.evtx`).
+   - 8 ca ACL Alteration (`icacls`, `takeown`, `Set-Acl`, `chmod`, `chown`).
+   - 15 ca Network Isolation (`netsh advfirewall`, `Disable-NetAdapter`, `iptables -F`, `ufw block`, `ifconfig down`, `ip link set down`).
+   - 19 ca Key Signing (`cast send`, `eth_sign`, `cat .env`, `cat id_rsa`, `wallet.dat`, raw hex keys).
+   - 18 ca Arbitrary Shell (`cmd /c`, `powershell -enc`, `pwsh -c`, `iex`, `Invoke-Expression`, `os.system`, `subprocess`).
 
 ### 7.2 Ma trận Kiểm thử Hồi quy Hệ thống (Regression Suites)
 
@@ -551,4 +572,4 @@ Giai đoạn P7 (AI First Responder & Endpoint Evidence Acquisition) đã hoàn 
 - Thực thi ranh giới an toàn nghiêm ngặt 100% đối với 5 danh mục hành vi bị cấm của AI First Responder, gia cố bảo vệ đối kháng toàn diện với phẳng hóa tham số và chặn biểu thức con PowerShell.
 - Triển khai 5 kịch bản phân loại sự cố không phá hủy tuân thủ thứ tự suy giảm tính khả biến.
 - Tích hợp an toàn vào AI Investigator P5 với bộ kiểm tra tham chiếu chống ảo giác hai giai đoạn.
-- Đạt tỷ lệ vượt qua kiểm thử tuyệt đối: **153/153 ca kiểm thử P7 (105 ca P7 gốc + 48 ca Adversarial Challenger)**, **109/109 ca kiểm thử hồi quy**, và **56/56 ca kiểm thử hợp đồng Solidity** (Tổng cộng **318/318 PASS 100%**), bảo toàn trọn vẹn dữ liệu chuỗi khối gốc. Hệ thống sẵn sàng cho việc nghiệm thu kỹ thuật và chuyển tiếp sang các giai đoạn tiếp theo.
+- Đạt tỷ lệ vượt qua kiểm thử tuyệt đối: **264/264 ca kiểm thử P7** (105 ca P7 gốc + 48 ca Adversarial Challenger Iter 1 + 111 ca Empirical Challenger Iter 2/3), **109/109 ca kiểm thử hồi quy**, và **56/56 ca kiểm thử hợp đồng Solidity** (Tổng cộng **429/429 PASS 100%**), bảo toàn trọn vẹn dữ liệu chuỗi khối gốc. Hệ thống sẵn sàng cho việc nghiệm thu kỹ thuật và chuyển tiếp sang các giai đoạn tiếp theo.

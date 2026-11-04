@@ -237,7 +237,7 @@ class SafetyGuard:
         r"|(?<!\w)/[ck]\b"
         r"|\b(?:subprocess\.(?:Popen|run|call|check_output)|os\.system|exec\(|eval\()\b"
         r"|[;&|`><]"
-        r"|\$\([^)]+\)|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)[\$a-zA-Z_][^)]*\)"
+        r"|\$\([^)]+\)|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)\s*[\$a-zA-Z_][^)]*\)"
         r"|^\s*&(?:\s+|$)",
         re.IGNORECASE,
     )
@@ -270,7 +270,7 @@ class SafetyGuard:
         r"|\b(?:route(?:\.exe)?\s+delete\s+0\.0\.0\.0)\b"
         r"|\b(?:ipconfig(?:\.exe)?\s+/(?:release|renew))\b"
         r"|\b(?:iptables|ip6tables|nftables|nft|ufw|firewall-cmd)\b"
-        r"|\b(?:ifconfig\s+\w+\s+down|ip\s+link\s+set\s+\w+\s+down)\b",
+        r"|\b(?:ifconfig\s+\S+\s+down|ip\s+link\s+set\s+(?:dev\s+)?\S+\s+down)\b",
         re.IGNORECASE,
     )
 
@@ -286,7 +286,7 @@ class SafetyGuard:
 
     # Dedicated shell injection metacharacter check for file_path
     _SHELL_INJECTION_RE = re.compile(
-        r"[;&|`><]|\$\(|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)[\$a-zA-Z_][^)]*\)|\n|\r"
+        r"[;&|`><]|\$\(|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)\s*[\$a-zA-Z_][^)]*\)|\n|\r"
     )
 
     @classmethod
