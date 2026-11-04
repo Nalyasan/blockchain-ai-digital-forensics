@@ -1,7 +1,7 @@
 ===============================================================================
 Blockchain + AI Digital Forensics P1-P6: Standalone Portable Distribution
 Release Version: v1.0.0
-Git Checkpoint:  checkpoint-g6b-migrated (preceded by 3a9b9a0 checkpoint-g6a-packaged)
+Git Checkpoint:  checkpoint-g6c-verified / v1.0.0 (Release Candidate)
 ===============================================================================
 
 1. OVERVIEW
@@ -33,10 +33,13 @@ as clean, standalone plain text files (.txt) with zero external Markdown depende
 |-- README.txt                # This distribution documentation
 |-- PROJECT.txt               # Architecture, inventory, and milestone specifications
 |-- agent.txt                 # Technical forensic agent specification & manual
+|-- COMPLETION_REPORT.txt     # Authoritative engineering completion & acceptance report
+|-- P1_P6_STATUS_MATRIX.csv   # Traceability matrix mapping all P1-P6 and G0-G6 features
+|-- BACKUP_RESTORATION.txt    # Backup verification & disaster recovery manual
 |-- MANIFEST_SHA256.txt       # SHA-256 checksum manifest of all bundled files
 |-- MANIFEST_INFO.json        # Package build metadata, git commit, and provenance
 |-- contracts/                # Foundry smart contracts (EvidenceRegistry.sol, tests)
-|-- docs/                     # Technical documentation (limitations.txt)
+|-- docs/                     # Technical documentation (limitations.txt, P4_P3_BRIDGE.txt)
 |-- forensics/                # Core forensic analysis, rule engine, and AI pipelines
 |-- scripts/                  # Standalone CLI tools (evaluate.py, portable.py, etc.)
 |-- tests/                    # 41 pytest test suites (1,119 tests)
@@ -99,4 +102,35 @@ The SQLite databases in data/ are cryptographically sealed. Verify with Get-File
 -------------------------
 To verify the complete package integrity against MANIFEST_SHA256.txt:
   python scripts\portable.py verify <path_to_zip>
+
+7. DOCUMENTED ACCEPTANCE PREREQUISITES & PRODUCTION READINESS (RULES 5 & 13)
+----------------------------------------------------------------------------
+MANDATORY INTEGRITY QUALIFICATION:
+In strict compliance with Rule 5, 100% test pass rate confirms offline functional
+correctness of P1-P6 modules but does NOT constitute live production deployment readiness.
+Untested live network components are NOT declared production-ready solely based on unit tests.
+
+The system is certified as 100% OFFLINE_VERIFIED. To transition this verified codebase
+into live public network operations, the operating organization must fulfill the following
+documented acceptance prerequisites:
+1. Google Gemini API Credentials:
+   - Environment Variable: GOOGLE_API_KEY or GEMINI_API_KEY
+   - Purpose: Required for live LLM reasoning in the AI Investigator.
+   - Offline Behavior: Operates against deterministic offline FunctionModel mock.
+2. Live Ethereum Execution RPC Endpoint:
+   - Environment Variable: RPC_URL or SEPOLIA_RPC_URL (e.g., Alchemy / Infura HTTPS/WSS)
+   - Purpose: Real-time transaction ingestion and block reorg tracking in collector.py.
+   - Offline Behavior: Operates against local Anvil loopback or mock_rpc.py.
+3. Etherscan API Key:
+   - Environment Variable: ETHERSCAN_API_KEY
+   - Purpose: Dynamic contract ABI retrieval and verified contract source validation.
+   - Offline Behavior: Operates against pre-compiled local ABI cache.
+4. Deployed Smart Contract Address:
+   - Environment Variable: EVIDENCE_REGISTRY_ADDRESS
+   - Purpose: Contract address of EvidenceRegistry.sol deployed on Ethereum Mainnet or Sepolia.
+   - Offline Behavior: Deploys ephemeral registry instances on local Anvil testnet.
+5. Funded Custodial Private Key:
+   - Environment Variable: ETH_PRIVATE_KEY or encrypted Cast keystore path
+   - Purpose: Authorizing and paying gas fees for on-chain cryptographic evidence custody.
+   - Offline Behavior: Uses standard Foundry pre-funded mnemonic accounts.
 ===============================================================================

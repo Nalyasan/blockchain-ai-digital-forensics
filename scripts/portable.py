@@ -64,6 +64,8 @@ EXCLUDE_FILE_PATTERNS: Set[str] = {
     ".key",
     ".pem",
     ".env",  # Exclude live credentials; bundle .env.example
+    ".md",
+    ".MD",
 }
 
 EXCLUDE_EXACT_FILES: Set[str] = {
@@ -102,7 +104,7 @@ def should_exclude(rel_path: str) -> bool:
         return True
         
     for pat in EXCLUDE_FILE_PATTERNS:
-        if file_name.endswith(pat):
+        if file_name.lower().endswith(pat.lower()):
             return True
             
     return False
@@ -143,7 +145,7 @@ def collect_source_files(root_dir: Path) -> List[Tuple[Path, str]]:
     collected: List[Tuple[Path, str]] = []
     
     # 1. Subdirectories to scan
-    scan_subdirs = ["forensics", "contracts", "scripts", "tests"]
+    scan_subdirs = ["forensics", "contracts", "scripts", "tests", "docs", "results"]
     for subdir in scan_subdirs:
         sub_path = root_dir / subdir
         if not sub_path.exists():
@@ -179,6 +181,11 @@ def collect_source_files(root_dir: Path) -> List[Tuple[Path, str]]:
         "setup_env.bat",
         "requirements.txt",
         "README.txt",
+        "PROJECT.txt",
+        "agent.txt",
+        "COMPLETION_REPORT.txt",
+        "P1_P6_STATUS_MATRIX.csv",
+        "BACKUP_RESTORATION.txt",
     ]
     for rf in root_files:
         p = root_dir / rf
@@ -258,16 +265,6 @@ def build_distribution(
             file_sha = compute_sha256(dest_path)
             manifest_entries.append((file_sha, rel_path))
 
-        # Sort manifest entries alphabetically by relative path
-        manifest_entries.sort(key=lambda x: x[1])
-
-        # Write MANIFEST_SHA256.txt
-        manifest_file = stage_dir / "MANIFEST_SHA256.txt"
-        with open(manifest_file, "w", encoding="utf-8") as f:
-            for sha, rel in manifest_entries:
-                f.write(f"{sha}  {rel}\n")
-        print(f"    [OK] Generated MANIFEST_SHA256.txt ({len(manifest_entries)} files)")
-
         # Write MANIFEST_INFO.json with packaging metadata
         total_uncompressed = sum((stage_dir / rel).stat().st_size for _, rel in manifest_entries if (stage_dir / rel).exists())
         commit_sha = "UNKNOWN"
@@ -288,7 +285,7 @@ def build_distribution(
             "package_name": archive_name,
             "git_commit": commit_sha,
             "build_timestamp_utc": datetime.now(timezone.utc).isoformat(),
-            "total_files": len(manifest_entries),
+            "total_files": len(manifest_entries) + 1,
             "total_uncompressed_bytes": total_uncompressed,
             "canonical_databases": CANONICAL_DB_HASHES,
             "bundled_foundry_binaries": REQUIRED_FOUNDRY_BINS,
@@ -298,6 +295,21 @@ def build_distribution(
         info_file = stage_dir / "MANIFEST_INFO.json"
         info_file.write_text(json.dumps(info_data, indent=2), encoding="utf-8")
         manifest_entries.append((compute_sha256(info_file), "MANIFEST_INFO.json"))
+
+        # Sort manifest entries alphabetically by relative path
+        manifest_entries.sort(key=lambda x: x[1])
+
+        # Write MANIFEST_SHA256.txt
+        manifest_file = stage_dir / "MANIFEST_SHA256.txt"
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            for sha, rel in manifest_entries:
+                f.write(f"{sha}  {rel}\n")
+        print(f"    [OK] Generated MANIFEST_SHA256.txt ({len(manifest_entries)} files)")
+
+        # Save external manifest to out_dir
+        out_manifest = out_dir / "MANIFEST_SHA256.txt"
+        shutil.copy2(manifest_file, out_manifest)
+        print(f"    [OK] Saved external manifest: {out_manifest}")
 
         # 5. Compress to Zip Archive
         print(f"[*] Compressing into zip archive: {archive_path}...")

@@ -131,8 +131,11 @@ def inspect_commit_provenance(export_commit, repo_root=None):
         return result
     if Path(state.repo_root).resolve() != root.resolve():
         return dict(result, status='WRONG_REPOSITORY')
-    if not isinstance(export_commit, str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', export_commit):
+    if not isinstance(export_commit, str) or not re.fullmatch(r'[0-9a-fA-F]{40}|[0-9a-fA-F]{64}', export_commit):
         return dict(result, status='MALFORMED')
+    if state.repo_root and not (Path(state.repo_root) / '.git').exists() and (Path(state.repo_root) / 'MANIFEST_INFO.json').is_file():
+        status = 'OK' if state.head and export_commit.lower() == state.head.lower() else 'EXISTING_NON_ANCESTOR'
+        return dict(result, status=status)
     try:
         graft = _git(['rev-parse', '--git-path', 'info/grafts'], root)
         if graft.returncode:

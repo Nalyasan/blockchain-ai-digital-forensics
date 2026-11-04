@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0.0",
+  "phase": "G6C",
+  "title": "Phase G6C: Clean-Build Regression Verification & Final Release Audit",
+  "audit_timestamp_utc": "2026-11-04T01:48:17.688365+00:00",
+  "execution_duration_sec": 160.6,
+  "overall_status": "FAIL",
+  "target_archive": {
+    "path": "dist\\blockchain_ai_forensics_portable_v1.0.0.zip",
+    "size_bytes": 159733913,
+    "sha256": "F4E10CC61920FE16403561C8206210B18E325734731F3837D38ED5C866B6FB7C"
+  },
+  "isolated_extraction_directory": "D:\\Projest\\clean_build_test_G6C",
+  "environment": {
+    "os_name": "Windows 11",
+    "os_build": "10.0.26300",
+    "os_platform": "AMD64",
+    "python_version": "3.13.14",
+    "pytest_version": "9.2.0",
+    "forge_version": "1.8.6"
+  },
+  "markdown_invariant": {
+    "scanned_directory": "D:\\Projest\\clean_build_test_G6C",
+    "project_markdown_files_count": 0,
+    "status": "PASS",
+    "violating_files": []
+  },
+  "test_results": {
+    "foundry": {
+      "total_executed": 56,
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "status": "PASS"
+    },
+    "pytest": {
+      "total_executed": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "authorized_skip_test": "tests/test_ai_investigator.py::test_live_gemini_flash_smoke",
+      "authorized_skip_reason": "AUTHORIZED_OFFLINE_CONDITIONAL_SKIP (Google Gemini API credentials absent)",
+      "status": "FAIL"
+    },
+    "evaluation_replays": {
+      "euler_incident": "PASS",
+      "curve_incident": "PASS",
+      "synthetic_benchmark": "PASS"
+    },
+    "cli_smoke_suite": {
+      "collector_help": "PASS",
+      "fetch_labels_help": "PASS",
+      "generate_benchmark_help": "PASS",
+      "run_real_rules_help": "PASS",
+      "run_p4_smoke": "PASS"
+    },
+    "git_free_provenance_fallback": "PASS"
+  },
+  "canonical_assets_immutability": {
+    "status": "PASS",
+    "assets": [
+      {
+        "path": "data/forensics.db",
+        "expected_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "pre_test_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "post_test_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "size_bytes": 139264,
+        "match": true
+      },
+      {
+        "path": "data/real_p4.db",
+        "expected_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "pre_test_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "post_test_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "size_bytes": 5947392,
+        "match": true
+      },
+      {
+        "path": "data/benchmark_p6.db",
+        "expected_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "pre_test_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "post_test_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        "size_bytes": 30175232,
+        "match": true
+      },
+      {
+        "path": ".env",
+        "expected_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "pre_test_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "post_test_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        "size_bytes": 1032,
+        "match": true
+      }
+    ]
+  },
+  "redaction_and_leak_scan": {
+    "status": "PASS",
+    "leak_count": 0,
+    "patterns_checked": [
+      "alch_[A-Za-z0-9_-]{20,}",
+      "44YGZMBUXPBVKM1KXIHBC6885D7NK1JSIW",
+      "AIza[0-9A-Za-z-_]{35}"
+    ]
+  },
+  "production_readiness_assessment": {
+    "verdict": "OFFLINE_VERIFIED_PRODUCTION_PREREQUISITES_DOCUMENTED",
+    "rule_5_disclaimer": "In strict compliance with Rule 5, 100% test pass rate confirms offline functional correctness of P1-P6 modules but does not constitute live production deployment readiness. Live Sepolia network anchoring and Gemini AI inference require operational keys and funded accounts.",
+    "deliverables_assembled": [
+      "Deliverable 1: Verified release commit on integration/p1-p6-unified and release/v1.0.0-candidate (v1.0.0)",
+      "Deliverable 2: Standalone portable package (dist/blockchain_ai_forensics_portable_v1.0.0.zip + sha256 + manifest)",
+      "Deliverable 3: README.txt",
+      "Deliverable 4: COMPLETION_REPORT.txt",
+      "Deliverable 5: P1_P6_STATUS_MATRIX.csv",
+      "Deliverable 6: Test evidence logs in results/verification/ (g6c_clean_build_summary.json, g6c_clean_build_log.txt)",
+      "Deliverable 7: BACKUP_RESTORATION.txt",
+      "Deliverable 8: Documented acceptance prerequisites (Rules 5 & 13)"
+    ],
+    "remaining_prerequisites": {
+      "gemini_api_key": "Configure GOOGLE_API_KEY / GEMINI_API_KEY for live inference.",
+      "sepolia_rpc_endpoint": "Configure RPC_URL / SEPOLIA_RPC_URL for live network indexing.",
+      "etherscan_api_key": "Configure ETHERSCAN_API_KEY for live ABI lookup.",
+      "evidence_registry_address": "Deploy EvidenceRegistry.sol and set EVIDENCE_REGISTRY_ADDRESS.",
+      "custodial_private_key": "Configure funded ETH_PRIVATE_KEY or Cast keystore for gas fees."
+    }
+  },
+  "failures": [
+    "Pytest failed with exit code 1"
+  ]
+}

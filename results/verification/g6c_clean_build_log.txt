@@ -1,0 +1,991 @@
+================================================================================
+PHASE G6C CLEAN-BUILD REGRESSION VERIFICATION LOG
+Timestamp: 2026-11-04T01:48:17.688365+00:00
+Archive:   blockchain_ai_forensics_portable_v1.0.0.zip (SHA-256: F4E10CC61920FE16403561C8206210B18E325734731F3837D38ED5C866B6FB7C)
+Duration:  160.6s
+Verdict:   FAIL
+================================================================================
+
+[2026-11-04T01:48:19.523008+00:00] STEP: Foundry Build Contracts
+COMMAND: D:\Projest\clean_build_test_G6C\tools\foundry\forge.exe build --root contracts
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (2.736s)
+--- STDOUT ---
+Compiling 4 files with Solc 0.8.24
+Solc 0.8.24 finished in 204.36ms
+Compiler run successful!
+
+--- STDERR ---
+warning[missing-events-access-control]: `owner` is changed without an event but is used for access control
+    ╭▸ contracts/src/EvidenceRegistry.sol:120:9
+    │
+120 │         owner = pendingOwner;
+    │         ━━━━━
+    │
+    ╰ help: https://getfoundry.sh/forge/linting/missing-events-access-control
+
+warning[missing-events-access-control]: `authorizedInvestigators` is changed without an event but is used for access control
+    ╭▸ contracts/src/EvidenceRegistry.sol:124:9
+    │
+124 │         authorizedInvestigators[msg.sender] = true;
+    │         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    │
+    ╰ help: https://getfoundry.sh/forge/linting/missing-events-access-control
+
+warning[missing-events-access-control]: `authorizedInvestigators` is changed without an event but is used for access control
+    ╭▸ contracts/src/EvidenceRegistry.sol:135:9
+    │
+135 │         authorizedInvestigators[account] = authorized;
+    │         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    │
+    ╰ help: https://getfoundry.sh/forge/linting/missing-events-access-control
+
+warning[missing-events-access-control]: `balanceOf` is changed without an event but is used for access control
+   ╭▸ contracts/src/MockToken.sol:21:9
+   │
+21 │         balanceOf[msg.sender] -= amount;
+   │         ━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰ help: https://getfoundry.sh/forge/linting/missing-events-access-control
+
+warning[require-revert-in-loop]: `require` or `revert` inside a loop
+    ╭▸ contracts/src/EvidenceRegistry.sol:174:17
+    │
+174 │                 revert InvalidUriPrefix();
+    │                 ━━━━━━━━━━━━━━━━━━━━━━━━━━
+    │
+    ╰ help: https://getfoundry.sh/forge/linting/require-revert-in-loop
+
+warning[require-revert-in-loop]: `require` or `revert` inside a loop
+    ╭▸ contracts/src/EvidenceRegistry.sol:183:17
+    │
+183 │                 revert InvalidUriCharacter(i, char);
+    │                 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    │
+    ╰ help: https://getfoundry.sh/forge/linting/require-revert-in-loop
+
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:48:22.258821+00:00] STEP: Foundry Contracts Suite
+COMMAND: D:\Projest\clean_build_test_G6C\tools\foundry\forge.exe test --root contracts
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.066s)
+--- STDOUT ---
+No files changed, compilation skipped
+
+Ran 25 tests for test/EvidenceRegistry_Group4.t.sol:EvidenceRegistry_Group4Test
+[PASS] test_CustodyPagination_EmptyHistory() (gas: 294664)
+[PASS] test_CustodyPagination_EvidenceNotFoundReverts() (gas: 27559)
+[PASS] test_CustodyPagination_ExactMaxLimit() (gas: 284250)
+[PASS] test_CustodyPagination_LimitZero() (gas: 449224)
+[PASS] test_CustodyPagination_MatchesFullHistory() (gas: 1568069)
+[PASS] test_CustodyPagination_MultipleEventsAndPages() (gas: 1147664)
+[PASS] test_CustodyPagination_OffsetBeyondTotal() (gas: 449239)
+[PASS] test_CustodyPagination_SingleEvent() (gas: 474764)
+[PASS] test_CustodyPagination_ViewDoesNotModifyState() (gas: 500015)
+[PASS] test_RevertIf_CustodyPagination_LimitExceedsMax() (gas: 289608)
+[PASS] test_RevertIf_UriContainsControlChar() (gas: 44353)
+[PASS] test_RevertIf_UriContainsDelChar() (gas: 44358)
+[PASS] test_RevertIf_UriContainsMultiByteUtf8() (gas: 44626)
+[PASS] test_RevertIf_UriContainsNewline() (gas: 44309)
+[PASS] test_RevertIf_UriContainsNonAsciiHighByte() (gas: 44336)
+[PASS] test_RevertIf_UriContainsNullByte() (gas: 44274)
+[PASS] test_RevertIf_UriContainsTab() (gas: 44310)
+[PASS] test_RevertIf_UriExceeds256Bytes_257Bytes() (gas: 75579)
+[PASS] test_RevertIf_UriMissingPrefix_Http() (gas: 36009)
+[PASS] test_RevertIf_UriMissingPrefix_RawPath() (gas: 35904)
+[PASS] test_RevertIf_UriPrefixCaseSensitive_MixedCase() (gas: 36165)
+[PASS] test_RevertIf_UriPrefixCaseSensitive_Uppercase() (gas: 36208)
+[PASS] test_RevertIf_UriPrefixOnly() (gas: 41226)
+[PASS] test_RevertIf_UriPrefixWhitespaceOnlyRef() (gas: 42122)
+[PASS] test_ValidUri_Exact256Bytes() (gas: 554475)
+Suite result: ok. 25 passed; 0 failed; 0 skipped; finished in 6.74ms (28.29ms CPU time)
+
+Ran 31 tests for test/EvidenceRegistry.t.sol:EvidenceRegistryTest
+[PASS] testFuzz_RegisterEvidence(bytes32,bytes32,uint8) (runs: 256, μ: 357759, ~: 281171)
+[PASS] test_AcceptOwnership_GrantsNewOwnerAndRevokesOldOwner() (gas: 447344)
+[PASS] test_AcceptOwnership_StrangerReverts() (gas: 86320)
+[PASS] test_CancelOwnershipTransfer_NoPending_Reverts() (gas: 34289)
+[PASS] test_CancelOwnershipTransfer_StrangerReverts() (gas: 86272)
+[PASS] test_CancelOwnershipTransfer_Success() (gas: 143977)
+[PASS] test_CustodyRecord_DetailedFieldsAndOrdering() (gas: 629222)
+[PASS] test_DuplicateManifestHashReverts() (gas: 317823)
+[PASS] test_EventsEmittedCorrectly() (gas: 508342)
+[PASS] test_GetCustodyHistory_NonExistent_Reverts() (gas: 14393)
+[PASS] test_GetEvidence_NonExistent_Reverts() (gas: 29588)
+[PASS] test_InitialState() (gas: 41407)
+[PASS] test_OldOwner_CannotRecordCustodyAfterTransfer() (gas: 415883)
+[PASS] test_OldOwner_CannotRegisterAfterTransfer() (gas: 144630)
+[PASS] test_RecordCustody_EvidenceNotFound_Before_ZeroValue() (gas: 36893)
+[PASS] test_RegisterEvidenceSuccess() (gas: 321920)
+[PASS] test_RevokedInvestigatorCannotRecordCustody() (gas: 386769)
+[PASS] test_SeparateCustodyHistories() (gas: 984890)
+[PASS] test_StrangerCannotRecordCustody() (gas: 310096)
+[PASS] test_StrangerCannotRegisterEvidence() (gas: 38942)
+[PASS] test_StrangerCannotSetInvestigator() (gas: 36607)
+[PASS] test_TransferOwnership_PendingTransferExistsReverts() (gas: 186422)
+[PASS] test_TransferOwnership_SameOwnerReverts() (gas: 56811)
+[PASS] test_TransferOwnership_ZeroAddressReverts() (gas: 32758)
+[PASS] test_UriTooLongReverts() (gas: 587248)
+[PASS] test_VerifyEvidence() (gas: 350922)
+[PASS] test_WhitespaceUriReverts() (gas: 94986)
+[PASS] test_ZeroValue_ArtifactSha256() (gas: 308258)
+[PASS] test_ZeroValue_CaseId() (gas: 35454)
+[PASS] test_ZeroValue_EmptyStorageUri() (gas: 34843)
+[PASS] test_ZeroValue_ManifestSha256() (gas: 35248)
+Suite result: ok. 31 passed; 0 failed; 0 skipped; finished in 22.14ms (52.39ms CPU time)
+
+Ran 2 test suites in 23.26ms (28.87ms CPU time): 56 tests passed, 0 failed, 0 skipped (56 total tests)
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:48:22.325038+00:00] STEP: Python Pytest Regression Suite
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe -m pytest tests --basetemp=D:\Projest\tmp_clean_pytest -q
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    1 (154.29s)
+--- STDOUT ---
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 19%]
+........................................................................ [ 25%]
+........................................................................ [ 32%]
+........................................................................ [ 38%]
+.........................................................F.............. [ 45%]
+................................................F....................... [ 51%]
+........................................................................ [ 57%]
+........................................................................ [ 64%]
+........................................................................ [ 70%]
+............................................EEEEEEE..................... [ 77%]
+............................................................s........... [ 83%]
+........................................................................ [ 90%]
+........................................................................ [ 96%]
+........................................                                 [100%]
+=================================== ERRORS ====================================
+__________________ ERROR at setup of test_smoke_overall_pass __________________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+_______________ ERROR at setup of test_smoke_canonical_identity _______________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+______________ ERROR at setup of test_smoke_multi_manifest_links ______________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+______________ ERROR at setup of test_smoke_custody_sha256_note _______________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+______________ ERROR at setup of test_smoke_verify_and_reconcile ______________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+______________ ERROR at setup of test_smoke_idempotency_refusal _______________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+________________ ERROR at setup of test_smoke_zero_raw_leakage ________________
+
+    @pytest.fixture(scope="module")
+    def group3_smoke_result():
+        """Run scripts/run_p3_group3_smoke.py once for this module and return parsed report."""
+        smoke_script = ROOT / "scripts" / "run_p3_group3_smoke.py"
+        res = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert res.returncode == 0, f"Smoke script failed (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+E       AssertionError: Smoke script failed (exit 1):
+E         STDOUT: {
+E           "suite": "P3-Group3-Smoke",
+E           "status": "FAIL",
+E           "chain_id": 31337,
+E           "checks": [
+E             {
+E               "name": "anvil_online",
+E               "status": "PASS",
+E               "port": 58315,
+E               "rpc_url": "http://127.0.0.1:58315"
+E             },
+E             {
+E               "name": "deploy_evidence_registry",
+E               "status": "PASS",
+E               "contract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+E               "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+E             },
+E             {
+E               "name": "export_dual_manifest_packages",
+E               "status": "PASS",
+E               "pkg1_digest": "1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c",
+E               "pkg2_digest": "2a92f8e8b297b03bd8ee00a3c7c6c0561682fc0528e6a68293ea279f5e6a424f"
+E             },
+E             {
+E               "name": "anchor_evidence_1_canonical_identity",
+E               "status": "PASS",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b",
+E               "uri": "evidence://sha256/73c8121b7b40b5f0c0d36d34a05045579c8662f9cd33e62b0261f0b5db5d6dc8/1478544872d9a2dda85d550dec0c8569a74b47ad1ccbe37215f9531bc8a90d0c/manifest.json"
+E             },
+E             {
+E               "name": "multi_manifest_anchor_links_created",
+E               "status": "PASS",
+E               "row_count": 2
+E             },
+E             {
+E               "name": "record_custody_sha256_note_hash",
+E               "status": "PASS",
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9",
+E               "verified": 1
+E             }
+E           ],
+E           "operations": [
+E             {
+E               "action": "anchor_1",
+E               "evidence_id": 1,
+E               "tx_hash": "0xe26452bd92b477c041ec26b60074c0d366d06c7f8173edd792aae81ce6ecb02b"
+E             },
+E             {
+E               "action": "anchor_2",
+E               "evidence_id": 2,
+E               "tx_hash": "0xcbcd9996821cc80ce426c4272641175afb53d27ae4d4500d5ce66d2e02278558"
+E             },
+E             {
+E               "action": "custody",
+E               "evidence_id": 1,
+E               "tx_hash": "0x9b8cc18795d4bb58abd199ae09c12639847c7a81340567add2111d0208715bb9"
+E             }
+E           ],
+E           "leaks_found": [],
+E           "failure": {
+E             "stage": "verify_onchain",
+E             "error_type": "AssertionError",
+E             "message": "ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE",
+E             "traceback": "Traceback (most recent call last):\n  File \"D:\\Projest\\clean_build_test_G6C\\scripts\\run_p3_group3_smoke.py\", line 324, in run_smoke\n    raise AssertionError(f\"ONCHAIN_VERIFY_FAILED: {verify_res.status} {verify_res.reason_code}\")\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\n"
+E           }
+E         }
+E         
+E         STDERR: 
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\Naly\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_...ason_code}\\")\\nAssertionError: ONCHAIN_VERIFY_FAILED: ERROR REGISTRATION_EVENT_UNAVAILABLE\\n"\n  }\n}\n', stderr='').returncode
+
+tests\test_onchain_group3_smoke.py:33: AssertionError
+================================== FAILURES ===================================
+_______________________ test_red_git_error_is_not_clean _______________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002744FEFE6D0>
+
+    def test_red_git_error_is_not_clean(monkeypatch):
+        monkeypatch.setattr(ev.subprocess, 'run', Mock(side_effect=OSError('synthetic-error')))
+>       with pytest.raises(RuntimeError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RuntimeError
+
+tests\test_integrity_2a.py:107: Failed
+____________________ test_export_real_git_policy[UNKNOWN] _____________________
+
+tmp_path = WindowsPath('D:/Projest/tmp_clean_pytest/test_export_real_git_policy_UN0')
+sample = WindowsPath('D:/Projest/tmp_clean_pytest/test_export_real_git_policy_UN0/sample.db')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000027450910590>
+git_mode = 'UNKNOWN'
+
+    @pytest.mark.parametrize('git_mode', ['CLEAN', 'DIRTY', 'UNKNOWN'])
+    def test_export_real_git_policy(tmp_path, sample, monkeypatch, git_mode):
+        from forensics import provenance
+        from test_provenance_2a import command, commit
+        repo = tmp_path/'git-root'; repo.mkdir()
+        if git_mode != 'UNKNOWN':
+            command(repo, 'init', '-q')
+            (repo/'source.py').write_text('source')
+            commit(repo, 'isolated source')
+            if git_mode == 'DIRTY': (repo/'source.py').write_text('changed')
+        monkeypatch.setattr(provenance, '__file__', str(repo/'forensics/provenance.py'))
+        if git_mode == 'UNKNOWN':
+>           with pytest.raises(RuntimeError, match='GIT_UNKNOWN'): exported(tmp_path, sample)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RuntimeError
+
+tests\test_integrity_2a.py:498: Failed
+============================== warnings summary ===============================
+tests/test_adversarial_m2.py::TestAnyIOConcurrencyAndThreadSafety::test_pydantic_ai_agent_with_staging_connection_across_threads
+  C:\Users\Naly\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\pydantic_graph\_utils.py:67: DeprecationWarning: There is no current event loop
+    event_loop = asyncio.get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_integrity_2a.py::test_red_git_error_is_not_clean - Failed: ...
+FAILED tests/test_integrity_2a.py::test_export_real_git_policy[UNKNOWN] - Fai...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_overall_pass - Assertion...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_canonical_identity - Ass...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_multi_manifest_links - A...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_custody_sha256_note - As...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_verify_and_reconcile - A...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_idempotency_refusal - As...
+ERROR tests/test_onchain_group3_smoke.py::test_smoke_zero_raw_leakage - Asser...
+2 failed, 1110 passed, 1 skipped, 1 warning, 7 errors in 153.21s (0:02:33)
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:56.616748+00:00] STEP: Euler DAI Incident Evaluation Replay
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/evaluate.py --mode incident --data data/real_p4.db --incident euler --unit all --output D:\Projest\clean_build_test_G6C\results\evaluation\euler
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.224s)
+--- STDOUT ---
+Generated: D:\Projest\clean_build_test_G6C\results\evaluation\euler\summary.json and D:\Projest\clean_build_test_G6C\results\evaluation\euler\summary.csv
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:56.840811+00:00] STEP: Curve alETH Incident Evaluation Replay
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/evaluate.py --mode incident --data data/real_p4.db --incident curve --unit all --output D:\Projest\clean_build_test_G6C\results\evaluation\curve
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.169s)
+--- STDOUT ---
+Generated: D:\Projest\clean_build_test_G6C\results\evaluation\curve\summary.json and D:\Projest\clean_build_test_G6C\results\evaluation\curve\summary.csv
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:57.010185+00:00] STEP: Synthetic Benchmark Evaluation Replay
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/evaluate.py --mode benchmark --data data/benchmark_p6.db --output D:\Projest\clean_build_test_G6C\results\evaluation\benchmark
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.126s)
+--- STDOUT ---
+Generated: D:\Projest\clean_build_test_G6C\results\evaluation\benchmark\summary.json and D:\Projest\clean_build_test_G6C\results\evaluation\benchmark\summary.csv
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:57.136129+00:00] STEP: Smoke: collector.py --help
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe collector.py --help
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.14s)
+--- STDOUT ---
+usage: collector.py [-h]
+                    {healthcheck,backfill,collect,verify,verify-derived,verify-rpc,timeline} ...
+
+Blockchain Forensics Collector
+
+positional arguments:
+  {healthcheck,backfill,collect,verify,verify-derived,verify-rpc,timeline}
+
+options:
+  -h, --help            show this help message and exit
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:57.276213+00:00] STEP: Smoke: fetch_labels.py --help
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/fetch_labels.py --help
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.112s)
+--- STDOUT ---
+usage: fetch_labels.py [-h] --out OUT source
+
+Validate/import a cited label JSON, optionally fetched from an explicit HTTPS
+URL. Does not manufacture labels from blacklist absence or download blockchain
+state.
+
+positional arguments:
+  source      Local JSON filepath or explicit https:// URL
+
+options:
+  -h, --help  show this help message and exit
+  --out OUT   Output JSON path
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:57.388737+00:00] STEP: Smoke: generate_benchmark.py --help
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/generate_benchmark.py --help
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.098s)
+--- STDOUT ---
+usage: generate_benchmark.py [-h] [--out OUT]
+
+Run existing R1-R4 synthetic regression fixtures; never report as real
+accuracy.
+
+options:
+  -h, --help  show this help message and exit
+  --out OUT   Output directory (defaults to temporary directory
+              synthetic-<uuid>)
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:57.486647+00:00] STEP: Smoke: run_real_rules.py --help
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/run_real_rules.py --help
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.129s)
+--- STDOUT ---
+usage: run_real_rules.py [-h] [--db DB] [--chain-id CHAIN_ID] [--out OUT]
+                         [--no-persist]
+
+Run Phase 4 detection rules R1-R4 on real Ethereum incident dataset.
+
+options:
+  -h, --help           show this help message and exit
+  --db DB              Path to SQLite database (default:
+                       D:\Projest\clean_build_test_G6C\data\real_p4.db)
+  --chain-id CHAIN_ID  Chain ID (default: 1)
+  --out OUT            Output path for alerts JSON (default: D:\Projest\clean_
+                       build_test_G6C\results\p4\real_data_alerts.json)
+  --no-persist         Do not persist alerts or calibrations into SQLite
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:57.615674+00:00] STEP: Smoke: run_p4_smoke.py
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe scripts/run_p4_smoke.py
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.508s)
+--- STDOUT ---
+======================================================================
+  PHASE 4 ANOMALY DETECTION RULE ENGINE — INTEGRATION SMOKE RUNNER
+======================================================================
+-> Testing R1: Large Transfer...
+   [PASS] R1 Large Transfer correctly detects ETH and ERC-20 thresholds
+-> Testing R2: High Frequency...
+   [PASS] R2 High Frequency correctly detects 10 events in rolling 300s window
+-> Testing R3: Fan-in / Fan-out...
+   [PASS] R3 Fan-in / Fan-out correctly identifies both patterns with >= 8 counterparties
+-> Testing R4: Rapid Pass-through...
+   [PASS] R4 Rapid Pass-through correctly detects flow forwarded within 5 blocks
+-> Testing Calibration provenance, Idempotency & Persistence...
+   [PASS] Calibration provenance recorded, alert IDs deterministic, idempotent rerun verified
+======================================================================
+  ALL PHASE 4 SMOKE CHECKS PASSED (5/5)
+======================================================================
+
+--------------------------------------------------------------------------------
+
+[2026-11-04T01:50:58.123470+00:00] STEP: Standalone Git-Free Provenance Fallback Test
+COMMAND: C:\Users\Naly\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe -c 
+import sys
+from pathlib import Path
+from forensics.provenance import get_git_state
+
+root = Path('.').resolve()
+assert not (root / '.git').exists(), 'Expected clean extracted folder without .git'
+state = get_git_state(root)
+print(f'GIT_STATE: {state.state}, HEAD: {state.head}')
+assert state.state == 'CLEAN', f'Expected CLEAN state via MANIFEST_INFO.json fallback, got {state.state}'
+assert state.head is not None, 'Expected valid head commit SHA from MANIFEST_INFO.json'
+print('PASS: Standalone git-free provenance fallback operational!')
+
+DIR:     D:\Projest\clean_build_test_G6C
+EXIT:    0 (0.138s)
+--- STDOUT ---
+GIT_STATE: CLEAN, HEAD: 2d6c892a89e8005669f66c2a83b1dca68fe86c4c
+PASS: Standalone git-free provenance fallback operational!
+
+--------------------------------------------------------------------------------
