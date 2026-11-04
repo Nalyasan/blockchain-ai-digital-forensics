@@ -278,6 +278,47 @@ class MitreMappingEngine:
                 )
             )
 
+        # 5. Evaluate T1565.001 (Flash Loan / State Manipulation)
+        vol_in = float(features.get("volume_in_normalized", 0.0))
+        vol_out = float(features.get("volume_out_normalized", 0.0))
+        tokens = float(features.get("token_diversity", 1.0))
+        velocity = float(features.get("tx_velocity", 0.0))
+        burst_std = float(features.get("burstiness_std", 999.0))
+        latency = float(features.get("turnover_latency_min", 999.0))
+
+        has_r1_or_r4 = bool(
+            {"large_transfer", "r1", "rapid_pass_through", "r4", "flash_loan", "state_manipulation"}.intersection(
+                triggered_rule_ids
+            )
+        )
+        is_burst_r1_r4 = has_r1_or_r4 and (velocity >= 2.0 or burst_std <= 2.5 or (vol_in >= 5.0 and vol_out >= 5.0))
+        is_multi_asset_flash_spike = (tokens >= 2.0 and vol_in >= 5.0 and vol_out >= 5.0 and latency <= 1.0)
+
+        if (
+            is_burst_r1_r4
+            or is_multi_asset_flash_spike
+            or "flash_loan" in triggered_rule_ids
+            or "state_manipulation" in triggered_rule_ids
+            or (anomaly_score >= 0.70 and tokens >= 2.0 and (vol_in >= 10.0 or vol_out >= 10.0) and latency <= 1.0)
+        ):
+            tech = MITRE_DEFI_TAXONOMY["T1565.001"]
+            conf = min(0.95, round(0.55 + 0.20 * min(vol_in / 20.0, 1.0) + 0.20 * anomaly_score, 2))
+            mappings.append(
+                self._build_mapping(
+                    tech=tech,
+                    confidence=conf,
+                    evidence_refs=valid_refs,
+                    rationale=(
+                        f"State manipulation signature with high velocity/burstiness and asset flows "
+                        f"(tx_velocity: {velocity:.1f}, burstiness_std: {burst_std:.2f}, "
+                        f"volume_in_normalized: {vol_in:.2f}, volume_out_normalized: {vol_out:.2f}, "
+                        f"token_diversity: {tokens:.1f}, turnover_latency_min: {latency:.1f}) "
+                        f"correlated with Rule Engine detections {sorted(triggered_rule_ids)}, "
+                        f"characteristic of flash loan or price oracle distortion."
+                    ),
+                )
+            )
+
         return mappings
 
     def _build_mapping(

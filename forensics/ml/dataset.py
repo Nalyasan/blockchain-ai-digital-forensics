@@ -114,10 +114,6 @@ def chronological_split(
     target_val_idx = min(target_train_idx + max(int(val_ratio * n_samples), 1), n_samples - 1)
 
     # Align cutoffs to block boundaries
-    train_boundary_block = sorted_blocks[target_train_idx]
-    
-    # Adjust train cutoff so all samples with block <= train_boundary_block belong to train,
-    # unless that consumes all samples, in which case we pick the block strictly before.
     unique_blocks = sorted(list(set(sorted_blocks)))
     if len(unique_blocks) >= 3:
         n_ub = len(unique_blocks)

@@ -129,6 +129,24 @@ class TestMitreMappingEngine:
         tech_ids = [m["technique_id"] for m in mappings]
         assert "T1499.004" in tech_ids
 
+    def test_trigger_t1565_state_manipulation(self):
+        engine = MitreMappingEngine(strict_evidence=True)
+        valid_ref = "tx:0x" + "5"*64
+        mappings = engine.map_anomaly(
+            features={
+                "tx_velocity": 5.0,
+                "volume_in_normalized": 15.0,
+                "volume_out_normalized": 15.0,
+                "token_diversity": 2.0,
+                "turnover_latency_min": 0.0,
+            },
+            anomaly_score=0.85,
+            rule_alerts=[{"rule_id": "large_transfer", "alert_id": "e"*64, "evidence_refs": []}],
+            evidence_refs=[valid_ref],
+        )
+        tech_ids = [m["technique_id"] for m in mappings]
+        assert "T1565.001" in tech_ids
+
 
 class TestAIInvestigatorP5Integration:
     """Verifies schema extension, strict field separation, and tool guardrails."""

@@ -23,9 +23,9 @@ Trong khuôn khổ Giai đoạn P8 (Đề tài 8), hệ thống giám định k�
 2. **Mô hình Mạng Nơ-ron Nhận diện Bất thường Gọn nhẹ (Compact MLP)**:
    - Thiết kế kiến trúc mạng nơ-ron truyền thẳng (MLP) gồm 3 lớp: $\text{Input}(10) \to \text{Linear}(10, 16) + \text{ReLU} \to \text{Linear}(16, 8) + \text{ReLU} \to \text{Linear}(8, 1) + \text{Sigmoid}$.
    - Tổng số tham số khả vi: **đúng 321 tham số** ($160 + 16 + 128 + 8 + 8 + 1 = 321$).
-   - Hỗ trợ cơ chế kép (Dual-Engine Execution): Vừa tương thích hoàn toàn với PyTorch/ONNX, vừa tích hợp mã tính toán thuần túy (Pure-Python/NumPy) với thuật toán lan truyền ngược (Backpropagation) có trọng số xử lý mất cân bằng lớp (`pos_weight = 15.0`), bảo đảm tính tái lập 100% trên mọi môi trường Python 3.13 không phụ thuộc thư viện C++ ngoài.
-   - Đạt độ nhạy (Recall) 100% trên tập Test đối với các thực thể liên quan đến cảnh báo tấn công.
-   - Xuất khẩu mô hình sang định dạng chuẩn tĩnh `models/anomaly_detector_v1.onnx` (opset 17, static shape $[1, 10]$) kèm chữ ký băm mật mã SHA-256 (`f1f22282...`) và tệp cấu hình siêu tham số `anomaly_detector_v1_meta.json`. Kiến trúc hoàn toàn sẵn sàng cho mạch chứng minh số học Zero-Knowledge EZKL/Halo2 (Phase P9).
+   - Hỗ trợ cơ chế kép (Dual-Engine Execution): Vừa tương thích hoàn toàn với PyTorch/ONNX, vừa tích hợp mã tính toán thuần túy (Pure-Python/NumPy) với thuật toán lan truyền ngược (Backpropagation) có trọng số xử lý mất cân bằng lớp (`pos_weight = 8.0`), bảo đảm tính tái lập 100% trên mọi môi trường Python 3.13 không phụ thuộc thư viện C++ ngoài.
+   - Đạt độ chính xác (Precision) 78.95% trên tập Test đối với các thực thể liên quan đến cảnh báo tấn công.
+   - Xuất khẩu mô hình sang định dạng chuẩn tĩnh `models/anomaly_detector_v1.onnx` (opset 17, static shape $[1, 10]$) kèm chữ ký băm mật mã SHA-256 (`d1b9ce82...`) và tệp cấu hình siêu tham số `anomaly_detector_v1_meta.json`. Kiến trúc hoàn toàn sẵn sàng cho mạch chứng minh số học Zero-Knowledge EZKL/Halo2 (Phase P9).
 
 3. **Mô-đun Giải thích Định lượng XAI (Exact Shapley Explainer)**:
    - Triển khai thuật toán tính giá trị Shapley chính xác (Exact Shapley Attribution) duyệt qua toàn bộ $2^{10} = 1024$ tập hợp liên minh đặc trưng trong thời gian thực (~1.6 ms trên CPU thuần túy).
@@ -145,18 +145,18 @@ Total Trainable Parameters: Exactly 321
 - Tệp mô hình ONNX: `Blockchain/models/anomaly_detector_v1.onnx` (kích thước 1.743 bytes).
 - Tệp metadata: `Blockchain/models/anomaly_detector_v1_meta.json`.
 - Mã băm SHA-256 xác thực:
-  `f1f22282b02b56a99a3728253ab10181c3410f11ee406627152deb57983b4b8f`
+  `d1b9ce8247f8a188355454ef5158280ce7b0d46dfb3388581023e9e01806aeff`
 - Hàm xác minh toàn vẹn `verify_model_integrity`: Đối chiếu trực tiếp mã băm byte-level của tệp ONNX trên đĩa với giá trị ghi nhận trong tệp metadata.
 
 ### 2.5 Hiệu năng Thực nghiệm trên Tập Dữ liệu Thực
 
 | Tập dữ liệu (Split) | Số mẫu (Samples) | Số ca bất thường (Positives) | Hàm mất mát (Loss) | Độ chính xác (Precision) | Độ nhạy (Recall) | Điểm F1 |
 |---|---|---|---|---|---|---|
-| **Train** | 5.055 | 853 | 0.428 (Weighted BCE) | 0.88 | 0.94 | 0.91 |
-| **Validation** | 67 | 36 | 0.385 | 0.82 | 0.97 | 0.89 |
-| **Test** | 143 | 90 | 0.362 | 0.63 | **1.00 (100%)** | 0.77 |
+| **Train** | 5.055 | 853 | 1.1594 (Weighted BCE) | 0.4128 | 0.7245 | 0.5260 |
+| **Validation** | 67 | 36 | 0.385 | 0.7059 | 0.3333 | 0.4528 |
+| **Test** | 143 | 90 | 0.362 | **0.7895** | 0.5000 | 0.6122 |
 
-*Ghi chú*: Việc cấu hình `pos_weight = 15.0` trong quá trình huấn luyện bảo đảm mô hình không bỏ sót bất kỳ cuộc tấn công DeFi nào trên tập Test (Recall đạt 100% với 90/90 ca dương tính được phát hiện).
+*Ghi chú*: Việc cấu hình `pos_weight = 8.0` và khởi tạo He uniform đối xứng giải quyết dứt điểm hiện tượng Dying ReLU, bảo đảm trọng số lan truyền ngược cập nhật trên toàn bộ 321 tham số và điểm số bất thường phân biệt rõ rệt giữa các địa chỉ lành tính (điểm trung bình 0.4887) và địa chỉ cảnh báo (điểm trung bình 0.7555, đạt 1.363 điểm dự báo phân biệt trên toàn bộ 5.265 mẫu).
 
 ---
 
@@ -183,19 +183,22 @@ $$\phi_i(x) = \sum_{S \subseteq N \setminus \{i\}} \frac{|S|!(M - |S| - 1)!}{M!}
 ### 3.3 Định dạng Yếu tố Chi phối & Các Trường hợp Thực nghiệm
 
 #### Case 1: Địa chỉ Tấn công Euler Finance Frontrun (`0xebc29199c817dc47ba12e3f86102564d640cbf99`)
-- **Điểm dự báo bất thường**: $f(x) = 0.9824$ (Ngưỡng $\tau = 0.65 \implies \text{ANOMALOUS}$)
-- **Giá trị nền**: $E[f(x)] = 0.0812$
+- **Điểm dự báo bất thường**: $f(x) = 0.8687$ (Ngưỡng $\tau = 0.60 \implies \text{ANOMALOUS}$)
+- **Giá trị nền**: $E[f(x)] = 0.7704$
 - **Top 3 Yếu tố Chi phối**:
-  1. `abnormal_volume_out: +0.41` (Khối lượng rút DAI cực lớn)
-  2. `concentrated_outflow: +0.28` (Toàn bộ số dư bị chuyển sạch trong 1 giao dịch)
-  3. `high_tx_velocity: +0.21` (Tốc độ giao dịch burst trong block)
+  1. `high_tx_velocity: +0.07` (Tốc độ giao dịch 4.0 tx/window trong block)
+  2. `abnormal_volume_in: +0.04` (Khối lượng tài sản nạp chuẩn hóa 25.84)
+  3. `abnormal_volume_out: +0.03` (Khối lượng rút DAI chuẩn hóa 25.78)
+- **Ánh xạ MITRE ATT&CK**: `T1566.002`, `T1048.003`, `T1565.001` (Flash Loan / State Manipulation)
 
 #### Case 2: Hợp đồng Khai thác Lỗ hổng Curve (`0xb657b895b265c38c53fff00166cf7f6a3c70587d`)
-- **Điểm dự báo bất thường**: $f(x) = 0.9650$ ($\text{ANOMALOUS}$)
+- **Điểm dự báo bất thường**: $f(x) = 1.0000$ ($\text{ANOMALOUS}$)
+- **Giá trị nền**: $E[f(x)] = 0.7704$
 - **Top 3 Yếu tố Chi phối**:
-  1. `high_fan_out: +0.48` (Phân tán tiền tới hàng loạt địa chỉ trung gian)
-  2. `high_token_diversity: +0.24` (Tương tác rút đồng thời nhiều pool token alETH/ETH)
-  3. `abnormal_volume_in: +0.16` (Khối lượng thanh khoản vào bể)
+  1. `burstiness_spike: +0.18` (Độ lệch chuẩn khoảng cách khối giao dịch cực lớn)
+  2. `high_fan_out: +0.16` (Phân tán tiền tới 11 đối tác trung gian)
+  3. `abnormal_volume_in: +0.01` (Khối lượng thanh khoản vào bể)
+- **Ánh xạ MITRE ATT&CK**: `T1566.002`, `T1048.003`, `T1027`, `T1499.004`, `T1565.001`
 
 ---
 
@@ -303,7 +306,7 @@ Toàn bộ các bộ kiểm thử đã được thực thi độc lập và cụ
   - Kiến trúc: 321 tham số ($10 \to 16 \to 8 \to 1$), chỉ sử dụng toán tử tuyến tính affine và `ReLU`.
   - Dạng đầu vào tĩnh: Tensor $[1, 10]$ kiểu `float32`.
   - Bậc mạch số học (Scale factor): Khuyến nghị cấu hình EZKL với `--bits 16 --scale 7 --logrows 10`.
-  - Cam kết mật mã (KZG Commitment): Giá trị băm SHA-256 của tệp ONNX `f1f22282...` được dùng làm định danh gốc để neo giữ vào hồ sơ điều tra.
+  - Cam kết mật mã (KZG Commitment): Giá trị băm SHA-256 của tệp ONNX `d1b9ce82...` được dùng làm định danh gốc để neo giữ vào hồ sơ điều tra.
 
 ### 8.2 Bàn giao cho Giai đoạn P10 (Chain of Custody DID Evidence Anchoring)
 - **Cấu trúc bản ghi chứng cứ**: Kết quả giám định ML (`MLAnomalyDetection`) và ánh xạ MITRE (`MitreAttackMapping`) xuất bản kèm `model_sha256` và danh sách `evidence_refs`.

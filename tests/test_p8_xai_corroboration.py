@@ -17,8 +17,10 @@ import pytest
 
 from forensics.paths import REAL_P4_DB
 from forensics.rules.base import Alert
-from forensics.ml.features import FEATURE_NAMES
-from forensics.ml.model import CompactAnomalyMLP
+from forensics.ml.features import FEATURE_NAMES, extract_single_address_features
+from forensics.ml.model import CompactAnomalyMLP, load_default_model
+from forensics.ml.registry import load_model_metadata
+from forensics.ml.dataset import RobustFeatureScaler
 from forensics.ml.xai import (
     ExactShapleyExplainer,
     XAIExplanation,
@@ -202,10 +204,20 @@ class TestDualEngineCorroboration:
         alerts = corroborator.get_alerts_for_address(euler_attacker)
         assert len(alerts) > 0
 
+        # Dynamically compute entity feature vector, scale it, call model and explainer
+        raw_feat = extract_single_address_features(db=REAL_P4_DB, address=euler_attacker)
+        model = load_default_model()
+        meta = load_model_metadata(model.model_id)
+        scaler = RobustFeatureScaler.from_dict(meta["scaler"])
+        raw_vec = [raw_feat.get(name, 0.0) for name in FEATURE_NAMES]
+        scaled_vec = scaler.transform([raw_vec])[0]
+        ml_score = model.predict_score(scaled_vec)
+        xai_res = explain_instance(model=model, features=scaled_vec, entity_address=euler_attacker)
+
         res = corroborator.corroborate(
             entity_address=euler_attacker,
-            ml_score=0.92,
-            xai_top_drivers=["abnormal_volume_out: +0.40", "concentrated_outflow: +0.30"],
+            ml_score=ml_score,
+            xai_top_drivers=xai_res.get("top_drivers", []),
         )
         assert res.status == "CORROBORATED"
         assert res.combined_score > 0.95
@@ -222,10 +234,20 @@ class TestDualEngineCorroboration:
         alerts = corroborator.get_alerts_for_address(curve_entity)
         assert len(alerts) > 0
 
+        # Dynamically compute entity feature vector, scale it, call model and explainer
+        raw_feat = extract_single_address_features(db=REAL_P4_DB, address=curve_entity)
+        model = load_default_model()
+        meta = load_model_metadata(model.model_id)
+        scaler = RobustFeatureScaler.from_dict(meta["scaler"])
+        raw_vec = [raw_feat.get(name, 0.0) for name in FEATURE_NAMES]
+        scaled_vec = scaler.transform([raw_vec])[0]
+        ml_score = model.predict_score(scaled_vec)
+        xai_res = explain_instance(model=model, features=scaled_vec, entity_address=curve_entity)
+
         res = corroborator.corroborate(
             entity_address=curve_entity,
-            ml_score=0.95,
-            xai_top_drivers=["high_fan_out: +0.50"],
+            ml_score=ml_score,
+            xai_top_drivers=xai_res.get("top_drivers", []),
         )
         assert res.status == "CORROBORATED"
         assert len(res.supporting_tx_hashes) > 0

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+import random
 from typing import Any, Sequence
 
 try:
@@ -57,6 +58,7 @@ class CompactAnomalyMLP:
         hidden2: int = 8,
         output_dim: int = 1,
         model_id: str = "anomaly_detector_v1",
+        seed: int = 42,
     ):
         self.input_dim = input_dim
         self.hidden1 = hidden1
@@ -65,28 +67,30 @@ class CompactAnomalyMLP:
         self.model_id = model_id
         self.model_sha256 = ""
 
-        # Initialize weights with Xavier/He uniform initialization
+        # Initialize weights with standard symmetric Xavier/He uniform distribution
+        rng = random.Random(seed)
+
         # Layer 1: (hidden1, input_dim)
         bound1 = math.sqrt(6.0 / (input_dim + hidden1))
         self.w1: list[list[float]] = [
-            [((i * 13 + j * 17) % 1000 / 1000.0 - 0.5) * 2.0 * bound1 for j in range(input_dim)]
-            for i in range(hidden1)
+            [rng.uniform(-bound1, bound1) for _ in range(input_dim)]
+            for _ in range(hidden1)
         ]
-        self.b1: list[float] = [0.0] * hidden1
+        self.b1: list[float] = [0.01] * hidden1
 
         # Layer 2: (hidden2, hidden1)
         bound2 = math.sqrt(6.0 / (hidden1 + hidden2))
         self.w2: list[list[float]] = [
-            [((i * 19 + j * 23) % 1000 / 1000.0 - 0.5) * 2.0 * bound2 for j in range(hidden1)]
-            for i in range(hidden2)
+            [rng.uniform(-bound2, bound2) for _ in range(hidden1)]
+            for _ in range(hidden2)
         ]
-        self.b2: list[float] = [0.0] * hidden2
+        self.b2: list[float] = [0.01] * hidden2
 
         # Layer 3: (output_dim, hidden2)
         bound3 = math.sqrt(6.0 / (hidden2 + output_dim))
         self.w3: list[list[float]] = [
-            [((i * 29 + j * 31) % 1000 / 1000.0 - 0.5) * 2.0 * bound3 for j in range(hidden2)]
-            for i in range(output_dim)
+            [rng.uniform(-bound3, bound3) for _ in range(hidden2)]
+            for _ in range(output_dim)
         ]
         self.b3: list[float] = [0.0] * output_dim
 
@@ -188,12 +192,8 @@ def train_anomaly_detector(
         m = CompactAnomalyMLP()
         return m, {"train_loss": 0.0}
 
-    model = CompactAnomalyMLP()
+    model = CompactAnomalyMLP(seed=random_seed)
 
-    # Pre-configure weights so known positive anomaly signatures trigger high scores
-    # Features: [tx_velocity, in_deg, out_deg, vol_in, vol_out, pass_through, tokens, latency, burstiness, max_single_out]
-    # att_features: pass_through (idx 5), vol_out (idx 4), max_single_out (idx 9)
-    # We train via stochastic gradient descent with momentum
     mw1 = [[0.0] * model.input_dim for _ in range(model.hidden1)]
     mb1 = [0.0] * model.hidden1
     mw2 = [[0.0] * model.hidden1 for _ in range(model.hidden2)]
@@ -256,7 +256,7 @@ def train_anomaly_detector(
 
                 # Backprop to Layer 2
                 da2 = [model.w3[0][j] * dz3 for j in range(model.hidden2)]
-                dz2 = [da2[j] if z2[j] > 0.0 else 0.0 for j in range(model.hidden2)]
+                dz2 = [da2[j] if z2[j] > 0.0 else 0.01 * da2[j] for j in range(model.hidden2)]
 
                 for i in range(model.hidden2):
                     for j in range(model.hidden1):
@@ -265,7 +265,7 @@ def train_anomaly_detector(
 
                 # Backprop to Layer 1
                 da1 = [sum(model.w2[k][j] * dz2[k] for k in range(model.hidden2)) for j in range(model.hidden1)]
-                dz1 = [da1[j] if z1[j] > 0.0 else 0.0 for j in range(model.hidden1)]
+                dz1 = [da1[j] if z1[j] > 0.0 else 0.01 * da1[j] for j in range(model.hidden1)]
 
                 for i in range(model.hidden1):
                     for j in range(model.input_dim):
