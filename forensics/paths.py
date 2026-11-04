@@ -8,6 +8,7 @@ TOOLS_DIR = PROJECT_ROOT / 'tools'
 REAL_P4_DB = DATA_DIR / 'real_p4.db'
 BENCHMARK_DB = DATA_DIR / 'benchmark_p6.db'
 FORENSICS_DB = DATA_DIR / 'forensics.db'
+ENDPOINT_EVIDENCE_DB = Path(os.environ.get("ENDPOINT_EVIDENCE_DB", str(DATA_DIR / "endpoint_evidence.db"))).resolve()
 
 
 def get_project_root() -> Path:
@@ -32,4 +33,9 @@ def get_real_p4_db() -> Path:
 
 def get_benchmark_db() -> Path:
     return BENCHMARK_DB
+
+
+def get_endpoint_evidence_db() -> Path:
+    return Path(os.environ.get("ENDPOINT_EVIDENCE_DB", str(DATA_DIR / "endpoint_evidence.db"))).resolve()
+
 

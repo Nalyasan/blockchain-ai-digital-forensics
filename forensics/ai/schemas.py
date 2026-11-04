@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 HEX_TX_HASH_REGEX = re.compile(r"^0x[0-9a-fA-F]{64}$")
 HEX_ADDRESS_REGEX = re.compile(r"^0x[0-9a-fA-F]{40}$")
 EVIDENCE_REF_REGEX = re.compile(
-    r"^(tx:0x[0-9a-fA-F]{64}|block:\d+|alert:[a-zA-Z0-9_\-]+|transfer:\d+|address:0x[0-9a-fA-F]{40}|log:0x[0-9a-fA-F]{64}:\d+)$"
+    r"^(tx:0x[0-9a-fA-F]{64}|block:\d+|alert:[a-zA-Z0-9_\-]+|transfer:\d+|address:0x[0-9a-fA-F]{40}|log:0x[0-9a-fA-F]{64}:\d+|endpoint:[a-zA-Z0-9_\-:]+)$"
 )
 
 # Words indicating subjective speculation or interpretation rather than objective physical on-chain fact
@@ -357,6 +357,58 @@ class MitreAttackMapping(BaseModel):
         return cleaned
 
 
+class EndpointEvidenceArtifact(BaseModel):
+    """Canonical endpoint telemetry artifact retrieved from endpoint_evidence.db."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    artifact_type: Literal["process", "socket", "event", "system_info", "persistence"] = Field(...)
+    record_id: str = Field(..., description="Unique record identifier from endpoint_evidence.db")
+    host_id: str = Field(..., description="Endpoint host identifier")
+    payload_sha256: str = Field(..., description="SHA-256 digest of stored canonical record")
+    summary: str = Field(..., min_length=5, max_length=500, description="Objective factual description")
+    details: dict[str, Any] = Field(default_factory=dict, description="Structured attributes")
+    evidence_refs: list[str] = Field(default_factory=list, description="Verifiable endpoint evidence references")
+
+    @field_validator("payload_sha256")
+    @classmethod
+    def validate_sha256(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not re.match(r"^[0-9a-f]{64}$", v):
+            raise ValueError(f"payload_sha256 must be a 64-char lowercase hex string, got {v!r}")
+        return v
+
+    @field_validator("summary")
+    @classmethod
+    def validate_summary_purity(cls, v: str) -> str:
+        """Enforces field separation: EndpointEvidenceArtifact.summary rejects speculative vocabulary."""
+        v_lower = v.lower()
+        words = set(re.findall(r"\b[a-z0-9]+\b", v_lower))
+        found = words.intersection(SPECULATIVE_WORDS)
+        if found:
+            raise ValueError(
+                f"Field separation violation: EndpointEvidenceArtifact.summary contains speculative vocabulary: {sorted(found)}. "
+                "Hypotheses and behavioral attributions must reside in AnalystInterpretation."
+            )
+        return v.strip()
+
+
+class FirstResponseTriageResult(BaseModel):
+    """Result of automated safe non-destructive incident triage."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    triage_id: str = Field(..., description="Unique UUID of triage execution")
+    playbook_name: str = Field(..., description="Executed playbook name")
+    case_id: str = Field(..., description="Associated investigation case identifier")
+    executed_at_utc: str = Field(..., description="ISO-8601 UTC timestamp")
+    status: Literal["SUCCESS", "BLOCKED", "ERROR"] = Field(...)
+    findings_summary: str = Field(..., description="Objective findings summary")
+    artifacts: list[EndpointEvidenceArtifact] = Field(default_factory=list)
+    evidence_refs: list[str] = Field(default_factory=list)
+    audit_digest_sha256: str = Field(..., description="SHA-256 hash of audit record")
+
+
 class ForensicInvestigationOutput(BaseModel):
     """Complete structured forensic investigation output schema for P5 AI Investigator.
     
@@ -404,6 +456,14 @@ class ForensicInvestigationOutput(BaseModel):
     mitre_mappings: list[MitreAttackMapping] = Field(
         default_factory=list,
         description="Formal MITRE ATT&CK taxonomy mappings substantiated by canonical evidence refs.",
+    )
+    endpoint_artifacts: list[EndpointEvidenceArtifact] = Field(
+        default_factory=list,
+        description="Endpoint telemetry artifacts verified against endpoint_evidence.db.",
+    )
+    triage_results: list[FirstResponseTriageResult] = Field(
+        default_factory=list,
+        description="Results of non-destructive AI First Responder triage playbooks.",
     )
     chronological_timeline: list[Union[dict[str, Any], str]] = Field(
         default_factory=list,

@@ -44,6 +44,7 @@ __all__ = [
     "RefMismatch",
     "ReferenceCheckResult",
     "check_investigation_output",
+    "verify_endpoint_artifacts",
     "verify_observed_facts",
     "verify_references_existence",
     "verify_single_fact",
@@ -162,7 +163,45 @@ def _parse_ref_entity(ref: str) -> tuple[str, str]:
             return ("block", val)
         if prefix in ("transfer", "xfer"):
             return ("transfer", val)
+        if prefix == "endpoint":
+            if ":" in val:
+                sub_p, sub_v = val.split(":", 1)
+                sub_p_clean = sub_p.strip().lower()
+                if sub_p_clean in ("proc", "process", "processes"):
+                    return ("endpoint_proc", sub_v.strip())
+                if sub_p_clean in ("sock", "socket", "sockets"):
+                    return ("endpoint_sock", sub_v.strip())
+                if sub_p_clean in ("event", "events", "even"):
+                    return ("endpoint_event", sub_v.strip())
+                if sub_p_clean in ("host", "system", "system_info", "syst"):
+                    return ("endpoint_host", sub_v.strip())
+                if sub_p_clean in ("triage", "trg"):
+                    return ("endpoint_triage", sub_v.strip())
+                return (f"endpoint_{sub_p_clean}", sub_v.strip())
+            if val.startswith("proc_"):
+                return ("endpoint_proc", val)
+            if val.startswith("sock_"):
+                return ("endpoint_sock", val)
+            if val.startswith("even_"):
+                return ("endpoint_event", val)
+            if val.startswith("syst_"):
+                return ("endpoint_host", val)
+            if val.startswith("trg_"):
+                return ("endpoint_triage", val)
+            return ("endpoint", val)
         return (prefix, val)
+
+    # Bare prefixes without colons
+    if ref_clean.startswith("proc_"):
+        return ("endpoint_proc", ref_clean)
+    if ref_clean.startswith("sock_"):
+        return ("endpoint_sock", ref_clean)
+    if ref_clean.startswith("even_"):
+        return ("endpoint_event", ref_clean)
+    if ref_clean.startswith("syst_"):
+        return ("endpoint_host", ref_clean)
+    if ref_clean.startswith("trg_"):
+        return ("endpoint_triage", ref_clean)
 
     # Bare hex strings without prefixes
     if HEX_TX_REGEX.match(ref_clean):
@@ -266,6 +305,55 @@ def _check_alert_exists(
     return (True, [])
 
 
+def _check_endpoint_ref_exists(conn: sqlite3.Connection, rtype: str, rval: str) -> bool:
+    """Verifies that an endpoint telemetry reference exists in endpoint_evidence.db."""
+    try:
+        c = conn.cursor()
+        rval_clean = rval.strip()
+        if rtype in ("endpoint_proc", "endpoint_processes"):
+            c.execute(
+                "SELECT 1 FROM endpoint_processes WHERE record_id = ? OR CAST(pid AS TEXT) = ? LIMIT 1",
+                (rval_clean, rval_clean),
+            )
+            return c.fetchone() is not None
+        elif rtype in ("endpoint_sock", "endpoint_sockets"):
+            c.execute(
+                "SELECT 1 FROM endpoint_sockets WHERE record_id = ? OR CAST(pid AS TEXT) = ? OR remote_address = ? LIMIT 1",
+                (rval_clean, rval_clean, rval_clean),
+            )
+            return c.fetchone() is not None
+        elif rtype in ("endpoint_event", "endpoint_events"):
+            c.execute(
+                "SELECT 1 FROM endpoint_events WHERE record_id = ? OR CAST(event_id AS TEXT) = ? LIMIT 1",
+                (rval_clean, rval_clean),
+            )
+            return c.fetchone() is not None
+        elif rtype in ("endpoint_host", "endpoint_system_info"):
+            c.execute(
+                "SELECT 1 FROM endpoint_system_info WHERE record_id = ? OR host_id = ? OR hostname = ? LIMIT 1",
+                (rval_clean, rval_clean, rval_clean),
+            )
+            return c.fetchone() is not None
+        elif rtype in ("endpoint_triage", "endpoint_trg"):
+            c.execute(
+                "SELECT 1 FROM triage_audit_log WHERE triage_id = ? LIMIT 1",
+                (rval_clean,),
+            )
+            return c.fetchone() is not None
+        else:
+            c.execute(
+                "SELECT 1 FROM endpoint_processes WHERE record_id = ? "
+                "UNION SELECT 1 FROM endpoint_sockets WHERE record_id = ? "
+                "UNION SELECT 1 FROM endpoint_events WHERE record_id = ? "
+                "UNION SELECT 1 FROM endpoint_system_info WHERE record_id = ? "
+                "UNION SELECT 1 FROM triage_audit_log WHERE triage_id = ? LIMIT 1",
+                (rval_clean, rval_clean, rval_clean, rval_clean, rval_clean),
+            )
+            return c.fetchone() is not None
+    except Exception:
+        return False
+
+
 # ==============================================================================
 # Stage 1: Reference Existence Verification
 # ==============================================================================
@@ -274,14 +362,18 @@ def _check_alert_exists(
 def verify_references_existence(
     tx_hashes: Sequence[str] = (),
     alert_ids: Sequence[str] = (),
+    endpoint_refs: Sequence[str] = (),
     db: sqlite3.Connection = None,
+    endpoint_db: sqlite3.Connection | None = None,
 ) -> tuple[float, list[str]]:
-    """Stage 1: Verifies that all referenced transaction hashes and alert IDs exist.
+    """Stage 1: Verifies that all referenced transaction hashes, alert IDs, and endpoint records exist.
 
     Args:
         tx_hashes: Sequence of transaction hash strings.
         alert_ids: Sequence of alert ID strings.
-        db: Strictly read-only SQLite database connection.
+        endpoint_refs: Sequence of endpoint reference strings (e.g. 'endpoint:proc:1234', 'proc_...').
+        db: Strictly read-only SQLite database connection for blockchain evidence.
+        endpoint_db: Optional strictly read-only SQLite database connection for endpoint evidence.
 
     Returns:
         Tuple of (existence_ref_ratio, missing_refs):
@@ -291,37 +383,180 @@ def verify_references_existence(
     if db is None:
         raise ValueError("Database connection db is required for reference existence checking.")
 
-    total_refs: list[tuple[str, str]] = []  # list of (type, id)
+    total_refs: list[tuple[str, str, str]] = []  # list of (type, id, original_repr)
     seen: set[tuple[str, str]] = set()
 
     for tx in tx_hashes:
         norm = _normalize_tx(tx)
         if norm and ("tx", norm) not in seen:
             seen.add(("tx", norm))
-            total_refs.append(("tx", norm))
+            total_refs.append(("tx", norm, f"tx:{norm}"))
 
     for alert in alert_ids:
         norm = alert.strip().lower()
         if norm and ("alert", norm) not in seen:
             seen.add(("alert", norm))
-            total_refs.append(("alert", norm))
+            total_refs.append(("alert", norm, f"alert:{norm}"))
+
+    for ep in endpoint_refs:
+        ep_clean = str(ep).strip()
+        if not ep_clean:
+            continue
+        rtype, rval = _parse_ref_entity(ep_clean)
+        if (rtype, rval) not in seen:
+            seen.add((rtype, rval))
+            total_refs.append((rtype, rval, ep_clean))
 
     if not total_refs:
         return (0.0, [])
 
+    # Setup endpoint db if needed
+    ep_conn = endpoint_db
+    close_ep = False
+    if any(r[0].startswith("endpoint") for r in total_refs) and ep_conn is None:
+        try:
+            from forensics.paths import ENDPOINT_EVIDENCE_DB
+            from forensics.endpoint.store import get_readonly_endpoint_connection
+
+            if ENDPOINT_EVIDENCE_DB.exists():
+                ep_conn = get_readonly_endpoint_connection(ENDPOINT_EVIDENCE_DB)
+                close_ep = True
+        except Exception:
+            ep_conn = None
+
     missing: list[str] = []
-    for ref_type, ref_id in total_refs:
-        if ref_type == "tx":
-            if not _check_tx_exists(db, ref_id):
-                missing.append(f"tx:{ref_id}")
-        elif ref_type == "alert":
-            exists, _ = _check_alert_exists(db, ref_id)
-            if not exists:
-                missing.append(f"alert:{ref_id}")
+    try:
+        for ref_type, ref_id, orig in total_refs:
+            if ref_type == "tx":
+                if not _check_tx_exists(db, ref_id):
+                    missing.append(orig)
+            elif ref_type == "alert":
+                exists, _ = _check_alert_exists(db, ref_id)
+                if not exists:
+                    missing.append(orig)
+            elif ref_type.startswith("endpoint"):
+                if ep_conn is None or not _check_endpoint_ref_exists(ep_conn, ref_type, ref_id):
+                    missing.append(orig)
+    finally:
+        if close_ep and ep_conn is not None:
+            ep_conn.close()
 
     existing_count = len(total_refs) - len(missing)
     ratio = round(existing_count / len(total_refs), 4)
     return (ratio, missing)
+
+
+def verify_endpoint_artifacts(
+    artifacts: Sequence[Union[Any, dict[str, Any]]],
+    endpoint_db: sqlite3.Connection | None = None,
+) -> list[RefMismatch]:
+    """Stage 2: Compares each EndpointEvidenceArtifact bit-for-bit against endpoint_evidence.db."""
+    mismatches: list[RefMismatch] = []
+    if not artifacts:
+        return mismatches
+
+    ep_conn = endpoint_db
+    close_ep = False
+    if ep_conn is None:
+        try:
+            from forensics.paths import ENDPOINT_EVIDENCE_DB
+            from forensics.endpoint.store import get_readonly_endpoint_connection
+
+            if ENDPOINT_EVIDENCE_DB.exists():
+                ep_conn = get_readonly_endpoint_connection(ENDPOINT_EVIDENCE_DB)
+                close_ep = True
+        except Exception:
+            ep_conn = None
+
+    if ep_conn is None:
+        return mismatches
+
+    try:
+        for idx, art in enumerate(artifacts):
+            if isinstance(art, dict):
+                rec_id = art.get("record_id")
+                host_id = art.get("host_id")
+                sha256_val = art.get("payload_sha256")
+                art_type = art.get("artifact_type")
+            else:
+                rec_id = getattr(art, "record_id", None)
+                host_id = getattr(art, "host_id", None)
+                sha256_val = getattr(art, "payload_sha256", None)
+                art_type = getattr(art, "artifact_type", None)
+
+            if not rec_id:
+                mismatches.append(
+                    RefMismatch(
+                        fact_index=idx,
+                        field="record_id",
+                        expected="Valid record_id",
+                        actual=rec_id,
+                        tag="CONTENT_MISMATCH",
+                        reason="EndpointEvidenceArtifact is missing record_id",
+                    )
+                )
+                continue
+
+            table_map = {
+                "process": "endpoint_processes",
+                "socket": "endpoint_sockets",
+                "event": "endpoint_events",
+                "system_info": "endpoint_system_info",
+            }
+            primary_table = table_map.get(str(art_type).lower(), "endpoint_processes")
+
+            cursor = ep_conn.cursor()
+            cursor.execute(f"SELECT * FROM {primary_table} WHERE record_id = ? LIMIT 1", (str(rec_id),))
+            row = cursor.fetchone()
+            if not row:
+                for alt_table in ["endpoint_processes", "endpoint_sockets", "endpoint_events", "endpoint_system_info"]:
+                    if alt_table != primary_table:
+                        cursor.execute(f"SELECT * FROM {alt_table} WHERE record_id = ? LIMIT 1", (str(rec_id),))
+                        row = cursor.fetchone()
+                        if row:
+                            break
+
+            if not row:
+                mismatches.append(
+                    RefMismatch(
+                        fact_index=idx,
+                        field="record_id",
+                        expected=f"Record {rec_id} present in endpoint database",
+                        actual=rec_id,
+                        tag="CONTENT_MISMATCH",
+                        reason=f"Endpoint record '{rec_id}' not found in endpoint_evidence.db",
+                    )
+                )
+                continue
+
+            row_dict = dict(row)
+            if sha256_val and str(row_dict.get("payload_sha256", "")).lower() != str(sha256_val).lower():
+                mismatches.append(
+                    RefMismatch(
+                        fact_index=idx,
+                        field="payload_sha256",
+                        expected=row_dict.get("payload_sha256"),
+                        actual=sha256_val,
+                        tag="CONTENT_MISMATCH",
+                        reason=f"Payload hash mismatch for endpoint record {rec_id}",
+                    )
+                )
+            if host_id and str(row_dict.get("host_id", "")).lower() != str(host_id).lower():
+                mismatches.append(
+                    RefMismatch(
+                        fact_index=idx,
+                        field="host_id",
+                        expected=row_dict.get("host_id"),
+                        actual=host_id,
+                        tag="CONTENT_MISMATCH",
+                        reason=f"Host identifier mismatch for endpoint record {rec_id}",
+                    )
+                )
+    finally:
+        if close_ep and ep_conn is not None:
+            ep_conn.close()
+
+    return mismatches
 
 
 # ==============================================================================
@@ -813,16 +1048,18 @@ def check_investigation_output(
     output: Union[Any, dict[str, Any]],
     db: sqlite3.Connection,
     input_refs: Sequence[str] | None = None,
+    endpoint_db: sqlite3.Connection | None = None,
 ) -> ReferenceCheckResult:
     """Comprehensive two-stage independent reference checking for AI Investigator output.
 
-    Stage 1: Validates existence of all referenced transaction hashes and alert IDs.
-    Stage 2: Validates content match of all fields in observed_facts.
+    Stage 1: Validates existence of all referenced transaction hashes, alert IDs, and endpoint records.
+    Stage 2: Validates content match of all fields in observed_facts and endpoint_artifacts.
 
     Args:
         output: ForensicInvestigationOutput instance or serialized dictionary.
         db: Strictly read-only SQLite connection.
         input_refs: Optional sequence of reference strings provided in input prompt.
+        endpoint_db: Optional strictly read-only SQLite connection for endpoint evidence.
 
     Returns:
         ReferenceCheckResult containing ratios, validation verdict, and detailed mismatches.
@@ -830,17 +1067,22 @@ def check_investigation_output(
     if db is None:
         raise ValueError("Database connection db is required for check_investigation_output.")
 
-    # Extract observed_facts, rule_detections, and references
+    # Extract observed_facts, rule_detections, and endpoint fields
     if isinstance(output, dict):
         observed_facts = output.get("observed_facts", [])
         rule_detections = output.get("rule_detections", [])
+        endpoint_artifacts = output.get("endpoint_artifacts", [])
+        triage_results = output.get("triage_results", [])
     else:
         observed_facts = getattr(output, "observed_facts", [])
         rule_detections = getattr(output, "rule_detections", [])
+        endpoint_artifacts = getattr(output, "endpoint_artifacts", [])
+        triage_results = getattr(output, "triage_results", [])
 
-    # Gather all referenced tx_hashes and alert_ids across output
+    # Gather all referenced tx_hashes, alert_ids, and endpoint_refs across output
     tx_candidates: set[str] = set()
     alert_candidates: set[str] = set()
+    endpoint_candidates: set[str] = set()
 
     # From observed_facts
     for f in observed_facts:
@@ -854,6 +1096,8 @@ def check_investigation_output(
                 tx_candidates.add(rval)
             elif rtype == "alert":
                 alert_candidates.add(rval)
+            elif rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
 
     # From rule_detections
     for d in rule_detections:
@@ -867,6 +1111,8 @@ def check_investigation_output(
                 tx_candidates.add(rval)
             elif rtype == "alert":
                 alert_candidates.add(rval)
+            elif rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
 
     # From ml_detections
     ml_detections = output.get("ml_detections", []) if isinstance(output, dict) else getattr(output, "ml_detections", [])
@@ -878,6 +1124,8 @@ def check_investigation_output(
                 tx_candidates.add(rval)
             elif rtype == "alert":
                 alert_candidates.add(rval)
+            elif rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
 
     # From mitre_mappings
     mitre_mappings = output.get("mitre_mappings", []) if isinstance(output, dict) else getattr(output, "mitre_mappings", [])
@@ -886,6 +1134,38 @@ def check_investigation_output(
         for r in refs:
             rtype, rval = _parse_ref_entity(str(r))
             if rtype == "tx":
+                tx_candidates.add(rval)
+            elif rtype == "alert":
+                alert_candidates.add(rval)
+            elif rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
+
+    # From endpoint_artifacts
+    for art in endpoint_artifacts:
+        rec_id = art.get("record_id") if isinstance(art, dict) else getattr(art, "record_id", None)
+        if rec_id:
+            endpoint_candidates.add(f"endpoint:{rec_id}")
+        refs = art.get("evidence_refs", []) if isinstance(art, dict) else getattr(art, "evidence_refs", [])
+        for r in refs:
+            rtype, rval = _parse_ref_entity(str(r))
+            if rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
+            elif rtype == "tx":
+                tx_candidates.add(rval)
+            elif rtype == "alert":
+                alert_candidates.add(rval)
+
+    # From triage_results
+    for trg in triage_results:
+        trg_id = trg.get("triage_id") if isinstance(trg, dict) else getattr(trg, "triage_id", None)
+        if trg_id:
+            endpoint_candidates.add(f"endpoint:triage:{trg_id}")
+        refs = trg.get("evidence_refs", []) if isinstance(trg, dict) else getattr(trg, "evidence_refs", [])
+        for r in refs:
+            rtype, rval = _parse_ref_entity(str(r))
+            if rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
+            elif rtype == "tx":
                 tx_candidates.add(rval)
             elif rtype == "alert":
                 alert_candidates.add(rval)
@@ -898,26 +1178,37 @@ def check_investigation_output(
                 tx_candidates.add(rval)
             elif rtype == "alert":
                 alert_candidates.add(rval)
+            elif rtype.startswith("endpoint"):
+                endpoint_candidates.add(str(r))
 
     # Stage 1: Reference Existence
     existence_ratio, missing_refs = verify_references_existence(
         tx_hashes=sorted(tx_candidates),
         alert_ids=sorted(alert_candidates),
+        endpoint_refs=sorted(endpoint_candidates),
         db=db,
+        endpoint_db=endpoint_db,
     )
-    total_refs_count = len(tx_candidates) + len(alert_candidates)
+    total_refs_count = len(tx_candidates) + len(alert_candidates) + len(endpoint_candidates)
     existing_refs_count = total_refs_count - len(missing_refs)
 
-    # Stage 2: Content Match
+    # Stage 2: Content Match for on-chain observed facts
     content_ratio, mismatches = verify_observed_facts(
         facts=observed_facts,
         db=db,
     )
 
-    total_facts = len(observed_facts)
+    # Stage 2 (cont): Content Match for endpoint artifacts
+    endpoint_mismatches = verify_endpoint_artifacts(
+        artifacts=endpoint_artifacts,
+        endpoint_db=endpoint_db,
+    )
+    mismatches.extend(endpoint_mismatches)
+
+    total_facts = len(observed_facts) + len(endpoint_artifacts)
     # Calculate matching facts
     mismatched_indices = {m.fact_index for m in mismatches}
-    matched_facts = total_facts - len(mismatched_indices)
+    matched_facts = max(0, total_facts - len(mismatched_indices))
 
     if total_facts == 0:
         field_match_ratio = 0.0
@@ -928,7 +1219,7 @@ def check_investigation_output(
             else "CONTENT_MISMATCH"
         )
     else:
-        total_fields_checked = max(1, total_facts * 6)
+        total_fields_checked = max(1, len(observed_facts) * 6 + len(endpoint_artifacts) * 3)
         matching_fields = max(0, total_fields_checked - len(mismatches))
         field_match_ratio = round(matching_fields / total_fields_checked, 4)
         is_valid = (len(mismatches) == 0) and (len(missing_refs) == 0)
@@ -937,7 +1228,7 @@ def check_investigation_output(
     return ReferenceCheckResult(
         is_valid=is_valid,
         existence_ref_ratio=existence_ratio,
-        content_match_ratio=content_ratio,
+        content_match_ratio=content_ratio if total_facts > 0 else 0.0,
         field_match_ratio=field_match_ratio,
         total_facts=total_facts,
         matched_facts=matched_facts,

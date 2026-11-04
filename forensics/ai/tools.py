@@ -76,6 +76,8 @@ __all__ = [
     "get_timeline",
     "get_tx",
     "init_staging_tables",
+    "query_endpoint_telemetry",
+    "run_safe_endpoint_triage",
     "validate_block_range",
     "verify_staging_database",
 ]
@@ -93,6 +95,8 @@ AUTHORIZED_TOOLS: frozenset[str] = frozenset({
     "get_timeline",
     "collect_missing_range",
     "get_ml_anomaly_analysis",
+    "query_endpoint_telemetry",
+    "run_safe_endpoint_triage",
 })
 
 P6_AUTHORIZED_TOOLS: frozenset[str] = frozenset(AUTHORIZED_TOOLS | {"get_threat_intel"})
@@ -1347,6 +1351,208 @@ def get_ml_anomaly_analysis(
     finally:
         if close_conn and conn is not None:
             conn.close()
+
+
+# ==============================================================================
+# Authorized Tool 8 & 9: query_endpoint_telemetry & run_safe_endpoint_triage
+# ==============================================================================
+
+
+def query_endpoint_telemetry(
+    category: Literal["processes", "sockets", "events", "system_info"],
+    host_id: Optional[str] = None,
+    time_window_start: Optional[str] = None,
+    time_window_end: Optional[str] = None,
+    filter_query: Optional[str] = None,
+    limit: int = 50,
+    db: Optional[sqlite3.Connection] = None,
+    db_path: Optional[Union[str, Path]] = None,
+) -> list[dict[str, Any]]:
+    """Query off-chain endpoint telemetry records from dedicated endpoint_evidence.db.
+
+    Guarantees:
+    - Strictly read-only connection against endpoint_evidence.db (PRAGMA query_only = ON).
+    - Limit clamped between 1 and 100.
+    - Sensitive free-form strings (cmdline, description) sanitized to prevent prompt injection.
+    - Preserves exact SHA-256 payload digests and ISO-8601 timestamps.
+    """
+    bounded_limit = max(1, min(int(limit), 100))
+    table_map = {
+        "processes": "endpoint_processes",
+        "sockets": "endpoint_sockets",
+        "events": "endpoint_events",
+        "system_info": "endpoint_system_info",
+    }
+    if category not in table_map:
+        raise ValueError(f"Invalid category '{category}'. Must be one of: {list(table_map.keys())}")
+
+    table = table_map[category]
+    close_conn = False
+    conn = None
+
+    try:
+        if db is not None:
+            conn = db
+            close_conn = False
+        else:
+            from forensics.endpoint.store import get_readonly_endpoint_connection
+            from forensics.paths import ENDPOINT_EVIDENCE_DB
+
+            target = db_path or ENDPOINT_EVIDENCE_DB
+            conn = get_readonly_endpoint_connection(target)
+            close_conn = True
+
+        query_parts = [f"SELECT * FROM {table} WHERE 1=1"]
+        params: list[Any] = []
+
+        if host_id:
+            query_parts.append("AND LOWER(host_id) = ?")
+            params.append(host_id.strip().lower())
+
+        if time_window_start:
+            time_col = "timestamp_utc" if category == "events" else "recorded_at_utc"
+            if category == "system_info":
+                time_col = "collected_at_utc"
+            query_parts.append(f"AND {time_col} >= ?")
+            params.append(time_window_start)
+
+        if time_window_end:
+            time_col = "timestamp_utc" if category == "events" else "recorded_at_utc"
+            if category == "system_info":
+                time_col = "collected_at_utc"
+            query_parts.append(f"AND {time_col} <= ?")
+            params.append(time_window_end)
+
+        if filter_query:
+            fq = f"%{filter_query.strip().lower()}%"
+            if category == "processes":
+                query_parts.append("AND (LOWER(name) LIKE ? OR LOWER(cmdline) LIKE ?)")
+                params.extend([fq, fq])
+            elif category == "sockets":
+                query_parts.append("AND (LOWER(local_address) LIKE ? OR LOWER(remote_address) LIKE ?)")
+                params.extend([fq, fq])
+            elif category == "events":
+                query_parts.append("AND (LOWER(description) LIKE ? OR LOWER(source) LIKE ?)")
+                params.extend([fq, fq])
+            elif category == "system_info":
+                query_parts.append("AND (LOWER(hostname) LIKE ? OR LOWER(os_name) LIKE ?)")
+                params.extend([fq, fq])
+
+        query_parts.append(f"LIMIT {bounded_limit}")
+        sql = " ".join(query_parts)
+
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+        from forensics.ai.sanitizer import sanitize_onchain_string
+
+        results = []
+        for r in rows:
+            d = dict(r)
+            if "cmdline" in d and d["cmdline"]:
+                d["cmdline_sanitized"], _ = sanitize_onchain_string(d["cmdline"], max_len=256)
+            if "description" in d and d["description"]:
+                d["description_sanitized"], _ = sanitize_onchain_string(d["description"], max_len=256)
+            results.append(d)
+        return results
+    finally:
+        if close_conn and conn is not None:
+            conn.close()
+
+
+def run_safe_endpoint_triage(
+    playbook_name: str,
+    case_id: str,
+    target_param: Optional[str] = None,
+    endpoint_db: Optional[sqlite3.Connection] = None,
+    endpoint_db_path: Optional[Union[str, Path]] = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Execute non-destructive incident triage playbook under AI First Responder safety guards.
+
+    Guarantees:
+    - Rejects any unsafe action (shell, log clear, ACL, network isolation, key signing).
+    - Writes immutable execution record to triage_audit_log in endpoint_evidence.db.
+    - Counts towards AI investigator step budget MAX_AI_TOOL_STEPS = 5.
+    """
+    playbook_map = {
+        "process_triage": "triage_running_processes",
+        "socket_triage": "triage_active_network_connections",
+        "event_triage": "triage_recent_system_events",
+        "persistence_triage": "triage_persistence_indicators",
+        "hash_triage": "triage_hash_verification",
+        "triage_running_processes": "triage_running_processes",
+        "triage_active_network_connections": "triage_active_network_connections",
+        "triage_recent_system_events": "triage_recent_system_events",
+        "triage_persistence_indicators": "triage_persistence_indicators",
+        "triage_hash_verification": "triage_hash_verification",
+    }
+    canon_playbook = playbook_map.get(playbook_name.strip().lower(), playbook_name.strip())
+
+    from forensics.endpoint.first_responder import (
+        ActionBlockedResult,
+        AIFirstResponder,
+        DangerousActionError,
+    )
+    from forensics.endpoint.store import EndpointEvidenceStore
+    from forensics.paths import ENDPOINT_EVIDENCE_DB
+
+    target_store = None
+    try:
+        db_p = endpoint_db_path or ENDPOINT_EVIDENCE_DB
+        target_store = EndpointEvidenceStore(db_p)
+    except Exception:
+        target_store = None
+
+    responder = AIFirstResponder(evidence_store=target_store)
+
+    playbook_args = dict(kwargs)
+    if target_param:
+        if canon_playbook == "triage_running_processes":
+            if target_param.isdigit():
+                playbook_args["target_pid"] = int(target_param)
+            else:
+                playbook_args["name_filter"] = target_param
+        elif canon_playbook == "triage_active_network_connections":
+            if target_param.isdigit():
+                playbook_args["target_pid"] = int(target_param)
+            else:
+                playbook_args["remote_ip"] = target_param
+        elif canon_playbook == "triage_recent_system_events":
+            playbook_args["channel"] = target_param
+        elif canon_playbook == "triage_hash_verification":
+            playbook_args["file_path"] = target_param
+
+    playbook_args["case_id"] = case_id
+
+    result = responder.execute_action(canon_playbook, strict_fail_fast=False, **playbook_args)
+    if isinstance(result, ActionBlockedResult):
+        return {
+            "status": "BLOCKED",
+            "playbook": canon_playbook,
+            "case_id": case_id,
+            "blocked": True,
+            "category": result.category.value,
+            "reason": result.reason,
+            "audit_digest": result.audit_digest,
+            "timestamp_utc": result.timestamp_utc,
+            "records": [],
+            "records_count": 0,
+        }
+    return {
+        "status": "SUCCESS",
+        "playbook": result.playbook.value,
+        "case_id": case_id,
+        "blocked": False,
+        "records_count": result.records_count,
+        "records": result.records,
+        "payload_sha256": result.payload_sha256,
+        "volatility_rank": result.volatility_rank,
+        "timestamp_utc": result.timestamp_utc,
+        "nist_sp800_86_ref": result.nist_sp800_86_ref,
+        "iso27037_ref": result.iso27037_ref,
+    }
 
 
 # ==============================================================================
