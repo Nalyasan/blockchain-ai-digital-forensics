@@ -159,6 +159,7 @@ class TestToolGuardrailsAndStepBudget:
             "get_timeline",
             "collect_missing_range",
         }
+        expected.update({"query_endpoint_telemetry", "run_safe_endpoint_triage", "get_ml_anomaly_analysis"})
         assert AUTHORIZED_TOOLS == expected
 
     def test_unauthorized_tools_rejected(self):
