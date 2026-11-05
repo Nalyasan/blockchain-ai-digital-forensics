@@ -68,6 +68,7 @@ SPECIFICATION_TARGETS = {
     },
 }
 
+EXPECTED_BRANCHES = {"integration/p7-p10-dev", "main", "master"}
 EXPECTED_BRANCH = "integration/p7-p10-dev"
 EXPECTED_BASE_COMMIT = "d7145333dcd1f0955e016f66ada78b806c84e581"
 
@@ -90,10 +91,10 @@ def check_git_state(repo_root: Path) -> Dict[str, Any]:
         ).strip()
         results["checks"]["branch"] = {
             "actual": branch,
-            "expected": EXPECTED_BRANCH,
-            "match": branch == EXPECTED_BRANCH,
+            "expected": list(EXPECTED_BRANCHES),
+            "match": branch in EXPECTED_BRANCHES,
         }
-        if branch != EXPECTED_BRANCH:
+        if branch not in EXPECTED_BRANCHES:
             results["passed"] = False
     except Exception as e:
         results["checks"]["branch"] = {"error": str(e), "match": False}

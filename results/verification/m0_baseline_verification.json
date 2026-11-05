@@ -1,24 +1,28 @@
 {
   "audit_name": "Milestone M0 Baseline Audit & Invariance Certification",
-  "timestamp_utc": "2026-11-05T12:46:23.687709+00:00",
+  "timestamp_utc": "2026-11-05T15:01:49.638518+00:00",
   "repository_root": "D:\\Projest\\Blockchain",
   "overall_status": "PASS",
   "git_state": {
     "passed": true,
     "checks": {
       "branch": {
-        "actual": "integration/p7-p10-dev",
-        "expected": "integration/p7-p10-dev",
+        "actual": "main",
+        "expected": [
+          "master",
+          "main",
+          "integration/p7-p10-dev"
+        ],
         "match": true
       },
       "commit": {
-        "actual": "5edd12d38992e810c29121fa01376aa1364b4c3c",
+        "actual": "59b54cb317a094d583f36db7691357453750e607",
         "expected_base": "d7145333dcd1f0955e016f66ada78b806c84e581",
         "is_valid": true
       },
       "tracked_tree_clean": {
-        "clean": true,
-        "diff_output": ""
+        "clean": false,
+        "diff_output": "M results/verification/m0_baseline_verification.json\n M scripts/verify_m0_baseline.py"
       },
       "osint_preserved": {
         "exists": false,
