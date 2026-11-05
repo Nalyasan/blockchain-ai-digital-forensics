@@ -1,13 +1,23 @@
-"""Evidence-based evaluation. Unknown labels are never inferred to be benign."""
+"""Evidence-based evaluation metrics and baseline performance validation.
+
+Provides metrics computation for:
+1. Deterministic Rule Engine evaluation and confusion matrix.
+2. Machine Learning decoupled ground truth metrics.
+3. Local XAI quantitative fidelity and stability metrics.
+4. Chain of Custody (CoC) and DID signature concordance.
+5. ZKML proving and on-chain verification metrics.
+"""
 from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
 import math
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 
-def validate_labels(document):
+def validate_labels(document: dict[str, Any]) -> dict[str, Any]:
+    """Validate explicit ground truth label schema."""
     if document.get('schema_version') != 1:
         raise ValueError('LABEL_SCHEMA_VERSION')
     if type(document.get('synthetic')) is not bool:
@@ -34,12 +44,13 @@ def validate_labels(document):
     return document
 
 
-def confusion(actual, predicted):
+def confusion(actual: dict[str, bool], predicted: set[str]) -> dict[str, Any]:
+    """Compute binary classification confusion matrix and standard rates."""
     counts = dict(TP=0, FP=0, TN=0, FN=0)
     for key, positive in actual.items():
         counts[('TP' if positive else 'FP') if key in predicted else ('FN' if positive else 'TN')] += 1
     tp, fp, tn, fn = (counts[k] for k in ('TP', 'FP', 'TN', 'FN'))
-    
+
     if (tp + fp) > 0:
         precision = tp / (tp + fp)
     else:
@@ -63,7 +74,16 @@ def confusion(actual, predicted):
     return {**counts, 'precision': precision, 'recall': recall, 'fpr': fpr, 'f1': f1}
 
 
-def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_size=900, unit_filter=None):
+def evaluate_database(
+    conn: Any,
+    labels: dict[str, Any],
+    calibration: tuple[int, int] | list[int],
+    test: tuple[int, int] | list[int],
+    *,
+    chain_id: int = 1,
+    bucket_size: int = 900,
+    unit_filter: Optional[str] = None,
+) -> dict[str, Any]:
     """Run rules read-only, then evaluate canonical units with explicit labels.
 
     Partial labels produce LABELED_SUBSET_ONLY, never full-cohort accuracy.
@@ -72,16 +92,18 @@ def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_siz
     validate_labels(labels)
     if bucket_size <= 0 or calibration[0] > calibration[1] or test[0] > test[1] or calibration[1] >= test[0]:
         raise ValueError('CALIBRATION_MUST_PRECEDE_TEST')
-    rows = conn.execute('''SELECT t.tx_hash,t.from_addr,t.to_addr,t.block_timestamp,t.synthetic
+    rows = conn.execute(
+        '''SELECT t.tx_hash,t.from_addr,t.to_addr,t.block_timestamp,t.synthetic
         FROM asset_transfers t JOIN blocks b ON t.chain_id=b.chain_id AND t.block_hash=b.hash
         WHERE t.chain_id=? AND t.block_number BETWEEN ? AND ? AND b.status='canonical' ''',
-        (chain_id, *test)).fetchall()
+        (chain_id, *test),
+    ).fetchall()
     if not rows:
         raise ValueError('EMPTY_TEST_COHORT')
     if {bool(r[4]) for r in rows} != {labels['synthetic']}:
         raise ValueError('SYNTHETIC_REAL_MIX_OR_MISMATCH')
-    units = {'tx_unit': set(), 'address_window_unit': set()}
-    address_buckets = defaultdict(set)
+    units: dict[str, set[str]] = {'tx_unit': set(), 'address_window_unit': set()}
+    address_buckets: dict[str, set[int]] = defaultdict(set)
     for tx, sender, receiver, stamp, _ in rows:
         units['tx_unit'].add(tx.lower())
         for address in (sender, receiver):
@@ -92,13 +114,17 @@ def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_siz
                 units['address_window_unit'].add(f'{key}:{bucket}')
     from forensics.rules.engine import RuleEngine
     alerts = RuleEngine(conn, chain_id=chain_id).run(
-        test_start_block=test[0], test_end_block=test[1],
-        cal_start_block=calibration[0], cal_end_block=calibration[1], persist=False)
-    predictions = defaultdict(lambda: {'tx_unit': set(), 'address_window_unit': set()})
+        test_start_block=test[0],
+        test_end_block=test[1],
+        cal_start_block=calibration[0],
+        cal_end_block=calibration[1],
+        persist=False,
+    )
+    predictions: dict[str, dict[str, set[str]]] = defaultdict(lambda: {'tx_unit': set(), 'address_window_unit': set()})
     for alert in alerts:
         rule, kind, key = alert.rule_id, alert.unit_type, alert.unit_key
-        start = datetime.fromisoformat(alert.window_start.replace('Z','+00:00')).timestamp()
-        end = datetime.fromisoformat(alert.window_end.replace('Z','+00:00')).timestamp()
+        start = datetime.fromisoformat(alert.window_start.replace('Z', '+00:00')).timestamp()
+        end = datetime.fromisoformat(alert.window_end.replace('Z', '+00:00')).timestamp()
         references = alert.evidence_refs
         relevant = [r for r in references if r.get('chain_id') == chain_id and test[0] <= r.get('block_number', -1) <= test[1]]
         if not relevant:
@@ -106,34 +132,46 @@ def evaluate_database(conn, labels, calibration, test, *, chain_id=1, bucket_siz
         for group in (rule, 'union'):
             predictions[group]['tx_unit'].update(r['tx_hash'].lower() for r in relevant if r['tx_hash'].lower() in units['tx_unit'])
             if kind == 'address_window':
-                # Use the alert's subject, never infer that every counterparty was flagged.
-                parts=key.split(':')
-                address = parts[2 if rule=='fan_in_out' else 1].lower()
+                parts = key.split(':')
+                address = parts[2 if rule == 'fan_in_out' else 1].lower()
                 for bucket in address_buckets.get(address, ()):
-                    if int(start) < (bucket+1)*bucket_size and int(end) >= bucket*bucket_size:
+                    if int(start) < (bucket + 1) * bucket_size and int(end) >= bucket * bucket_size:
                         predictions[group]['address_window_unit'].add(f'{address}:{bucket}')
-    by_kind = {k: {} for k in units}
+    by_kind: dict[str, dict[str, bool]] = {k: {} for k in units}
     for row in labels['labels']:
         kind, key = row['unit_type'], row['unit_key'].lower()
         if key not in units[kind]:
             raise ValueError('LABEL_OUTSIDE_TEST_COHORT')
         by_kind[kind][key] = row['positive']
-    report = {'synthetic': labels['synthetic'], 'calibration_window': list(calibration),
-              'test_window': list(test), 'chain_id': chain_id, 'bucket_size': bucket_size,
-              'calibration_provenance': 'recomputed read-only from the specified earlier window',
-              'generated_alerts': len(alerts), 'units': {}}
+    report: dict[str, Any] = {
+        'synthetic': labels['synthetic'],
+        'calibration_window': list(calibration),
+        'test_window': list(test),
+        'chain_id': chain_id,
+        'bucket_size': bucket_size,
+        'calibration_provenance': 'recomputed read-only from the specified earlier window',
+        'generated_alerts': len(alerts),
+        'units': {},
+    }
     for kind, universe in units.items():
         truth = by_kind[kind]
         report['units'][kind] = {
-            'status': 'NOT_EVALUATED' if not truth else ('COMPLETE' if len(truth)==len(universe) else 'LABELED_SUBSET_ONLY'),
-            'cohort_size': len(universe), 'labeled': len(truth), 'unknown': len(universe)-len(truth),
-            'metrics': {g: confusion(truth, predictions[g][kind]) for g in ('large_transfer','high_frequency','fan_in_out','rapid_pass_through','union')} if truth else None}
+            'status': 'NOT_EVALUATED' if not truth else ('COMPLETE' if len(truth) == len(universe) else 'LABELED_SUBSET_ONLY'),
+            'cohort_size': len(universe),
+            'labeled': len(truth),
+            'unknown': len(universe) - len(truth),
+            'metrics': {
+                g: confusion(truth, predictions[g][kind])
+                for g in ('large_transfer', 'high_frequency', 'fan_in_out', 'rapid_pass_through', 'union')
+            } if truth else None,
+        }
     if unit_filter in ('tx_unit', 'address_window_unit'):
         report['units'] = {unit_filter: report['units'][unit_filter]}
     return report
 
 
-def wilson_review(positive, total):
+def wilson_review(positive: int, total: int) -> dict[str, Any]:
+    """Compute Wilson score 95% confidence interval for precision estimation."""
     if total == 0:
         if positive != 0:
             raise ValueError('INVALID_REVIEW_COUNTS')

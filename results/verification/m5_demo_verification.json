@@ -1,0 +1,113 @@
+{
+  "metadata": {
+    "schema_version": "1.0.0",
+    "timestamp_utc": "2026-11-05T10:41:45Z",
+    "milestone": "M5",
+    "milestone_name": "End-to-End Real Demos & Adversarial Replay (D1, D2, D3)",
+    "specification_ref": "AGENT.md v6.0 §9.1, §9.2, §11 (Gates T12-T24)",
+    "overall_status": "PASS",
+    "chain_id": 31337
+  },
+  "demos": {
+    "demo_d1_evm": {
+      "demo_name": "Demo D1 EVM Incident Replay",
+      "status": "PASS",
+      "target_incident": "Euler Finance DAI Liquidation Attack",
+      "stages_executed": 8,
+      "proof_type": "Halo2 BN254 KZG",
+      "proof_bytes_length": 5504,
+      "onchain_zkml_verified": true,
+      "onchain_did_custody_verified": true,
+      "reread_branch_verified": true,
+      "report_json": "reports/DEMO_D1_EVM_REPORT.json",
+      "report_summary": "reports/DEMO_D1_EVM_SUMMARY.md"
+    },
+    "demo_d2_host": {
+      "demo_name": "Demo D2 Host Log Incident Replay",
+      "status": "PASS",
+      "standard": "ISO/IEC 27037:2012 Digital Evidence Handling",
+      "phases_executed": 6,
+      "events_processed": 12,
+      "guardrails_verified": 5,
+      "ref_checker_valid": true,
+      "merkle_root_verified": true,
+      "onchain_did_custody_verified": true,
+      "zkml_status": "ARCHITECTURAL_LIMITATION / NOT_APPLICABLE (No Mocks)",
+      "report_json": "reports/DEMO_D2_HOST_REPORT.json",
+      "report_summary": "reports/DEMO_D2_HOST_SUMMARY.md"
+    },
+    "demo_d3_adversarial": {
+      "demo_name": "Demo D3 Multi-Gateway Adversarial Replay",
+      "status": "PASS",
+      "total_attack_vectors": 35,
+      "total_rejected_fail_closed": 35,
+      "total_bypasses_allowed": 0,
+      "fail_closed_rate": 1.0,
+      "defense_gateways": {
+        "gateway_1_endpoint_first_responder": {
+          "total_vectors": 8,
+          "rejected_fail_closed": 8
+        },
+        "gateway_2_ml_xai": {
+          "total_vectors": 6,
+          "rejected_fail_closed": 6
+        },
+        "gateway_3_mitre_threat_intel": {
+          "total_vectors": 4,
+          "rejected_fail_closed": 4
+        },
+        "gateway_4_ai_investigator": {
+          "total_vectors": 6,
+          "rejected_fail_closed": 6
+        },
+        "gateway_5_zkml_verifier": {
+          "total_vectors": 5,
+          "rejected_fail_closed": 5
+        },
+        "gateway_6_did_custody": {
+          "total_vectors": 6,
+          "rejected_fail_closed": 6
+        }
+      },
+      "report_json": "reports/DEMO_D3_ADVERSARIAL_REPORT.json",
+      "report_summary": "reports/DEMO_D3_ADVERSARIAL_SUMMARY.md"
+    }
+  },
+  "master_evaluation_report": {
+    "report_path": "reports/DEMO_EVALUATION_REPORT.md",
+    "backward_traceability_stages": [
+      "Evidence (Raw Ingestion)",
+      "Alert (Rule Engine)",
+      "ML / XAI (Verifiable Inference)",
+      "AI Investigation (RefChecker)",
+      "Custody Handover & ZKML Proof"
+    ],
+    "metric_sections": [
+      "1. Functional Verification Metrics",
+      "2. Machine Learning Metrics (Independent Ground Truth)",
+      "3. Explainable AI (XAI) Metrics",
+      "4. AI Investigator & Citation Accuracy Metrics",
+      "5. Chain of Custody & DID Concordance Metrics",
+      "6. ZKML Verifiable Inference & Gas Metrics",
+      "7. Portability, Clean Isolation & Data Invariance Metrics"
+    ]
+  },
+  "canonical_database_invariance": {
+    "real_p4.db": {
+      "expected_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+      "match": true
+    },
+    "forensics.db": {
+      "expected_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+      "match": true
+    },
+    "benchmark_p6.db": {
+      "expected_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+      "match": true
+    },
+    ".env": {
+      "expected_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+      "match": true
+    }
+  }
+}

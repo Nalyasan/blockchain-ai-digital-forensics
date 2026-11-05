@@ -1,0 +1,105 @@
+{
+  "demo_id": "DEMO_D2_HOST",
+  "title": "Integration Demo D2: Host Log Incident Replay per ISO/IEC 27037",
+  "run_id": "run_d2_1793874552",
+  "timestamp_utc": "2026-11-05T10:29:12.712747Z",
+  "status": "PASS",
+  "canonical_database_invariance": {
+    "real_p4.db": {
+      "expected_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+      "actual_sha256": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+      "match": true
+    },
+    "forensics.db": {
+      "expected_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+      "actual_sha256": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+      "match": true
+    },
+    "benchmark_p6.db": {
+      "expected_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+      "actual_sha256": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+      "match": true
+    },
+    ".env": {
+      "expected_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+      "actual_sha256": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+      "match": true
+    }
+  },
+  "phases": {
+    "phase_1_acquisition": {
+      "acquisition_id": "acq_576e13408161",
+      "source_type": "HOST_LOG_JSONL",
+      "source_id": "VAL-NODE-01:host_logs.jsonl",
+      "consent_scope": "security_events_only",
+      "original_sha256": "d3a264f7f63a3c894b2ce8e136587cfde69148982cc2ca6f753cb8d3f238fbf1",
+      "copy_sha256": "d3a264f7f63a3c894b2ce8e136587cfde69148982cc2ca6f753cb8d3f238fbf1",
+      "bitwise_match": true,
+      "manifest_path": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d2_rhxdlxsa\\evidence_vault\\acq_576e13408161\\acquisition_manifest.json",
+      "records_ingested": 12
+    },
+    "phase_2_database_isolation": {
+      "destination_db": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d2_rhxdlxsa\\endpoint_evidence.db",
+      "canonical_hashes_verified": {
+        "real_p4.db": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+        "forensics.db": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+        "benchmark_p6.db": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+        ".env": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C"
+      },
+      "zero_canonical_writes": true
+    },
+    "phase_3_first_responder_triage": {
+      "playbooks_executed": [
+        "triage_active_network_connections",
+        "triage_running_processes",
+        "triage_recent_system_events",
+        "triage_persistence_indicators",
+        "triage_hash_verification"
+      ],
+      "guardrails_verified": {
+        "arbitrary_shell_blocked": true,
+        "log_clearing_blocked": true,
+        "file_deletion_blocked": true,
+        "automated_isolation_blocked": true,
+        "private_key_access_blocked": true
+      },
+      "audit_records_count": 10
+    },
+    "phase_4_analysis_and_ref_checker": {
+      "heuristics_triggered": [
+        "rule_h1_encoded_powershell",
+        "rule_h2_c2_socket",
+        "rule_h3_service_persistence"
+      ],
+      "threat_intel_matches": 1,
+      "ref_checker_status": "PASS",
+      "existence_ref_ratio": 1.0,
+      "field_match_ratio": 1.0,
+      "mismatches_count": 0
+    },
+    "phase_5_evidence_package": {
+      "rfc6962_merkle_root": "45fb7d8ea4dbf14dc8dd4307a4ece42442904af82517257c993d9c9f6e1e41b6",
+      "canonical_storage_uri": "evidence://sha256/e06de7f8382fb143e9730170a0d6c8e069f052f21e326b54cb3087582f242e03/45fb7d8ea4dbf14dc8dd4307a4ece42442904af82517257c993d9c9f6e1e41b6/manifest.json",
+      "leaf_count": 5
+    },
+    "phase_5_onchain_custody": {
+      "contract_address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "chain_id": 31337,
+      "evidence_id": 1,
+      "handover": {
+        "from_actor": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Alice)",
+        "to_actor": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (Bob)",
+        "transaction_hash": "0xef310decc77730996c6b5350d7e93896d799267f8ecab5172f4b57f904823807 (synthetic) (synthetic)",
+        "gas_used": 444497,
+        "block_number": 7
+      },
+      "concordance": {
+        "original_evidence_sha256": "MATCH_100%",
+        "package_merkle_root": "MATCH_100%",
+        "custodian_address": "MATCH_100%"
+      },
+      "zkml_proof_status": "ARCHITECTURAL_LIMITATION (Host telemetry model not applicable per AGENT.md \u00a79.1)"
+    }
+  },
+  "post_invariance_verified": true
+}
