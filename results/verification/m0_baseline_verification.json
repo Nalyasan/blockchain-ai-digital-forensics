@@ -1,6 +1,6 @@
 {
   "audit_name": "Milestone M0 Baseline Audit & Invariance Certification",
-  "timestamp_utc": "2026-11-05T12:45:51.704567+00:00",
+  "timestamp_utc": "2026-11-05T12:46:23.687709+00:00",
   "repository_root": "D:\\Projest\\Blockchain",
   "overall_status": "PASS",
   "git_state": {
@@ -12,13 +12,13 @@
         "match": true
       },
       "commit": {
-        "actual": "17a9a258f037506bc3389f51d8f78cec08271632",
+        "actual": "5edd12d38992e810c29121fa01376aa1364b4c3c",
         "expected_base": "d7145333dcd1f0955e016f66ada78b806c84e581",
         "is_valid": true
       },
       "tracked_tree_clean": {
-        "clean": false,
-        "diff_output": "M docs/architecture.md\n M docs/naming_cross_reference.md\n M forensics/adapters/benchmark_runner.py\n M forensics/adapters/persistence_benchmark.py\n M forensics/adapters/screening.py\n M forensics/adapters/validate_and_import.py\n M forensics/ai/tools.py\n M forensics/evaluation/report_generator.py\n M forensics/ml/ground_truth.py\n M forensics/ml/infer.py\n M forensics/ml/model.py\n M forensics/ml/registry.py\n M forensics/onchain.py\n M forensics/paths.py\n M forensics/real_data_ingest.py\n M reports/GAP_MATRIX_T01_T25.md\n M results/verification/m0_baseline_verification.json\n M scripts/demo_d1_evm.py\n M scripts/demo_d2_host.py\n M scripts/demo_d3_adversarial.py\n M scripts/fetch_labels.py\n M scripts/portable.py\n M scripts/run_g5_verification.py\n M scripts/run_g6c_regression.py\n M scripts/verify_m0_baseline.py\n M scripts/verify_protected_hashes.py\n M tests/test_adversarial_adapters.py\n M tests/test_adversarial_benchmark_screening.py\n M tests/test_adversarial_db_concurrency.py\n M tests/test_adversarial_m2.py\n M tests/test_ai_db_readonly.py\n M tests/test_ai_db_readonly_adversarial.py\n M tests/test_ai_security.py\n M tests/test_ai_tools.py\n M tests/test_ai_tools_adversarial.py\n M tests/test_benchmark_adapters.py\n M tests/test_benchmark_screening.py\n M tests/test_challenger_m2_adversarial_deep.py\n M tests/test_challenger_m2_empirical.py\n M tests/test_challenger_m3_zkml_stress.py\n M tests/test_challenger_m4_adversarial.py\n M tests/test_challenger_m4_adversarial_stress.py\n M tests/test_challenger_m4_concordance_stress.py\n M tests/test_challenger_m4_empirical_probes.py\n M tests/test_custody_transfer_flow.py\n M tests/test_empirical_challenger_iter2.py\n M tests/test_endpoint_acquisition.py\n M tests/test_evidence_identity.py\n M tests/test_first_responder_guardrails.py\n M tests/test_integration_lifecycle.py\n M tests/test_investigator_real_incidents.py"
+        "clean": true,
+        "diff_output": ""
       },
       "osint_preserved": {
         "exists": false,
