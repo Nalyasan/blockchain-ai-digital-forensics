@@ -6,6 +6,8 @@ with explicit DataLeakageError guard and train-only fitted robust scaling.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 import math
 from typing import Any, Sequence
 
@@ -237,3 +239,185 @@ class RobustFeatureScaler:
         scaler.iqrs = [float(x) for x in data.get("iqrs", [])]
         scaler.is_fitted = bool(data.get("is_fitted", True))
         return scaler
+
+
+def verify_scaler_isolation(
+    scaler: RobustFeatureScaler,
+    train_split: DatasetSplit,
+    val_split: DatasetSplit,
+    test_split: DatasetSplit,
+) -> bool:
+    """Verifies that RobustFeatureScaler statistics were computed STRICTLY on train_split.
+
+    Raises:
+        DataLeakageError: If scaler parameters reflect val or test set distributions.
+    """
+    if not scaler.is_fitted:
+        raise DataLeakageError("Scaler is not fitted.")
+
+    if len(train_split) == 0:
+        return True
+
+    # Recompute expected train statistics
+    expected_scaler = RobustFeatureScaler().fit(train_split.features)
+    for j, (actual_m, exp_m) in enumerate(zip(scaler.medians, expected_scaler.medians)):
+        if abs(actual_m - exp_m) > 1e-5:
+            raise DataLeakageError(
+                f"Scaler leakage detected on feature index {j}: "
+                f"fitted median {actual_m} != expected train median {exp_m}"
+            )
+
+    for j, (actual_iqr, exp_iqr) in enumerate(zip(scaler.iqrs, expected_scaler.iqrs)):
+        if abs(actual_iqr - exp_iqr) > 1e-5:
+            raise DataLeakageError(
+                f"Scaler leakage detected on feature index {j}: "
+                f"fitted IQR {actual_iqr} != expected train IQR {exp_iqr}"
+            )
+
+    return True
+
+
+@dataclass(frozen=True)
+class PreparedDataset:
+    """Immutable prepared dataset with certified train-only scaling and zero leakage."""
+    train: DatasetSplit
+    val: DatasetSplit
+    test: DatasetSplit
+    scaler: RobustFeatureScaler
+    split_manifest: dict[str, Any]
+    provenance_digest: str
+
+
+class MLDatasetPipeline:
+    """Automates tamper-evident dataset splitting, train-only scaling, and manifest generation."""
+
+    def __init__(
+        self,
+        train_ratio: float = 0.70,
+        val_ratio: float = 0.15,
+        test_ratio: float = 0.15,
+    ):
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
+
+    def prepare(
+        self,
+        features: Any,
+        addresses: Sequence[str],
+        blocks: Sequence[int],
+        labels: Sequence[int],
+    ) -> PreparedDataset:
+        """Executes chronological block boundary split, fits scaler strictly on train, and validates."""
+        # 1. Chronological split
+        train_s, val_s, test_s = chronological_split(
+            features, addresses, blocks, labels,
+            train_ratio=self.train_ratio,
+            val_ratio=self.val_ratio,
+            test_ratio=self.test_ratio,
+        )
+
+        # 2. Strict anti-leakage validation
+        validate_no_data_leakage(train_s, val_s, test_s)
+
+        # 3. Fit scaler ONLY on train
+        scaler = RobustFeatureScaler()
+        train_scaled = scaler.fit_transform(train_s.features)
+        val_scaled = scaler.transform(val_s.features)
+        test_scaled = scaler.transform(test_s.features)
+
+        # 4. Verify scaler isolation
+        verify_scaler_isolation(scaler, train_s, val_s, test_s)
+
+        # 5. Pack into certified splits
+        certified_train = DatasetSplit(train_scaled, train_s.labels, train_s.addresses, train_s.blocks)
+        certified_val = DatasetSplit(val_scaled, val_s.labels, val_s.addresses, val_s.blocks)
+        certified_test = DatasetSplit(test_scaled, test_s.labels, test_s.addresses, test_s.blocks)
+
+        # 6. Generate cryptographic split manifest
+        def hash_keys(split: DatasetSplit) -> str:
+            keys = [f"{b}:{a}" for b, a in zip(split.blocks, split.addresses)]
+            return hashlib.sha256(json.dumps(keys).encode("utf-8")).hexdigest()
+
+        split_manifest = {
+            "strategy": "CHRONOLOGICAL_BLOCK_BOUNDARY",
+            "train_samples": len(certified_train),
+            "val_samples": len(certified_val),
+            "test_samples": len(certified_test),
+            "train_block_min": min(certified_train.blocks) if len(certified_train) > 0 else 0,
+            "train_block_max": max(certified_train.blocks) if len(certified_train) > 0 else 0,
+            "val_block_min": min(certified_val.blocks) if len(certified_val) > 0 else 0,
+            "val_block_max": max(certified_val.blocks) if len(certified_val) > 0 else 0,
+            "test_block_min": min(certified_test.blocks) if len(certified_test) > 0 else 0,
+            "test_block_max": max(certified_test.blocks) if len(certified_test) > 0 else 0,
+            "train_key_digest": hash_keys(certified_train),
+            "val_key_digest": hash_keys(certified_val),
+            "test_key_digest": hash_keys(certified_test),
+        }
+
+        manifest_digest = hashlib.sha256(json.dumps(split_manifest, sort_keys=True).encode("utf-8")).hexdigest()
+
+        return PreparedDataset(
+            train=certified_train,
+            val=certified_val,
+            test=certified_test,
+            scaler=scaler,
+            split_manifest=split_manifest,
+            provenance_digest=manifest_digest,
+        )
+
+
+def grouped_by_incident_split(
+    features: Any,
+    addresses: Sequence[str],
+    blocks: Sequence[int],
+    labels: Sequence[int],
+    train_incident_blocks: tuple[int, int] = (16817000, 16819000),
+    test_incident_blocks: tuple[int, int] = (17800000, 17860000),
+) -> tuple[DatasetSplit, DatasetSplit, DatasetSplit]:
+    """Partitions dataset with complete incident group isolation.
+
+    Ensures that distinct incident clusters (e.g. Euler vs Curve) reside strictly
+    in separate splits to test generalization on unseen attack contracts.
+    """
+    n_samples = len(blocks)
+    if n_samples == 0:
+        empty_feat = np.empty((0, 10)) if HAS_NUMPY else []
+        return (
+            DatasetSplit(empty_feat, [], [], []),
+            DatasetSplit(empty_feat, [], [], []),
+            DatasetSplit(empty_feat, [], [], []),
+        )
+
+    t_start, t_end = train_incident_blocks
+    te_start, te_end = test_incident_blocks
+
+    train_idx: list[int] = []
+    val_idx: list[int] = []
+    test_idx: list[int] = []
+
+    for i in range(n_samples):
+        b = blocks[i]
+        if b <= t_end:
+            train_idx.append(i)
+        elif b < te_start:
+            val_idx.append(i)
+        else:
+            test_idx.append(i)
+
+    def make_split(indices: list[int]) -> DatasetSplit:
+        if HAS_NUMPY and isinstance(features, np.ndarray):
+            sub_feats = features[indices]
+        else:
+            sub_feats = [features[i] for i in indices]
+        sub_labels = [labels[i] for i in indices]
+        sub_addrs = [addresses[i] for i in indices]
+        sub_blocks = [blocks[i] for i in indices]
+        return DatasetSplit(sub_feats, sub_labels, sub_addrs, sub_blocks)
+
+    train_s = make_split(train_idx)
+    val_s = make_split(val_idx)
+    test_s = make_split(test_idx)
+
+    validate_no_data_leakage(train_s, val_s, test_s)
+    return train_s, val_s, test_s

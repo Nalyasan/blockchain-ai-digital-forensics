@@ -337,24 +337,41 @@ class MitreAttackMapping(BaseModel):
     """Formal MITRE ATT&CK mapping with mandatory documented evidence citations."""
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    technique_id: str = Field(..., description="e.g. 'T1027', 'T1566.002', 'T1048.003', 'T1499.004'")
+    technique_id: str = Field(..., description="e.g. 'T1027', 'T1566.002', 'T1048.003', 'T1499.004', 'NOT_MAPPED'")
     technique_name: str = Field(..., description="Descriptive name of the technique")
-    tactic: str = Field(..., description="e.g. 'Defense Evasion', 'Initial Access', 'Exfiltration', 'Impact'")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
+    tactic: str = Field(..., description="e.g. 'Defense Evasion', 'Initial Access', 'Exfiltration', 'Impact', 'Unmapped'")
+    tactic_id: str = Field(default="TA0000", description="Authoritative ATT&CK tactic ID (e.g. 'TA0040', 'TA0001')")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0.0 for NOT_MAPPED)")
     evidence_refs: list[str] = Field(
-        ..., min_length=1, description="Must cite at least 1 verified canonical on-chain evidence reference"
+        default_factory=list,
+        description="Canonical evidence references supporting this technique (empty allowed only for NOT_MAPPED)",
     )
     rationale: str = Field(..., min_length=10, description="Technical rationale grounded in evidence")
+    mapping_version: str = Field(default="v1.0.0", description="ATT&CK mapping version string")
+    required_evidence: list[str] = Field(default_factory=list, description="List of prerequisite evidence predicates")
+    mapping_rule: str = Field(default="UNKNOWN", description="Formal rule identifier or abstain code")
+    analyst_review_status: str = Field(
+        default="MACHINE_SUGGESTED",
+        description="Review status ('MACHINE_SUGGESTED', 'ANALYST_CONFIRMED', 'REJECTED', 'ABSTAINED')",
+    )
 
     @field_validator("evidence_refs")
     @classmethod
     def validate_evidence_refs(cls, v: list[str]) -> list[str]:
-        if not v:
-            raise ValueError("MitreAttackMapping must cite at least 1 evidence reference.")
         cleaned = [str(r).strip() for r in v if str(r).strip()]
-        if not cleaned:
-            raise ValueError("MitreAttackMapping must cite at least 1 non-empty evidence reference.")
         return cleaned
+
+    @model_validator(mode="after")
+    def validate_grounding_and_abstain(self) -> MitreAttackMapping:
+        """Enforces that non-abstain techniques MUST cite at least 1 verified evidence reference."""
+        if self.technique_id == "NOT_MAPPED":
+            return self
+        if not self.evidence_refs:
+            raise ValueError(
+                f"MitreAttackMapping for technique {self.technique_id} must cite at least 1 verified "
+                "canonical on-chain evidence reference."
+            )
+        return self
 
 
 class EndpointEvidenceArtifact(BaseModel):

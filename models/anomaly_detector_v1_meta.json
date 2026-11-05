@@ -456,5 +456,7 @@
       1.0
     ],
     "is_fitted": true
-  }
+  },
+  "dataset_manifest_sha256": "344a6e080cadbd081f3cdaf91e5f4981930d118207dff14a9933def0543f2401",
+  "init_method": "he"
 }

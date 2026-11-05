@@ -34,45 +34,109 @@ class MitreTechniqueDefinition:
     technique_id: str
     technique_name: str
     tactic: str
+    tactic_id: str
     sub_tactic_defi: str
     description: str
+    required_evidence: tuple[str, ...]
+    mapping_rule: str
+    reference_url: str = ""
+    mapping_version: str = "v1.0.0"
 
+
+MITRE_MAPPING_VERSION = "v1.0.0 (ATT&CK Enterprise v14.1)"
 
 MITRE_DEFI_TAXONOMY: dict[str, MitreTechniqueDefinition] = {
     "T1566.002": MitreTechniqueDefinition(
         technique_id="T1566.002",
         technique_name="Phishing: Spearphishing Link / Approval Scam",
         tactic="Initial Access",
+        tactic_id="TA0001",
         sub_tactic_defi="Token Approval Drain & Permit Exploitation",
         description="Adversary tricks victims into granting ERC-20 allowances or signing permit messages to drain assets.",
+        required_evidence=(
+            "canonical_evidence_ref",
+            "high_single_out_ratio_or_large_transfer",
+            "volume_threshold",
+        ),
+        mapping_rule="R1_LARGE_TRANSFER_OR_SINGLE_OUT_BURST",
+        reference_url="https://attack.mitre.org/techniques/T1566/002/",
+        mapping_version=MITRE_MAPPING_VERSION,
     ),
     "T1027": MitreTechniqueDefinition(
         technique_id="T1027",
         technique_name="Obfuscated Files or Information: Mixer Layering",
         tactic="Defense Evasion",
+        tactic_id="TA0005",
         sub_tactic_defi="Peeling Chains, Mixer Ingestion, and Token Hopping",
         description="Adversary fragments and disperses funds across multiple intermediary contracts and tokens to evade graph tracing.",
+        required_evidence=(
+            "canonical_evidence_ref",
+            "multi_counterparty_dispersal",
+            "token_diversity_dispersion",
+        ),
+        mapping_rule="R3_FAN_OUT_AND_TOKEN_DIVERSITY",
+        reference_url="https://attack.mitre.org/techniques/T1027/",
+        mapping_version=MITRE_MAPPING_VERSION,
     ),
     "T1048.003": MitreTechniqueDefinition(
         technique_id="T1048.003",
         technique_name="Exfiltration Over Alternative Protocol: Bridge Hop",
         tactic="Exfiltration",
+        tactic_id="TA0010",
         sub_tactic_defi="Rapid Liquidity Siphoning & Cross-Chain Extraction",
         description="Adversary rapidly siphons exploited capital through cross-chain bridges or unmonitored liquidity protocols.",
+        required_evidence=(
+            "canonical_evidence_ref",
+            "rapid_pass_through_flow",
+            "low_latency_turnover",
+        ),
+        mapping_rule="R4_RAPID_PASS_THROUGH_LOW_LATENCY",
+        reference_url="https://attack.mitre.org/techniques/T1048/003/",
+        mapping_version=MITRE_MAPPING_VERSION,
     ),
     "T1499.004": MitreTechniqueDefinition(
         technique_id="T1499.004",
         technique_name="Endpoint Denial of Service: Application or Gas Exhaustion",
         tactic="Impact",
+        tactic_id="TA0040",
         sub_tactic_defi="Mempool Burst Spamming & Liquidation Frontrunning",
         description="Adversary floods block space or mempool with rapid transaction bursts to exhaust gas or block liquidation.",
+        required_evidence=(
+            "canonical_evidence_ref",
+            "high_tx_velocity",
+            "sustained_burstiness",
+        ),
+        mapping_rule="R2_HIGH_FREQUENCY_BURST_SPAM",
+        reference_url="https://attack.mitre.org/techniques/T1499/004/",
+        mapping_version=MITRE_MAPPING_VERSION,
     ),
     "T1565.001": MitreTechniqueDefinition(
         technique_id="T1565.001",
         technique_name="Data Manipulation: Stored Data / State Manipulation",
         tactic="Impact",
+        tactic_id="TA0040",
         sub_tactic_defi="Flash Loan Price Oracle Distortion",
         description="Adversary executes flash borrowing to distort spot price state in automated market maker reserves.",
+        required_evidence=(
+            "canonical_evidence_ref",
+            "state_change_or_rule_detection",
+            "bidirectional_volume_spike_or_atomic_latency",
+        ),
+        mapping_rule="FLASH_LOAN_ORACLE_DISTORTION",
+        reference_url="https://attack.mitre.org/techniques/T1565/001/",
+        mapping_version=MITRE_MAPPING_VERSION,
+    ),
+    "NOT_MAPPED": MitreTechniqueDefinition(
+        technique_id="NOT_MAPPED",
+        technique_name="Unmapped Activity / Abstain",
+        tactic="Unmapped",
+        tactic_id="TA0000",
+        sub_tactic_defi="Ungrounded or Unmatched Behavior",
+        description="Observed activity does not satisfy prerequisite criteria or evidence requirements for any known ATT&CK technique.",
+        required_evidence=(),
+        mapping_rule="FAIL_SAFE_ABSTAIN",
+        reference_url="",
+        mapping_version=MITRE_MAPPING_VERSION,
     ),
 }
 
@@ -86,15 +150,25 @@ class MitreAttackMapping:
     confidence: float
     evidence_refs: list[str]
     rationale: str
+    tactic_id: str = "TA0000"
+    mapping_version: str = MITRE_MAPPING_VERSION
+    required_evidence: list[str] = field(default_factory=list)
+    mapping_rule: str = "UNKNOWN"
+    analyst_review_status: str = "MACHINE_SUGGESTED"
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "technique_id": self.technique_id,
             "technique_name": self.technique_name,
             "tactic": self.tactic,
+            "tactic_id": self.tactic_id,
             "confidence": round(self.confidence, 4),
             "evidence_refs": list(self.evidence_refs),
             "rationale": self.rationale,
+            "mapping_version": self.mapping_version,
+            "required_evidence": list(self.required_evidence),
+            "mapping_rule": self.mapping_rule,
+            "analyst_review_status": self.analyst_review_status,
         }
 
 
@@ -127,8 +201,9 @@ def validate_canonical_evidence_refs(refs: Sequence[str]) -> list[str]:
 class MitreMappingEngine:
     """Engine that maps ML anomaly metrics and Rule Engine detections to MITRE ATT&CK techniques."""
 
-    def __init__(self, strict_evidence: bool = True):
+    def __init__(self, strict_evidence: bool = True, fallback_to_abstain: bool = True):
         self.strict_evidence = strict_evidence
+        self.fallback_to_abstain = fallback_to_abstain
 
     def map_anomaly(
         self,
@@ -319,6 +394,15 @@ class MitreMappingEngine:
                 )
             )
 
+        # 6. Fail-Safe Abstain Mechanism (AGENT.md §6.3)
+        if not mappings and self.fallback_to_abstain:
+            abstain_entry = self._build_abstain_mapping(
+                anomaly_score=anomaly_score,
+                evidence_refs=valid_refs,
+                triggered_rules=sorted(triggered_rule_ids),
+            )
+            mappings.append(abstain_entry)
+
         return mappings
 
     def _build_mapping(
@@ -327,6 +411,8 @@ class MitreMappingEngine:
         confidence: float,
         evidence_refs: list[str],
         rationale: str,
+        satisfied_predicates: list[str] | None = None,
+        analyst_status: str = "MACHINE_SUGGESTED",
     ) -> dict[str, Any]:
         """Constructs and validates a single MITRE ATT&CK mapping entry."""
         if not evidence_refs:
@@ -339,11 +425,60 @@ class MitreMappingEngine:
             else:
                 logger.warning(msg)
 
-        return {
-            "technique_id": tech.technique_id,
-            "technique_name": tech.technique_name,
-            "tactic": tech.tactic,
-            "confidence": float(confidence),
-            "evidence_refs": list(evidence_refs),
-            "rationale": str(rationale),
-        }
+        req_ev = list(satisfied_predicates) if satisfied_predicates is not None else list(tech.required_evidence)
+
+        mapping_obj = MitreAttackMapping(
+            technique_id=tech.technique_id,
+            technique_name=tech.technique_name,
+            tactic=tech.tactic,
+            tactic_id=tech.tactic_id,
+            confidence=float(confidence),
+            evidence_refs=list(evidence_refs),
+            rationale=str(rationale),
+            mapping_version=tech.mapping_version,
+            required_evidence=req_ev,
+            mapping_rule=tech.mapping_rule,
+            analyst_review_status=analyst_status,
+        )
+        return mapping_obj.to_dict()
+
+    def _build_abstain_mapping(
+        self,
+        anomaly_score: float,
+        evidence_refs: list[str],
+        triggered_rules: list[str],
+    ) -> dict[str, Any]:
+        tech = MITRE_DEFI_TAXONOMY["NOT_MAPPED"]
+        if not evidence_refs:
+            rationale = (
+                "Abstaining from MITRE ATT&CK technique attribution: zero canonical evidence references "
+                "available to support technique grounding. Fallback to NOT_MAPPED to prevent hallucination."
+            )
+            rule = "ABSTAIN_INSUFFICIENT_EVIDENCE"
+        elif triggered_rules:
+            rationale = (
+                f"Observed rule alerts {triggered_rules} do not satisfy prerequisite required_evidence criteria "
+                "for any defined MITRE ATT&CK Enterprise technique. Abstaining to avoid ungrounded attribution."
+            )
+            rule = "ABSTAIN_UNMAPPED_ALERT_TYPE"
+        else:
+            rationale = (
+                f"Entity features indicate normal on-chain activity (anomaly_score: {anomaly_score:.4f}). "
+                "No ATT&CK technique criteria met. Explicitly recording NOT_MAPPED."
+            )
+            rule = "ABSTAIN_NORMAL_BEHAVIOR"
+
+        mapping_obj = MitreAttackMapping(
+            technique_id=tech.technique_id,
+            technique_name=tech.technique_name,
+            tactic=tech.tactic,
+            tactic_id=tech.tactic_id,
+            confidence=0.0,
+            evidence_refs=list(evidence_refs),
+            rationale=rationale,
+            mapping_version=tech.mapping_version,
+            required_evidence=[],
+            mapping_rule=rule,
+            analyst_review_status="ABSTAINED",
+        )
+        return mapping_obj.to_dict()

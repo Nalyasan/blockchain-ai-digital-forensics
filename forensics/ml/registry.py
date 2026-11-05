@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from forensics.ml.model import CompactAnomalyMLP
 
@@ -110,6 +110,74 @@ def export_to_onnx(
     return out_p
 
 
+def export_pytorch_to_onnx(
+    torch_model: Any,
+    output_path: Path | str,
+    input_dim: int = 10,
+    opset_version: int = 17,
+) -> Path:
+    """Exports PyTorchAnomalyMLP directly to static ONNX format."""
+    out_p = Path(output_path)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+
+    import torch
+    dummy_input = torch.zeros((1, input_dim), dtype=torch.float32)
+    torch.onnx.export(
+        torch_model,
+        dummy_input,
+        str(out_p),
+        input_names=["input"],
+        output_names=["output"],
+        opset_version=opset_version,
+        do_constant_folding=True,
+    )
+    return out_p
+
+
+def verify_pytorch_onnx_equivalence(
+    model: CompactAnomalyMLP | Any,
+    onnx_path: Path | str,
+    test_vectors: Sequence[Sequence[float]],
+    float_tolerance: float = 1e-5,
+) -> tuple[bool, float]:
+    """Verifies that PyTorch / CompactAnomalyMLP and ONNX graphs yield identical outputs.
+    
+    Returns:
+        tuple[bool, float]: (is_equivalent, max_absolute_error)
+    """
+    from onnx.reference import ReferenceEvaluator
+    import numpy as np
+
+    onnx_proto = onnx.load(str(onnx_path))
+    evaluator = ReferenceEvaluator(onnx_proto)
+
+    max_err = 0.0
+    for vec in test_vectors:
+        x_list = [float(v) for v in vec]
+        # Evaluate reference model
+        if hasattr(model, "forward_single"):
+            ref_out = float(model.forward_single(x_list))
+        elif callable(model):
+            import torch
+            t_in = torch.tensor([x_list], dtype=torch.float32)
+            ref_out = float(model(t_in).item())
+        else:
+            raise ValueError("Unsupported model type for equivalence checking.")
+
+        # Evaluate ONNX
+        x_np = np.array([x_list], dtype=np.float32)
+        onnx_out = float(evaluator.run(None, {"input": x_np})[0][0][0])
+
+        err = abs(ref_out - onnx_out)
+        if err > max_err:
+            max_err = err
+
+        if err > float_tolerance:
+            return False, max_err
+
+    return True, max_err
+
+
 def save_model(
     model: CompactAnomalyMLP,
     model_id: str,
@@ -133,6 +201,12 @@ def save_model(
     export_to_onnx(model, onnx_path)
     file_sha256 = compute_file_sha256(onnx_path)
 
+    # Check for dataset manifest
+    manifest_path = target_dir / "dataset_manifest.json"
+    manifest_sha256 = metadata.get("dataset_manifest_sha256", "")
+    if not manifest_sha256 and manifest_path.is_file():
+        manifest_sha256 = compute_file_sha256(manifest_path)
+
     full_meta = {
         "model_id": model_id,
         "model_version": metadata.get("model_version", "1.0.0"),
@@ -145,6 +219,7 @@ def save_model(
         "ezkl_compatible": True,
         "onnx_opset": 17,
         "weights": model.get_weights(),
+        "dataset_manifest_sha256": manifest_sha256,
         **metadata,
     }
     # Ensure model_sha256 matches file_sha256

@@ -101,35 +101,31 @@ def compute_features_for_transfers(
     out_recipients = {str(t.get("to_addr", "")).strip().lower() for t in out_transfers}
     unique_counterparties_out = float(len(out_recipients))
 
-    # 4 & 5. volume_in_normalized & volume_out_normalized
-    v_in_raw = 0
+    # 4 & 5. volume_in_normalized & volume_out_normalized (Unit-Safe USD Reference)
+    from forensics.ml.tokens import compute_transfer_usd_value
+
+    v_in_usd = 0.0
     for t in in_transfers:
-        try:
-            v_in_raw += int(t.get("amount_raw", 0))
-        except (ValueError, TypeError):
-            pass
+        v_in_usd += compute_transfer_usd_value(t.get("amount_raw", 0), t.get("asset_id", ""))
 
-    v_out_raw = 0
-    max_out_raw = 0
+    v_out_usd = 0.0
+    max_out_usd = 0.0
     for t in out_transfers:
-        try:
-            amt = int(t.get("amount_raw", 0))
-            v_out_raw += amt
-            if amt > max_out_raw:
-                max_out_raw = amt
-        except (ValueError, TypeError):
-            pass
+        val_usd = compute_transfer_usd_value(t.get("amount_raw", 0), t.get("asset_id", ""))
+        v_out_usd += val_usd
+        if val_usd > max_out_usd:
+            max_out_usd = val_usd
 
-    volume_in_normalized = safe_log10(v_in_raw)
-    volume_out_normalized = safe_log10(v_out_raw)
+    volume_in_normalized = safe_log10(v_in_usd)
+    volume_out_normalized = safe_log10(v_out_usd)
 
-    # 6. pass_through_ratio
-    if v_out_raw == 0:
+    # 6. pass_through_ratio (Unit-Safe Economic Flow)
+    if v_out_usd <= 0.0:
         pass_through_ratio = 0.0
-    elif v_in_raw == 0:
+    elif v_in_usd <= 0.0:
         pass_through_ratio = 10.0
     else:
-        ratio = float(v_out_raw) / float(v_in_raw + 1)
+        ratio = float(v_out_usd) / float(v_in_usd + 1.0)
         pass_through_ratio = min(ratio, 10.0)
 
     # 7. token_diversity
@@ -159,9 +155,9 @@ def compute_features_for_transfers(
         variance = sum((d - mean_delta) ** 2 for d in deltas) / len(deltas)
         burstiness_std = float(math.sqrt(variance))
 
-    # 10. max_single_out_ratio
-    if v_out_raw > 0:
-        max_single_out_ratio = min(max(float(max_out_raw) / float(v_out_raw), 0.0), 1.0)
+    # 10. max_single_out_ratio (Unit-Safe USD Concentration)
+    if v_out_usd > 0.0:
+        max_single_out_ratio = min(max(float(max_out_usd) / float(v_out_usd), 0.0), 1.0)
     else:
         max_single_out_ratio = 0.0
 
@@ -183,8 +179,12 @@ def extract_address_features(
     db_path_or_conn: Path | str | sqlite3.Connection,
     window_blocks: int = 100,
     min_transfers_per_window: int = 1,
+    ground_truth_registry: Any = None,
 ) -> FeatureExtractionResult:
     """Extracts (N, 10) feature matrix, addresses, and feature names from real_p4.db.
+
+    Decoupled from Rule Engine alerts table: uses IndependentGroundTruthRegistry
+    with strict window-scoped malicious mapping.
 
     Returns:
         FeatureExtractionResult tuple: (X, addresses, FEATURE_NAMES) with .blocks and .labels.
@@ -193,61 +193,59 @@ def extract_address_features(
     if isinstance(db_path_or_conn, sqlite3.Connection):
         conn = db_path_or_conn
     else:
-        conn = sqlite3.connect(str(db_path_or_conn))
+        db_uri = f"{Path(db_path_or_conn).resolve().as_uri()}?mode=ro&immutable=1"
+        conn = sqlite3.connect(db_uri, uri=True)
         conn.row_factory = sqlite3.Row
         owns_conn = True
 
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT block_number, from_addr, to_addr, asset_id, amount_raw "
-            "FROM asset_transfers ORDER BY block_number ASC"
-        )
+
+        # Check if blocks table exists for canonical filter
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='blocks'")
+        has_blocks = cursor.fetchone() is not None
+        if has_blocks:
+            cursor.execute(
+                """
+                SELECT t.block_number, t.from_addr, t.to_addr, t.asset_id, t.amount_raw
+                FROM asset_transfers t
+                LEFT JOIN blocks b ON t.chain_id = b.chain_id AND t.block_hash = b.hash
+                WHERE b.status IS NULL OR b.status = 'canonical'
+                ORDER BY t.block_number ASC
+                """
+            )
+        else:
+            cursor.execute(
+                "SELECT block_number, from_addr, to_addr, asset_id, amount_raw "
+                "FROM asset_transfers ORDER BY block_number ASC"
+            )
         rows = cursor.fetchall()
 
         if not rows:
             empty_arr = np.empty((0, 10), dtype=float) if HAS_NUMPY else []
             return FeatureExtractionResult(empty_arr, [], list(FEATURE_NAMES), [], [])
 
-        # Fetch alert ground truth
-        cursor.execute("SELECT unit_key, evidence_refs, window_start, window_end FROM alerts")
-        alert_rows = cursor.fetchall()
-        alerted_entities: set[str] = set()
-        for ar in alert_rows:
-            uk = str(ar[0] or "").strip().lower()
-            if uk.startswith("0x") and len(uk) == 42:
-                alerted_entities.add(uk)
-            refs_str = str(ar[1] or "")
-            try:
-                refs = json.loads(refs_str)
-                for r in refs:
-                    if isinstance(r, dict):
-                        fa = str(r.get("from_addr", "")).strip().lower()
-                        ta = str(r.get("to_addr", "")).strip().lower()
-                        if fa.startswith("0x") and len(fa) == 42:
-                            alerted_entities.add(fa)
-                        if ta.startswith("0x") and len(ta) == 42:
-                            alerted_entities.add(ta)
-            except Exception:
-                pass
+        # Ingest independent ground truth registry (NEVER query alerts table)
+        from forensics.ml.ground_truth import IndependentGroundTruthRegistry
+        gt_registry = ground_truth_registry or IndependentGroundTruthRegistry()
 
         # Group transfers by window and entity
         # Window indexing: window_id = block_number // window_blocks
         windows: dict[int, dict[str, list[dict[str, Any]]]] = {}
         for r in rows:
-            b_num = int(r["block_number"])
+            b_num = int(r[0] if isinstance(r, (tuple, list)) else r["block_number"])
             w_id = b_num // window_blocks
             if w_id not in windows:
                 windows[w_id] = {}
-            
-            f_addr = str(r["from_addr"] or "").strip().lower()
-            t_addr = str(r["to_addr"] or "").strip().lower()
+
+            f_addr = str(r[1] if isinstance(r, (tuple, list)) else r["from_addr"] or "").strip().lower()
+            t_addr = str(r[2] if isinstance(r, (tuple, list)) else r["to_addr"] or "").strip().lower()
             t_dict = {
                 "block_number": b_num,
                 "from_addr": f_addr,
                 "to_addr": t_addr,
-                "asset_id": str(r["asset_id"] or ""),
-                "amount_raw": str(r["amount_raw"] or "0"),
+                "asset_id": str(r[3] if isinstance(r, (tuple, list)) else r["asset_id"] or ""),
+                "amount_raw": str(r[4] if isinstance(r, (tuple, list)) else r["amount_raw"] or "0"),
             }
 
             if f_addr.startswith("0x") and len(f_addr) == 42:
@@ -268,6 +266,7 @@ def extract_address_features(
         sorted_w_ids = sorted(windows.keys())
         for w_id in sorted_w_ids:
             window_start_block = w_id * window_blocks
+            window_end_block = window_start_block + window_blocks
             entity_dict = windows[w_id]
             for entity_addr, transfers in entity_dict.items():
                 if len(transfers) < min_transfers_per_window:
@@ -276,7 +275,11 @@ def extract_address_features(
                 matrix.append(vec)
                 addresses.append(entity_addr)
                 blocks.append(window_start_block)
-                label = 1 if entity_addr in alerted_entities else 0
+
+                # WINDOW-SCOPED LABEL: Only 1 if attacker was active in THIS specific window
+                label = gt_registry.is_malicious_in_window(
+                    entity_addr, window_start_block, window_end_block
+                )
                 labels.append(label)
 
         if HAS_NUMPY:
@@ -309,7 +312,8 @@ def extract_single_address_features(
     if isinstance(db, sqlite3.Connection):
         conn = db
     else:
-        conn = sqlite3.connect(str(db))
+        db_uri = f"{Path(db).resolve().as_uri()}?mode=ro&immutable=1"
+        conn = sqlite3.connect(db_uri, uri=True)
         conn.row_factory = sqlite3.Row
         owns_conn = True
 

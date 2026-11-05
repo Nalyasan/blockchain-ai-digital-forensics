@@ -77,7 +77,8 @@ class DualEngineCorroborator:
             self.conn = db_path_or_conn
             self._owns_conn = False
         elif db_path_or_conn is not None:
-            self.conn = sqlite3.connect(str(db_path_or_conn))
+            db_uri = f"{Path(db_path_or_conn).resolve().as_uri()}?mode=ro&immutable=1"
+            self.conn = sqlite3.connect(db_uri, uri=True)
             self.conn.row_factory = sqlite3.Row
             self._owns_conn = True
         else:

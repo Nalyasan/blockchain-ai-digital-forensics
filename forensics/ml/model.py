@@ -41,6 +41,82 @@ def relu(z: float) -> float:
     return max(0.0, z)
 
 
+if HAS_TORCH:
+    class PyTorchAnomalyMLP(nn.Module):
+        """PyTorch nn.Module equivalent of CompactAnomalyMLP (321 parameters).
+        
+        Topology:
+          Linear(10, 16) -> ReLU -> Linear(16, 8) -> ReLU -> Linear(8, 1) -> Sigmoid
+        """
+        def __init__(self, input_dim: int = 10, hidden1: int = 16, hidden2: int = 8, output_dim: int = 1):
+            super().__init__()
+            self.input_dim = input_dim
+            self.hidden1 = hidden1
+            self.hidden2 = hidden2
+            self.output_dim = output_dim
+
+            self.fc1 = nn.Linear(input_dim, hidden1)
+            self.fc2 = nn.Linear(hidden1, hidden2)
+            self.fc3 = nn.Linear(hidden2, output_dim)
+            self.relu = nn.ReLU()
+            self.sigmoid = nn.Sigmoid()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = self.relu(self.fc1(x))
+            x = self.relu(self.fc2(x))
+            return self.sigmoid(self.fc3(x))
+
+        def load_from_compact_mlp(self, mlp: CompactAnomalyMLP) -> None:
+            """Loads weights and biases from a CompactAnomalyMLP instance."""
+            with torch.no_grad():
+                self.fc1.weight.copy_(torch.tensor(mlp.w1, dtype=torch.float32))
+                self.fc1.bias.copy_(torch.tensor(mlp.b1, dtype=torch.float32))
+                self.fc2.weight.copy_(torch.tensor(mlp.w2, dtype=torch.float32))
+                self.fc2.bias.copy_(torch.tensor(mlp.b2, dtype=torch.float32))
+                self.fc3.weight.copy_(torch.tensor(mlp.w3, dtype=torch.float32))
+                self.fc3.bias.copy_(torch.tensor(mlp.b3, dtype=torch.float32))
+
+        def to_compact_mlp(self, model_id: str = "anomaly_detector_v1") -> CompactAnomalyMLP:
+            """Converts PyTorch model weights to a CompactAnomalyMLP instance."""
+            mlp = CompactAnomalyMLP(
+                input_dim=self.input_dim,
+                hidden1=self.hidden1,
+                hidden2=self.hidden2,
+                output_dim=self.output_dim,
+                model_id=model_id,
+            )
+            with torch.no_grad():
+                weights = {
+                    "w1": self.fc1.weight.detach().cpu().numpy().tolist(),
+                    "b1": self.fc1.bias.detach().cpu().numpy().tolist(),
+                    "w2": self.fc2.weight.detach().cpu().numpy().tolist(),
+                    "b2": self.fc2.bias.detach().cpu().numpy().tolist(),
+                    "w3": self.fc3.weight.detach().cpu().numpy().tolist(),
+                    "b3": self.fc3.bias.detach().cpu().numpy().tolist(),
+                }
+            mlp.set_weights(weights)
+            return mlp
+
+        def save_pt(self, path: Path | str) -> Path:
+            """Saves PyTorch state_dict."""
+            out_p = Path(path)
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(self.state_dict(), str(out_p))
+            return out_p
+
+        @classmethod
+        def load_pt(cls, path: Path | str, input_dim: int = 10, hidden1: int = 16, hidden2: int = 8, output_dim: int = 1) -> PyTorchAnomalyMLP:
+            """Loads PyTorch model from saved state_dict."""
+            model = cls(input_dim, hidden1, hidden2, output_dim)
+            model.load_state_dict(torch.load(str(path), weights_only=True))
+            model.eval()
+            return model
+else:
+    class PyTorchAnomalyMLP:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PyTorch is required for PyTorchAnomalyMLP.")
+
+
 class CompactAnomalyMLP:
     """Compact 321-parameter Multilayer Perceptron for anomaly detection.
 
@@ -59,6 +135,7 @@ class CompactAnomalyMLP:
         output_dim: int = 1,
         model_id: str = "anomaly_detector_v1",
         seed: int = 42,
+        init_method: str = "he",
     ):
         self.input_dim = input_dim
         self.hidden1 = hidden1
@@ -66,27 +143,35 @@ class CompactAnomalyMLP:
         self.output_dim = output_dim
         self.model_id = model_id
         self.model_sha256 = ""
+        self.init_method = init_method.lower()
 
         rng = random.Random(seed)
 
-        # Layer 1: (hidden1, input_dim)
-        bound1 = math.sqrt(6.0 / (input_dim + hidden1))
+        # Calculate bounds per initialization method
+        if self.init_method == "he":
+            # He (Kaiming) uniform for ReLU layers: sqrt(6 / fan_in)
+            bound1 = math.sqrt(6.0 / input_dim)
+            bound2 = math.sqrt(6.0 / hidden1)
+            # Xavier uniform for final Sigmoid layer: sqrt(6 / (fan_in + fan_out))
+            bound3 = math.sqrt(6.0 / (hidden2 + output_dim))
+        else:
+            # Standard Xavier/Glorot uniform
+            bound1 = math.sqrt(6.0 / (input_dim + hidden1))
+            bound2 = math.sqrt(6.0 / (hidden1 + hidden2))
+            bound3 = math.sqrt(6.0 / (hidden2 + output_dim))
+
         self.w1: list[list[float]] = [
             [rng.uniform(-bound1, bound1) for _ in range(input_dim)]
             for _ in range(hidden1)
         ]
         self.b1: list[float] = [0.01] * hidden1
 
-        # Layer 2: (hidden2, hidden1)
-        bound2 = math.sqrt(6.0 / (hidden1 + hidden2))
         self.w2: list[list[float]] = [
             [rng.uniform(-bound2, bound2) for _ in range(hidden1)]
             for _ in range(hidden2)
         ]
         self.b2: list[float] = [0.01] * hidden2
 
-        # Layer 3: (output_dim, hidden2)
-        bound3 = math.sqrt(6.0 / (hidden2 + output_dim))
         self.w3: list[list[float]] = [
             [rng.uniform(-bound3, bound3) for _ in range(hidden2)]
             for _ in range(output_dim)
@@ -178,6 +263,7 @@ def train_anomaly_detector(
     pos_weight: float = 10.0,
     batch_size: int = 64,
     random_seed: int = 42,
+    init_method: str = "he",
 ) -> tuple[CompactAnomalyMLP, dict[str, Any]]:
     """Genuine backpropagation training with class-imbalance weighting."""
     if HAS_NUMPY and isinstance(X_train, np.ndarray):
@@ -188,10 +274,10 @@ def train_anomaly_detector(
 
     n_samples = len(X)
     if n_samples == 0:
-        m = CompactAnomalyMLP()
+        m = CompactAnomalyMLP(init_method=init_method)
         return m, {"train_loss": 0.0}
 
-    model = CompactAnomalyMLP(seed=random_seed)
+    model = CompactAnomalyMLP(seed=random_seed, init_method=init_method)
 
     mw1 = [[0.0] * model.input_dim for _ in range(model.hidden1)]
     mb1 = [0.0] * model.hidden1
@@ -301,6 +387,48 @@ def train_anomaly_detector(
         "pos_weight": pos_weight,
     }
     return model, metrics
+
+
+def check_active_neurons(
+    model: CompactAnomalyMLP,
+    X_samples: Sequence[Sequence[float]],
+) -> dict[str, Any]:
+    """Computes percentage of active (non-zero ReLU) neurons across evaluated samples.
+
+    Returns:
+        dict: {"layer1_active_ratio": float, "layer2_active_ratio": float, "is_healthy": bool}
+    """
+    if len(X_samples) == 0:
+        return {"layer1_active_ratio": 1.0, "layer2_active_ratio": 1.0, "is_healthy": True}
+
+    n_samples = len(X_samples)
+    l1_active_counts = [0] * model.hidden1
+    l2_active_counts = [0] * model.hidden2
+
+    for x_vec in X_samples:
+        # Layer 1
+        a1 = []
+        for i in range(model.hidden1):
+            val = model.b1[i] + sum(model.w1[i][j] * x_vec[j] for j in range(model.input_dim))
+            if val > 0.0:
+                l1_active_counts[i] += 1
+            a1.append(relu(val))
+
+        # Layer 2
+        for i in range(model.hidden2):
+            val = model.b2[i] + sum(model.w2[i][j] * a1[j] for j in range(model.hidden1))
+            if val > 0.0:
+                l2_active_counts[i] += 1
+
+    l1_ratio = sum(l1_active_counts) / (n_samples * model.hidden1)
+    l2_ratio = sum(l2_active_counts) / (n_samples * model.hidden2)
+    is_healthy = l1_ratio >= 0.10 and l2_ratio >= 0.10
+
+    return {
+        "layer1_active_ratio": round(l1_ratio, 4),
+        "layer2_active_ratio": round(l2_ratio, 4),
+        "is_healthy": is_healthy,
+    }
 
 
 def load_default_model(models_dir: Path | str | None = None) -> CompactAnomalyMLP:
