@@ -1,320 +1,306 @@
 # BLOCKCHAIN + AI DIGITAL FORENSICS (HỆ THỐNG ĐIỀU TRA SỐ)
 
-> **Dự án Nghiên cứu Học thuật — Đề tài 8: Điều tra số kết hợp Blockchain và Trí tuệ Nhân tạo (K18 ATTT)**  
-> **Phiên bản hệ thống:** `v6.0.0` (Chuẩn hóa 12 thành phần chức năng theo `AGENT.md` v6.0)  
-> **Kiến trúc cốt lõi:** Multi-Source Ingestion (ISO/IEC 27037) $\rightarrow$ Explainable AI & Machine Learning $\rightarrow$ Zero-Knowledge Machine Learning (ZKML Halo2 BN254 Pairing) $\rightarrow$ Decentralized Identity (W3C DID) & Smart Contract Chain of Custody (EIP-712).
+> **Dự án Nghiên cứu Khoa học — Đề tài 8: Điều tra số kết hợp Blockchain và Trí tuệ Nhân tạo (K18 An toàn Thông tin)**  
+> **Đặc tả căn cứ:** `AGENT.md` v6.1 (Phạm vi P1–P11: Vận hành thực tế trên Terminal CLI đa nền tảng)  
+> **Kiến trúc cốt lõi:** Multi-Source Evidence Ingestion (ISO/IEC 27037) $\rightarrow$ Explainable AI & Machine Learning $\rightarrow$ Zero-Knowledge Machine Learning (Halo2 BN254 Pairing) $\rightarrow$ Decentralized Identity (W3C DID) & Smart Contract Chain of Custody (EIP-712).
 
 ---
 
 ## 1. TỔNG QUAN HỆ THỐNG
 
-Hệ thống **Blockchain + AI Digital Forensics** là nền tảng điều tra số đa nguồn thế hệ mới, giải quyết triệt để bài toán **toàn vẹn dữ liệu chứng cứ** và **tính minh bạch, kiểm chứng được của suy luận AI** trong điều tra an ninh mạng.
+Hệ thống **Blockchain + AI Digital Forensics** là giải pháp điều tra số tiên tiến giải quyết đồng thời hai bài toán trọng tâm: **bảo toàn tính toàn vẹn tuyệt đối của chuỗi chứng cứ số** và **kiểm chứng mật mã học quá trình suy luận của Trí tuệ Nhân tạo (AI)**.
 
-Hệ thống được xây dựng trên **3 trụ cột công nghệ cốt lõi**:
-1. **Trụ cột A — AI Agents & Explainable AI (XAI):**
-   - Bộ thu thập đa nguồn (EVM Logs + Host Logs) tuân thủ tiêu chuẩn pháp chứng số **ISO/IEC 27037**.
-   - Mô hình học máy phát hiện gian lận dòng tiền độc lập (`CompactAnomalyMLP` ONNX 321 tham số, triệt tiêu hoàn toàn rò rỉ nhãn và thời gian).
-   - Giải thích quyết định cục bộ bằng chỉ số định lượng SHAP (`ExactShapleyExplainer` với kiểm chuẩn độ trung thực $R^2$ và độ ổn định nhiễu).
-   - Tự động ánh xạ chiến thuật & kỹ thuật **MITRE ATT&CK** v14.1 có căn cứ chứng cứ, kèm cơ chế từ chối gán nhãn sai (`abstain / NOT_MAPPED`).
-   - Điều tra viên AI (**AI Investigator**) vận hành trong khuôn khổ rào chắn an toàn đa lớp: **Tool Whitelist** (tối đa 5 bước công cụ), **Ref Checker** (bắt buộc trích dẫn ID thực từ CSDL, triệt tiêu ảo giác), và **SafetyGuard** (chặn 100% Prompt Injection và lệnh can thiệp OS trái phép).
+### Ba Trụ Cột Công Nghệ:
+1. **Trụ cột A — AI First Responder, Học Máy & Explainable AI (XAI):**
+   - Thu thập dấu vết đa nguồn (EVM on-chain + Host logs) tuân thủ nghiêm ngặt nguyên tắc bảo quản chứng cứ **ISO/IEC 27037**.
+   - Mô hình học máy phát hiện bất thường dòng tiền độc lập `CompactAnomalyMLP` (ONNX, 321 tham số, triệt tiêu hoàn toàn rò rỉ nhãn và thời gian).
+   - Giải thích suy luận định lượng bằng **Exact Shapley Values (SHAP)** có đo lường độ trung thực cục bộ ($R^2$) và độ ổn định nhiễu.
+   - Ánh xạ chiến thuật & kỹ thuật **MITRE ATT&CK** v14.1 có căn cứ chứng cứ bắt buộc và cơ chế từ chối gán nhãn sai (`abstain / NOT_MAPPED`).
+   - Điều tra viên AI (**AI Investigator**) vận hành trong khuôn khổ rào chắn an toàn: **Tool Whitelist** (tối đa 5 bước công cụ), **Ref Checker** (bắt buộc trích dẫn mã chứng cứ thực tế từ CSDL chỉ đọc, triệt tiêu ảo giác), và **SafetyGuard** (chặn 100% Prompt Injection và lệnh can thiệp hệ điều hành trái phép).
 2. **Trụ cột B — Smart Contract Chain of Custody & Decentralized Identity (DID):**
-   - Quản lý chuỗi hành trình chứng cứ số bất biến bằng Smart Contract Solidity 0.8.24 trên máy ảo Ethereum (EVM).
-   - Ràng buộc định danh điều tra viên qua chuẩn W3C DID Core 1.0 (`did:ethr` / `did:key`).
-   - Ký nhận và chuyển giao chứng cứ giữa các tác viên bằng chữ ký có cấu trúc **EIP-712** chống tấn công phát lại (`monotonic nonce` + `deadline`).
+   - Quản lý chuỗi hành trình chứng cứ bất biến bằng Smart Contract Solidity 0.8.24 trên máy ảo Ethereum (EVM).
+   - Định danh phân tán theo chuẩn W3C DID Core 1.0 (`did:ethr` / `did:key`).
+   - Ký nhận và chuyển giao quyền lưu giữ chứng cứ giữa các tác viên bằng chữ ký có cấu trúc **EIP-712** chống phát lại (`monotonic nonce` + `deadline`).
 3. **Trụ cột C — Zero-Knowledge Machine Learning (ZKML):**
-   - Chứng minh tính toàn vẹn của quá trình suy luận AI bằng chứng minh không tiết lộ tri thức (ZK-SNARK) sử dụng hệ chứng minh **Halo2 KZG**.
+   - Chứng minh tính toàn vẹn của suy luận AI bằng ZK-SNARK sử dụng hệ chứng minh **Halo2 KZG**.
    - Hợp đồng thông minh `Halo2Verifier.sol` thực hiện phép toán ghép cặp đường cong elip **BN254 Pairing thật trên EVM** (~1.13M gas).
-   - Ràng buộc toán học chặt chẽ giữa mã băm mô hình, cam kết đầu vào, cam kết đầu ra và proof bytes; tự động hoàn tác (revert) 100% nếu có bất kỳ sự can thiệp hoặc tráo đổi dữ liệu nào.
+   - Ràng buộc mật mã học giữa mã băm mô hình, cam kết đầu vào, cam kết đầu ra và bằng chứng tính toán; tự động hoàn tác (revert) 100% trước mọi hành vi sửa đổi dữ liệu.
 
 ---
 
-## 2. CẤU TRÚC THƯ MỤC DỰ ÁN
+## 2. YÊU CẦU TIÊN QUYẾT & CÀI ĐẶT ĐA NỀN TẢNG (SETUP)
 
-Hệ thống tổ chức thành **12 thành phần chức năng chuẩn hóa**:
+Hệ thống được thiết kế để chạy trực tiếp trên dòng lệnh (Terminal / CLI) của **bất kỳ hệ điều hành nào**: Linux, macOS, hoặc Windows.
 
-```text
-D:\Projest\Blockchain\
-├── collector.py                      # [Blockchain Collector] CLI thu thập khối, giao dịch, log EVM
-├── mock_rpc.py                       # Mock RPC phục vụ môi trường kiểm thử offline
-├── .env.example                      # Cấu hình mẫu môi trường an toàn (không chứa secret)
-├── requirements.txt                  # 101 gói phụ thuộc nền tảng
-├── requirements-ml-zkml.lock.txt     # 12 gói mở rộng PyTorch, ONNX, EZKL
-│
-├── forensics/                        # 72 module Python xử lý nghiệp vụ pháp chứng
-│   ├── acquisition/ / endpoint/      # [Endpoint Acquisition] Thu thập Host/EVM log theo ISO/IEC 27037 & SafetyGuard
-│   ├── adapters/                     # [Threat Intelligence] Bộ nạp dữ liệu đe dọa, screening, benchmark
-│   ├── ai/                           # [AI Investigator] Pydantic AI Agent, Ref Checker, Tool Whitelist, SafetyGuard
-│   ├── did/                          # [Identity & Custody] Xử lý W3C DID, xác thực chữ ký EIP-712, phân quyền RBAC
-│   ├── evaluation/                   # [Integration & Evaluation] Tổng hợp báo cáo đánh giá thực nghiệm
-│   ├── ml/                           # [ML/XAI] Trích xuất đặc trưng, suy luận ONNX, SHAP XAI, MITRE ATT&CK
-│   ├── rules/                        # [Rule Engine] 4 quy tắc phát hiện tất định R1–R4 (ETH/ERC-20)
-│   ├── zkml/                         # [ZKML] Bộ mã hóa lượng tử hóa, cam kết mật mã học, sinh & nạp proof Halo2
-│   ├── evidence.py                   # [Evidence Store & Package] Quản lý chứng cứ, manifest, xuất gói tar/zip
-│   ├── integrity.py                  # Kiểm tra tính toàn vẹn 3 tầng và cấu trúc lược đồ
-│   ├── onchain.py                    # Giao tiếp EVM RPC, tương tác Cast/Forge, che dấu bí mật an toàn
-│   └── paths.py                      # Tiện ích đường dẫn độc lập hệ thống và kiểm tra mã băm CSDL
-│
-├── contracts/                        # Smart Contracts Solidity 0.8.24 & Kiểm thử Foundry
-│   ├── src/
-│   │   ├── Halo2Verifier.sol         # Hợp đồng xác minh BN254 KZG Pairing thật
-│   │   ├── InferenceVerifier.sol     # Wrapper xác minh cam kết ZKML & kiểm tra Model Hash
-│   │   ├── EvidenceRegistry.sol      # Sổ đăng ký chứng cứ & Chain of Custody (kế thừa P3)
-│   │   └── EvidenceRegistryDID.sol   # Sổ đăng ký mở rộng hỗ trợ DID và EIP-712
-│   └── test/                         # 7 suite kiểm thử Foundry (175 tests, 100% PASS)
-│
-├── circuits/anomaly_detector_v1/     # Hiện vật mạch toán học ZKML Halo2
-│   ├── settings.json, network.compiled, vk.key, pk.key, kzg.srs
-│   ├── baseline_proof.json           # Proof thật 5.504 bytes của mạng CompactAnomalyMLP
-│   └── Halo2Verifier.abi.json
-│
-├── models/                           # Hiện vật mô hình học máy
-│   ├── anomaly_detector_v1.onnx      # Đồ thị ONNX (321 trọng số, SHA-256: d1b9ce82...)
-│   ├── anomaly_detector_v1_meta.json # Siêu dữ liệu mô hình và danh sách đặc trưng
-│   └── dataset_manifest.json         # Nguồn gốc tập dữ liệu huấn luyện
-│
-├── data/                             # Dữ liệu chuẩn bất biến (Canonical Protected Datasets)
-│   ├── forensics.db                  # Evidence Store chuẩn (SHA-256: 3F2B0DFC...)
-│   ├── real_p4.db                    # Khối và giao dịch thực từ Ethereum Mainnet (SHA-256: 6BD9AED4...)
-│   ├── benchmark_p6.db               # Tập đối chuẩn Threat Intel (SHA-256: C7FF724C...)
-│   └── sample_host_logs/             # Mẫu nhật ký máy chủ chuẩn hóa
-│
-├── tools/foundry/                    # Bộ công cụ EVM Windows x64: forge.exe, anvil.exe, cast.exe
-├── wheels/                           # 101 gói wheel Python cài đặt offline
-├── scripts/                          # Các kịch bản CLI, xác minh toàn vẹn, đóng gói portable
-└── tests/                            # 90 tệp kiểm thử tự động (1998 test cases)
+### 2.1 Yêu Cầu Môi Trường
+- **Python:** Phiên bản `3.11`, `3.12`, hoặc `3.13` (64-bit).
+- **Git:** Quản lý mã nguồn.
+- **Foundry (`forge`, `anvil`, `cast`):** Bộ công cụ phát triển và kiểm thử Smart Contract EVM.
+
+---
+
+### 2.2 Cài Đặt Công Cụ Tiên Quyết Theo Từng Hệ Điều Hành
+
+#### Trên Linux (Ubuntu / Debian):
+```bash
+# 1. Cài đặt Python 3, pip và venv
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv git curl
+
+# 2. Cài đặt bộ công cụ Foundry (forge, anvil, cast)
+curl -L https://foundry.paradigm.xyz | bash
+source ~/.bashrc
+foundryup
+```
+
+#### Trên macOS (Apple Silicon / Intel):
+```bash
+# 1. Cài đặt Python và Foundry qua Homebrew
+brew install python git curl
+curl -L https://foundry.paradigm.xyz | bash
+source ~/.zshrc
+foundryup
+```
+
+#### Trên Windows (PowerShell):
+```powershell
+# 1. Cài đặt Python 3.13 (nếu chưa có)
+winget install Python.Python.3.13
+
+# 2. Cài đặt Foundry (hoặc sử dụng bản có sẵn trong thư mục tools/foundry)
+powershell -c "irm https://foundry.paradigm.xyz | iex"
+foundryup
 ```
 
 ---
 
-## 3. CÀI ĐẶT & THIẾT LẬP MÔI TRƯỜNG
+### 2.3 Khởi Tạo Môi Trường Ảo & Cài Đặt Thư Viện
 
-### 3.1 Yêu cầu hệ thống
-- **Hệ điều hành:** Windows 10/11 x64 (hoặc Linux x64).
-- **Python:** Python `3.11` đến `3.13` (64-bit).
-- **Công cụ Blockchain:** Foundry (`forge`, `anvil`, `cast`) — *Đã đóng gói sẵn trong `tools/foundry/` cho Windows*.
+Sau khi clone kho mã nguồn, mở Terminal tại thư mục dự án:
 
-### 3.2 Khởi tạo môi trường ảo
+#### Trên Linux / macOS:
+```bash
+# 1. Tạo môi trường ảo .venv
+python3 -m venv .venv
+source .venv/bin/activate
 
-Mở PowerShell tại thư mục dự án:
-
-```powershell
-Set-Location D:\Projest\Blockchain
-
-# 1. Tạo môi trường ảo Python
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# 2. Cài đặt các thư viện nền tảng (101 packages)
-# Lựa chọn A: Cài offline từ thư mục wheels có sẵn (không cần Internet)
-pip install --no-index --find-links=wheels -r requirements.txt
-
-# Lựa chọn B: Cài trực tiếp từ mạng (nếu máy có Internet)
+# 2. Cài đặt toàn bộ phụ thuộc (Bao gồm PyTorch, ONNX, EZKL, Pydantic AI, Web3)
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 3.3 Thiết lập tệp cấu hình `.env`
-
-Tạo tệp `.env` từ `.env.example`:
+#### Trên Windows (PowerShell):
 ```powershell
+# 1. Tạo môi trường ảo .venv
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 2. Cài đặt toàn bộ phụ thuộc
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+### 2.4 Cấu Hình Biến Môi Trường (`.env`)
+
+Sao chép tệp cấu hình mẫu và chỉnh sửa theo nhu cầu vận hành:
+
+```bash
+# Linux / macOS
+cp .env.example .env
+
+# Windows PowerShell
 Copy-Item .env.example .env
 ```
 
-Chỉnh sửa `.env` phù hợp với chế độ vận hành:
+#### Bảng Tham Số Cấu Hình Trong `.env`:
 
-| Biến môi trường | Giá trị mặc định (Local Test / Anvil) | Giá trị khi Chạy Thật (Live Sepolia / Gemini) |
-|---|---|---|
-| `FORENSICS_OFFLINE` | `1` | `0` |
-| `ANCHOR_CHAIN_ID` | `31337` (Anvil) | `11155111` (Ethereum Sepolia) |
-| `ANCHOR_RPC_URL` | `http://127.0.0.1:8545` | `https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY` |
-| `ANCHOR_PRIVATE_KEY`| Khóa Anvil mặc định | `0x_PRIVATE_KEY_VI_CUA_BAN` |
-| `AI_PROVIDER` | `none` hoặc `test` | `gemini` (hoặc `ollama`, `openai`) |
-| `GEMINI_API_KEY` | *(Để trống)* | `AIzaSy...` (Lấy từ Google AI Studio) |
+| Biến môi trường | Chế độ Kiểm thử Cục bộ (Local Anvil) | Chế độ Vận hành Thật (Live Sepolia / Gemini API) | Mô tả |
+|---|---|---|---|
+| `FORENSICS_OFFLINE` | `1` | `0` | Khóa các kết nối ra ngoài internet khi chạy offline |
+| `ANCHOR_CHAIN_ID` | `31337` | `11155111` (Sepolia) | Chain ID của mạng blockchain đích |
+| `ANCHOR_RPC_URL` | `http://127.0.0.1:8545` | `https://eth-sepolia.g.alchemy.com/v2/KEY` | Địa chỉ RPC node Ethereum |
+| `ANCHOR_PRIVATE_KEY`| *(Khóa Anvil mặc định)* | `0x_PRIVATE_KEY_VI_CUA_BAN` | Khóa ký giao dịch neo chứng cứ |
+| `AI_PROVIDER` | `test` hoặc `none` | `gemini` (hoặc `ollama`, `openai`) | Nhà cung cấp LLM cho điều tra viên AI |
+| `GEMINI_API_KEY` | *(Để trống)* | `AIzaSy...` | Khóa API từ Google AI Studio |
 
 ---
 
-## 4. HƯỚNG DẪN VẬN HÀNH DÒNG LỆNH (TERMINAL CLI)
+## 3. HƯỚNG DẪN VẬN HÀNH THỰC TẾ BẰNG DÒNG LỆNH (CLI)
 
-Dưới đây là các câu lệnh vận hành thực tế cho từng phân hệ của dự án từ Terminal.
+Tất cả các lệnh dưới đây sử dụng cú pháp chuẩn, hoạt động đồng nhất trên Linux, macOS và Windows (chỉ cần thay `python3` trên Linux/macOS hoặc `python` trên Windows).
 
-### 4.1 Khởi động Node Blockchain Cục Bộ (Terminal riêng)
+---
 
-Nếu chạy kiểm thử nội bộ trên EVM node chuẩn trước khi phát lên mạng công khai:
-```powershell
-# Mở Terminal mới và chạy:
-.\tools\foundry\anvil.exe --host 127.0.0.1 --port 8545
+### 3.1 Khởi Động Node Blockchain Cục Bộ (EVM Node)
+
+Khi cần thử nghiệm hoặc vận hành cục bộ mà không tốn phí gas mạng thật, mở một cửa sổ Terminal riêng và khởi động EVM node Anvil:
+
+```bash
+anvil --host 127.0.0.1 --port 8545
+```
+*Node sẽ lắng nghe giao dịch trên cổng `8545` với Chain ID `31337`.*
+
+---
+
+### 3.2 Phân Hệ 1: Thu Thập Dữ Liệu Blockchain On-Chain (`collector.py`)
+
+Công cụ `collector.py` thực hiện giao tiếp RPC, trích xuất block, transaction, receipt và event logs:
+
+```bash
+# 1. Kiểm tra tình trạng kết nối tới RPC Node
+python3 collector.py healthcheck
+
+# 2. Thu thập dữ liệu liên tục thời gian thực (Live Continuous Collection)
+python3 collector.py collect --start-block 19000000 --watch-addresses 0x2718294287B224551D7054c66114372338E8A79C
+
+# 3. Thu thập dữ liệu lịch sử theo khoảng khối (Historical Backfill)
+python3 collector.py backfill --start-block 16817990 --end-block 16818010
+
+# 4. Kiểm tra tính toàn vẹn mật mã học của dữ liệu đã thu thập
+python3 collector.py verify
+
+# 5. Xuất dòng thời gian (Timeline) giao dịch của một địa chỉ ví nghi vấn
+python3 collector.py timeline --address 0xb66cd966670d962c227b3eaba30a872dbfb995db
 ```
 
 ---
 
-### 4.2 Module 1: Thu thập Dữ liệu Blockchain On-Chain (`collector.py`)
+### 3.3 Phân Hệ 2: Thu Thập Dấu Vết Máy Chủ Chuẩn ISO/IEC 27037 (`forensics.endpoint`)
 
-Công cụ `collector.py` cho phép tương tác trực tiếp với node RPC Ethereum:
+Tiếp nhận nhật ký máy chủ (Windows Event Log JSONL, Sysmon, Linux auditd/syslog) và lập hồ sơ chứng cứ số:
 
-```powershell
-# 1. Kiểm tra trạng thái kết nối tới RPC node
-python collector.py healthcheck
-
-# 2. Thu thập dữ liệu liên tục thời gian thực (Live Continuous Streaming)
-python collector.py collect --start-block 19000000 --watch-addresses 0x2718294287B224551D7054c66114372338E8A79C
-
-# 3. Thu thập dữ liệu lịch sử theo khoảng khối hoặc mốc thời gian (Backfill)
-python collector.py backfill --start-block 16817990 --end-block 16818010
-
-# 4. Kiểm tra tính toàn vẹn và đối chiếu mã băm của dữ liệu đã cào
-python collector.py verify
-
-# 5. Xuất dòng thời gian (Timeline) các giao dịch theo địa chỉ ví cần điều tra
-python collector.py timeline --address 0xb66cd966670d962c227b3eaba30a872dbfb995db
-```
-
----
-
-### 4.3 Module 2: Thu thập Dấu vết Máy chủ chuẩn ISO/IEC 27037 (`forensics.endpoint`)
-
-Thu thập nhật ký từ máy chủ (Windows Event Log JSONL, Sysmon, Linux auditd) và tạo hồ sơ pháp chứng:
-
-```powershell
-# 1. Tiếp nhận tệp nhật ký, tính SHA-256 gốc và tạo acquisition_manifest.json
-python -m forensics.endpoint.adapters `
-    --source-type host_file `
-    --path data/sample_host_logs/sysmon_incident_sample.jsonl `
-    --consent-case "CASE-2026-INCIDENT-01" `
+```bash
+# 1. Tiếp nhận tệp nhật ký, tính SHA-256 gốc và sinh acquisition_manifest.json
+python3 -m forensics.endpoint.adapters \
+    --source-type host_file \
+    --path data/sample_host_logs/sysmon_incident_sample.jsonl \
+    --consent-case "CASE-2026-LIVE-01" \
     --investigator-did "did:ethr:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-# 2. Kích hoạt First Responder tự động phân loại dấu vết dưới sự bảo vệ của SafetyGuard
-python -m forensics.endpoint.first_responder `
-    --manifest acquisition_manifest.json `
+# 2. Kích hoạt First Responder phân tích dấu vết dưới sự bảo vệ của SafetyGuard
+python3 -m forensics.endpoint.first_responder \
+    --manifest acquisition_manifest.json \
     --policy strict
 ```
 
 ---
 
-### 4.4 Module 3: Phát hiện Bất thường ML & Giải thích Minh bạch XAI (`forensics.ml`)
+### 3.4 Phân Hệ 3: Phát Hiện Bất Thường Bằng Học Máy & Giải Thích XAI (`forensics.ml`)
 
-Chạy mô hình học máy độc lập để phát hiện dấu hiệu rửa tiền / tấn công dòng tiền:
+Chạy mô hình học máy `CompactAnomalyMLP` và giải thích quyết định suy luận:
 
-```powershell
-# 1. Thực hiện suy luận bất thường bằng mô hình ONNX CompactAnomalyMLP
-python -m forensics.ml.infer `
-    --model models/anomaly_detector_v1.onnx `
-    --features-input data/sample_features.json `
+```bash
+# 1. Trích xuất đặc trưng và suy luận bất thường bằng mô hình ONNX
+python3 -m forensics.ml.infer \
+    --model models/anomaly_detector_v1.onnx \
+    --features-input data/sample_features.json \
     --output-inference results/inference_record.json
 
-# 2. Giải thích kết quả suy luận bằng Exact Shapley Values (XAI)
-python -m forensics.ml.xai `
-    --inference-record results/inference_record.json `
-    --calculate-fidelity `
+# 2. Giải thích quyết định mô hình bằng Exact Shapley Values (XAI)
+python3 -m forensics.ml.xai \
+    --inference-record results/inference_record.json \
+    --calculate-fidelity \
     --output-explanation results/xai_explanation.json
 
-# 3. Ánh xạ kỹ thuật tấn công MITRE ATT&CK (có kiểm tra điều kiện căn cứ chứng cứ)
-python -m forensics.ml.mitre `
-    --evidence-input results/xai_explanation.json `
+# 3. Ánh xạ kỹ thuật tấn công MITRE ATT&CK v14.1 có căn cứ chứng cứ
+python3 -m forensics.ml.mitre \
+    --evidence-input results/xai_explanation.json \
     --output-mitre results/mitre_mapping.json
 ```
 
 ---
 
-### 4.5 Module 4: Sinh & Xác Minh Bằng Chứng Mật Mã ZKML Trên EVM
+### 3.5 Phân Hệ 4: Sinh Bằng Chứng Mật Mã ZKML & Xác Minh Trên Smart Contract
 
-Kiểm chứng suy luận AI bằng ZK-SNARK Halo2 và Smart Contract:
+Kiểm chứng tính toàn vẹn của suy luận AI bằng chứng minh toán học ZK-SNARK:
 
-```powershell
-# Thêm Foundry vào biến môi trường PATH
-$env:PATH = "D:\Projest\Blockchain\tools\foundry;$env:PATH"
-
-# 1. Biên dịch bộ hợp đồng thông minh (Bao gồm bộ giải mã ghép cặp elip BN254)
+```bash
+# 1. Biên dịch bộ Smart Contract Solidity (bao gồm trình giải mã ghép cặp BN254)
 forge build --root contracts
 
-# 2. Chạy bộ kiểm thử xác minh Halo2 BN254 KZG Pairing trực tiếp trên Foundry
+# 2. Chạy kiểm thử xác minh Halo2 BN254 KZG Pairing trực tiếp trên EVM
 forge test --root contracts --match-contract Halo2RealVerifierTest -vvv
 
-# 3. Tương tác xác minh suy luận qua hợp đồng InferenceVerifier trên mạng Anvil/Sepolia
-python scripts/verify_m3_zkml_anvil.py
+# 3. Thực hiện xác minh suy luận qua hợp đồng InferenceVerifier on-chain
+python3 scripts/verify_m3_zkml_anvil.py
 ```
-
-*Hợp đồng sẽ đối chiếu: `SHA256(Input) == InputCommitment` $\rightarrow$ `ModelHash == TargetHash` $\rightarrow$ `Halo2Verifier.verifyProof(proof, instances) == true` $\rightarrow$ Ghi nhận kết quả hợp lệ lên blockchain.*
+*Giao dịch xác minh on-chain sẽ kiểm tra: `SHA256(Input) == InputCommitment` $\rightarrow$ `ModelHash == TargetHash` $\rightarrow$ `Halo2Verifier.verifyProof(proof, instances) == true`.*
 
 ---
 
-### 4.6 Module 5: Quản lý Chuỗi Hành Trình Chứng Cứ (Chain of Custody & DID)
+### 3.6 Phân Hệ 5: Quản Lý Chuỗi Hành Trình Chứng Cứ (Chain of Custody & DID)
 
-Quản lý đăng ký và chuyển giao quyền lưu giữ chứng cứ giữa các điều tra viên:
+Quản lý đăng ký, niêm phong và chuyển giao quyền lưu giữ chứng cứ giữa các điều tra viên:
 
-```powershell
+```bash
 # 1. Neo mã băm chứng cứ số lên Smart Contract EvidenceRegistryDID
-python -m forensics.did.custody `
-    --action anchor `
-    --evidence-id "EVID-2026-DAI-001" `
-    --evidence-hash "0x4a72d829377488801d0a52df0473abf16f51be0e653ae832a85e43a6dd9de341" `
+python3 -m forensics.did.custody \
+    --action anchor \
+    --evidence-id "EVID-2026-LIVE-001" \
+    --evidence-hash "0x4a72d829377488801d0a52df0473abf16f51be0e653ae832a85e43a6dd9de341" \
     --actor-did "did:ethr:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 # 2. Chuyển giao chứng cứ giữa 2 điều tra viên (Alice -> Bob) với chữ ký EIP-712
-python scripts/run_custody_handover_demo.py
+python3 scripts/run_custody_handover_demo.py
 ```
 
 ---
 
-### 4.7 Module 6: Tương tác với Điều tra viên AI (AI Investigator)
+### 3.7 Phân Hệ 6: Vận Hành Điều Tra Viên AI (AI Investigator)
 
-Giao tiếp với Agent điều tra viên có kiểm soát quyền hạn:
+Giao tiếp với Agent điều tra viên có kiểm soát quyền hạn chặt chẽ:
 
-```powershell
-# Chạy truy vấn điều tra một vụ việc (Agent tự động đọc DB chỉ đọc, qua Tool Whitelist và Ref Checker)
-python -m forensics.ai.investigator `
-    --case-id "CASE-EULER-2026" `
+```bash
+# Chạy truy vấn điều tra vụ việc (Agent tự động truy vấn CSDL chỉ đọc, qua Tool Whitelist và Ref Checker)
+python3 -m forensics.ai.investigator \
+    --case-id "CASE-EULER-2026" \
     --query "Truy vết địa chỉ nhận tiền lớn nhất từ giao dịch khai thác và đối chiếu với danh sách đen."
 ```
 
 ---
 
-## 5. BỘ KIỂM THỬ ĐÁNH GIÁ CHẤT LƯỢNG (TEST SUITE)
+## 4. KIỂM ĐỊNH TÍNH TOÀN VẸN & BỘ KIỂM THỬ TỰ ĐỘNG
 
-Hệ thống được bảo vệ bởi **2.173 ca kiểm thử tự động**, đạt tỷ lệ đỗ **100%**:
+Dự án duy trì bộ kiểm thử toàn diện bảo vệ tính toàn vẹn dữ liệu và mã nguồn:
 
-```powershell
-# 1. Xác minh tính toàn vẹn 4 tài sản CSDL bất biến (4/4 MATCH)
-python scripts/verify_m0_baseline.py
+```bash
+# 1. Kiểm tra tính toàn vẹn 4 CSDL bất biến (Phải trả về 4/4 MATCH và PASS)
+python3 scripts/verify_m0_baseline.py
 
-# 2. Chạy 175 ca kiểm thử Smart Contract trên Foundry (Solidity)
+# 2. Chạy 175 ca kiểm thử Smart Contract Solidity trên Foundry
 forge test --root contracts
 
-# 3. Chạy 126 ca kiểm thử khói nhanh (Smoke test trong ~18 giây)
-powershell -ExecutionPolicy Bypass -File .\smoke_test.ps1
-
-# 4. Chạy toàn bộ 1.998 ca kiểm thử hồi quy Python (Pytest)
-python -m pytest tests -q --tb=short
+# 3. Chạy toàn bộ bộ kiểm thử hồi quy Python (Pytest)
+python3 -m pytest tests/ -q --tb=short
 ```
 
 ---
 
-## 6. ĐÓNG GÓI BẢN PHÁT HÀNH ĐỘC LẬP (PORTABLE RELEASE)
+## 5. DỮ LIỆU BẢO VỆ — MÃ BĂM BẤT BIẾN (CANONICAL HASHES)
 
-Dự án cung cấp công cụ tự động đóng gói toàn bộ mã nguồn, dữ liệu chuẩn, binary Foundry và 101 bánh xe Python vào một tệp nén duy nhất để chuyển giao sang máy khác mà không phụ thuộc Internet:
+Các tệp dữ liệu chuẩn sau đây được bảo vệ nghiêm ngặt tính toàn vẹn bitwise SHA-256:
 
-```powershell
-# 1. Đóng gói tệp ZIP di động vào thư mục dist/
-python scripts/portable.py build --root . --output-dir dist
-
-# 2. Kiểm tra tính toàn vẹn của tệp ZIP vừa đóng gói
-python scripts/portable.py verify dist/blockchain_ai_forensics_portable_v6.0.0.zip
-```
-
-*Chi tiết quy trình giải nén sạch và thiết lập trên máy mới: xem [`README_SETUP.md`](README_SETUP.md).*
+| Tệp Dữ Liệu | SHA-256 Chuẩn | Mô Tả |
+|---|---|---|
+| `data/real_p4.db` | `6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97` | Khối và giao dịch thực tế từ Ethereum Mainnet |
+| `data/forensics.db` | `3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001` | Cơ sở dữ liệu chứng cứ và dấu vết số |
+| `data/benchmark_p6.db`| `C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507` | Tập đối chuẩn Threat Intelligence |
+| `models/anomaly_detector_v1.onnx` | `d1b9ce8247f8a188355454ef5158280ce7b0d46dfb3388581023e9e01806aeff` | Trọng số mạng nơ-ron phân loại bất thường |
 
 ---
 
-## 7. CÁC TÀI LIỆU NGHIÊN CỨU & NGHIỆM THU ĐI KÈM
+## 6. TÀI LIỆU NGHIÊN CỨU & KIẾN TRÚC THAM CHIẾU
 
-- 📖 **Kiến trúc chi tiết 7 phân tầng:** [`docs/architecture.md`](docs/architecture.md)
-- 📊 **Ma trận 25 cổng nghiệm thu (T01–T25):** [`reports/GAP_MATRIX_T01_T25.md`](reports/GAP_MATRIX_T01_T25.md)
-- 📋 **Báo cáo bàn giao tổng thể:** [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md)
-- 📝 **Báo cáo nghiệm thu cuối cùng v6.0:** [`reports/FINAL_ACCEPTANCE_REPORT_v6.md`](reports/FINAL_ACCEPTANCE_REPORT_v6.md)
-- 🔬 **Báo cáo đối kháng & an ninh (Demo D1/D2/D3):** [`reports/DEMO_EVALUATION_REPORT.md`](reports/DEMO_EVALUATION_REPORT.md)
-- 🛡️ **Báo cáo kiểm chứng ZKML:** [`reports/ZKML_VERIFICATION.md`](reports/ZKML_VERIFICATION.md)
+- 📖 **Đặc tả mục tiêu kỹ thuật:** [`AGENT.md`](AGENT.md)
+- 🏛️ **Tài liệu kiến trúc runtime 7 phân tầng:** [`docs/architecture.md`](docs/architecture.md)
+- 📊 **Ma trận đối chiếu các cổng nghiệm thu:** [`reports/GAP_MATRIX_T01_T25.md`](reports/GAP_MATRIX_T01_T25.md)
+- 🔬 **Báo cáo đánh giá thực nghiệm (Demo D1/D2/D3):** [`reports/DEMO_EVALUATION_REPORT.md`](reports/DEMO_EVALUATION_REPORT.md)
+- 🛡️ **Báo cáo kiểm chứng toán học ZKML:** [`reports/ZKML_VERIFICATION.md`](reports/ZKML_VERIFICATION.md)
 
 ---
 
-## 8. GIẤY PHÉP & BẢN QUYỀN
+## 7. GIẤY PHÉP & BẢN QUYỀN
 
-- Mã nguồn dự án được phân phối dưới giấy phép **MIT License**.
-- Các bộ dữ liệu on-chain phục vụ nghiên cứu học thuật tuân thủ quy chuẩn trích dẫn khoa học và quyền riêng tư (Zero PII). Chi tiết xem [`LICENSES_AND_DATA_RIGHTS.md`](LICENSES_AND_DATA_RIGHTS.md).
+- Mã nguồn dự án phát hành theo giấy phép **MIT License**.
+- Dữ liệu nghiên cứu tuân thủ các quy tắc pháp chứng số, bảo vệ thông tin nhận dạng cá nhân (Zero PII) và sử dụng hợp pháp cho mục đích nghiên cứu học thuật.

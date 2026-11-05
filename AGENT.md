@@ -1,10 +1,11 @@
 # AGENT.md — BLOCKCHAIN + AI DIGITAL FORENSICS (ĐỀ TÀI 8)
 
-> **Phiên bản đặc tả:** 6.0 — điều chỉnh phạm vi theo hướng dẫn Đề tài 8 của giảng viên, ngày 04/11/2026.  
+> **Phiên bản đặc tả:** 6.1 — phạm vi P1–P11, loại yêu cầu đóng gói portable Windows theo quyết định của chủ dự án ngày 05/11/2026.  
 > **Loại tài liệu:** Yêu cầu sản phẩm, kiến trúc, quy tắc thực thi và tiêu chí nghiệm thu cho Coding Agent.  
 > **Nguồn yêu cầu học thuật:** *Ứng dụng blockchain trong ATTT — Hướng dẫn các chủ đề các nhóm K18 ATTT*, mục **“Đề tài 8: Điều tra số kết hợp Blockchain và AI”**, trang 10–12.  
 > **Kế thừa:** `AGENT.md v5.1` (tài liệu người dùng cung cấp) và các kết quả P1–P6 đã báo cáo; **KHÔNG** viết lại hoặc mặc nhiên hủy những phần đã được kiểm thử.  
 > **Trạng thái:** Đây là **đặc tả mục tiêu cập nhật**, không phải tuyên bố những chức năng mới đã có trong mã nguồn. Mọi tính năng phải được kiểm tra trên repository thật trước khi gắn nhãn `DONE`.
+> **Phạm vi:** P1–P11; ưu tiên vận hành bằng Terminal và dữ liệu thật được phép sử dụng. Không yêu cầu đóng gói portable Windows hoặc kiểm thử clean-extract trên máy thứ hai; hướng dẫn cài đặt và vận hành nằm trong `README.md`. Yêu cầu tạo **gói chứng cứ**, sao lưu, kiểm thử hồi quy và xác minh SHA-256 vẫn giữ nguyên.
 
 ---
 
@@ -13,7 +14,7 @@
 1. **Đúng Đề tài 8:** Hệ thống cần thể hiện ba trụ cột của hướng dẫn: **(A) AI Agents thu thập/phân tích dấu vết và Explainable AI (XAI); (B) Smart Contract quản lý Chain of Custody; (C) kiểm chứng tính toàn vẹn suy luận bằng Zero-Knowledge Machine Learning (ZKML)**. Phần Ethereum/EVM là môi trường thí điểm, không phải toàn bộ khái niệm điều tra số.
 2. **Giữ tài sản hiện có:** P1–P6 được coi là baseline báo cáo, **không phải** tự động được nghiệm thu lại. Chỉ bổ sung có kiểm soát vào code đang chạy; kiểm thử hồi quy để phát hiện phá vỡ tính năng cũ.
 3. **Phân biệt nguồn yêu cầu:** Hướng dẫn của thầy là tài liệu định hướng nghiên cứu, trong đó có các đề xuất tham vọng (DL, GNN, ZKML). Tài liệu này chuyển chúng thành những *deliverable* cụ thể với mức tối thiểu/ mở rộng. Không khẳng định thầy yêu cầu nhất thiết mọi kỹ thuật đều phải triển khai production khi chưa có xác nhận riêng.
-4. **Không bịa tiến độ:** Phải ghi `DONE / PARTIAL / NOT_STARTED / BLOCKED / NOT_VERIFIED` dựa trên commit, log, test và bằng chứng. Không xem `SKIP` là `PASS`; không suy diễn test suite xanh là hệ thống đã chạy được trên máy khác.
+4. **Không bịa tiến độ:** Phải ghi `DONE / PARTIAL / NOT_STARTED / BLOCKED / NOT_VERIFIED` dựa trên commit, log, test và bằng chứng. Không xem `SKIP` là `PASS`; không suy diễn test suite xanh là toàn bộ hệ thống đã vận hành với dữ liệu thật.
 5. **Nguồn sự thật theo thứ tự:** hướng dẫn Đề tài 8 → đặc tả này → code + tests + dữ liệu thực tế tại commit đã đối chiếu → báo cáo đã có. Khi mâu thuẫn, **nêu khác biệt và báo người phụ trách**, không tự ý sửa lịch sử.
 6. **Thay đổi có giới hạn:** trước khi chạm nguồn phải ghi repo, branch, HEAD, Git status, file có thay đổi chưa commit; sao lưu an toàn. Không reset/rebase/force-push/merge/xóa file dữ liệu nếu chưa được yêu cầu rõ ràng.
 
@@ -32,7 +33,7 @@
 5. Có **XAI** giải thích dự đoán của **mô hình ML** bằng đặc trưng, ảnh hưởng/độ quan trọng, giới hạn, dẫn chứng và **MITRE ATT&CK** nếu ánh xạ được từ chứng cứ.
 6. Tạo gói chứng cứ gồm dữ liệu thô + manifest + hash; đăng ký trên **Anvil cục bộ**, ghi và xác minh các sự kiện **Chain of Custody** và người thực hiện.
 7. Chứng minh suy luận bằng **ZKML proof of concept thực** (không mock), gắn proof với mô hình/đầu vào/đầu ra; xác minh proof offline và qua verifier smart contract trên Anvil khi toolchain cho phép. Nếu điều kiện chưa đáp ứng, phải để trạng thái `NOT_DONE`, không thay bằng SHA-256/chữ ký rồi gọi ZKML.
-8. Sinh báo cáo thực nghiệm và gói phần mềm portable phục vụ tái chạy trên Windows khác; ghi rõ các trường hợp kiểm thử không chạy được.
+8. Cung cấp hướng dẫn chạy các thành phần thật qua Terminal (`README.md`), ghi rõ phụ thuộc và cấu hình trên hệ điều hành được hỗ trợ; sinh báo cáo thực nghiệm, log và bằng chứng kiểm chứng. Không bắt buộc tạo gói portable hay kiểm thử chuyển máy.
 
 **Giới hạn phạm vi thực thi:** PoC phục vụ học thuật, không phải nền tảng SOC quy mô sản xuất hay hệ thống bảo đảm giá trị chứng cứ trước tòa. Không đòi hỏi can thiệp kernel, tự động dump RAM của máy khác hoặc giám sát trái phép. Những ví dụ IoT/5G/cloud trong đề bài được thể hiện bằng adapter nguồn dữ liệu có quyền và case study giới hạn; không được khẳng định đã hỗ trợ toàn hạ tầng nếu chỉ chạy fixture.
 
@@ -45,7 +46,7 @@
 | Explainable AI và MITRE ATT&CK | Lý giải dự đoán mô hình, trích dẫn chứng cứ, ánh xạ kỹ thuật nếu đủ căn cứ | Ref checker và giải thích rule đã có một phần | XAI thực sự cho mô hình ML, mapping có cơ sở và cơ chế abstain |
 | CoC bằng Smart Contract, chữ ký, dấu thời gian, DID | Neo hash, ghi sự kiện chuyển giao, ký/xác minh, ràng buộc actor với DID | P2/P3 EvidenceRegistry và custody | DID tối thiểu ở lớp ứng dụng, xác thực ánh xạ DID↔địa chỉ ký |
 | ZKML: xác nhận suy luận AI không bị thay đổi | Mô hình nhỏ + public/private input rõ ràng + prove/verify thật | Chưa có bằng chứng triển khai ZKML | Prototype prover/verifier, kiểm thử sai model/input/output phải fail |
-| Minh bạch, tái lập, nghiên cứu pháp chứng | Log nguồn, metrics có methodology, báo cáo giới hạn | P6 có benchmark và integrity tests | Đánh giá AI/XAI/ZKML riêng, chạy thử trên máy thứ hai |
+| Minh bạch, tái lập, nghiên cứu pháp chứng | Log nguồn, metrics có methodology, báo cáo giới hạn | P6 có benchmark và integrity tests | Đánh giá AI/XAI/ZKML riêng, hướng dẫn tái lập các lệnh CLI và hash đầu ra |
 
 **Không được tráo khái niệm:** `Rule Engine ≠ Machine Learning`; `LLM giải thích bằng lời ≠ XAI kiểm chứng cho mô hình ML`; `SHA-256/chữ ký số ≠ ZKML`; `địa chỉ Ethereum ≠ DID`; `blacklist screening ≠ đo chất lượng phát hiện on-chain`.
 
@@ -79,7 +80,7 @@ Nguồn chứng cứ được phép
                                      |
                      EvidenceRegistry / CoC / DID (P3 + mở rộng)
                                      |
-                         Audit + Report + Replay + Portable
+                         Audit + Report + Replay + Terminal CLI
 ```
 
 **Ranh giới tin cậy:** chứng cứ thô và nhãn CTI là dữ liệu không tin cậy; LLM không có quyền tùy ý thực thi shell/SQL/ký giao dịch. Model ML, XAI và ZKML phải ghi phiên bản/commit/hash độc lập. Blockchain chỉ chứa thông tin tối thiểu (hash/commitment, id giả danh, sự kiện), **không** chứa raw logs, PII, mật khẩu, khóa hoặc prompt.
@@ -126,7 +127,7 @@ Giữ pipeline công khai Forta/PTXPhish/MEW, adapter CSV/XLSX/JSON, provenance,
 | P6 feature | `D:\Projest\p6_public_benchmark\repo`, branch `feature/p6-public-dataset-benchmark`, HEAD `50f457f` |
 | P4/P5 audit cũ | 922 pass, 70 skip, trạng thái PARTIAL tại thời điểm kiểm toán; phải xác định thay đổi 14 file đã có trong baseline hay chưa |
 
-**Mọi giai đoạn mới phải bắt đầu bằng `git status --short`, `git rev-parse HEAD`, kiểm tra commit ancestry, SHA-256 hai DB chứng cứ canonical và trạng thái test baseline.** Dự án portable CANDIDATE được báo cáo từng có lỗi/thiếu fixtures; không xem việc tạo ZIP là bằng chứng tương đương repo gốc.
+**Mọi giai đoạn mới phải bắt đầu bằng `git status --short`, `git rev-parse HEAD`, kiểm tra commit ancestry, SHA-256 các DB chứng cứ canonical đang được bảo vệ và trạng thái test baseline.** Không xem kết quả chạy demo, log cũ hoặc việc có README là bằng chứng tương đương kiểm chứng mã nguồn và dữ liệu thực tế.
 
 ## 5. P7 — AI First Responder & đa nguồn pháp chứng (mới)
 
@@ -145,7 +146,7 @@ Giữ pipeline công khai Forta/PTXPhish/MEW, adapter CSV/XLSX/JSON, provenance,
 - Cảnh báo từ nguồn log không EVM không được ép thành transaction on-chain giả. Phải có namespace và `evidence_refs` riêng.
 - T01–T11 baseline tiếp tục PASS trong phạm vi test không bị skip do policy.
 
-**P7 nghiệm thu:** Chạy một ca điều tra từ nguồn EVM và một ca từ host log với đầy đủ acquisition manifest/hash/audit, không phát sinh hành động vượt allowlist và có thể phát lại trên máy thứ hai.
+**P7 nghiệm thu:** Chạy một ca điều tra từ nguồn EVM và một ca từ host log với đầy đủ acquisition manifest/hash/audit, không phát sinh hành động vượt allowlist và có thể tái hiện bằng lệnh, cấu hình và đầu vào được ghi nhận.
 
 ## 6. P8 — Machine Learning, XAI và MITRE ATT&CK (mới)
 
@@ -221,7 +222,7 @@ Giữ pipeline công khai Forta/PTXPhish/MEW, adapter CSV/XLSX/JSON, provenance,
 
 ### P11.2 — Nguyên tắc đo lường
 
-- Tách **test chức năng**, **ML metrics**, **XAI metrics**, **CoC integrity**, **ZKML correctness/performance**, **portable reproducibility** thành các báo cáo riêng.
+- Tách **test chức năng**, **ML metrics**, **XAI metrics**, **CoC integrity**, **ZKML correctness/performance** và **khả năng tái lập bằng lệnh CLI** thành các báo cáo riêng.
 - ML: dùng Precision/Recall/F1/AUPRC khi có ground truth thích hợp; nếu thiếu nhãn, chỉ báo cáo anomaly score distribution, hit counts, case study và limitation. Tuyệt đối không coi `0 blacklist matches` là `0 false positives` trong tập không có nhãn chuẩn.
 - XAI: fidelity và stability (định nghĩa cụ thể, script sinh số), số record giải thích được/abstain, độ phủ evidence_refs.
 - AI Investigator: tỷ lệ trích dẫn tồn tại và khớp nội dung, số tool calls, ngân sách, prompt-injection defenses.
@@ -235,17 +236,7 @@ Giữ pipeline công khai Forta/PTXPhish/MEW, adapter CSV/XLSX/JSON, provenance,
 - Rà soát quyền dùng Forta/MEW và PTXPhish; dữ liệu PTXPhish thuộc artifact nghiên cứu có điều kiện, **không** tự đóng gói để phân phối thương mại hoặc tải lên paid/cloud API.
 - Không sửa NTFS ACL và không làm thất bại test bằng cách làm yếu cơ chế bảo mật; ghi rõ các test bị SKIP theo policy.
 
-## 10. P12 — Portable Windows/offline để kiểm thử độc lập (mới)
-
-**Đầu ra:** một bản phát hành thử nghiệm có thể copy sang Windows x64 khác mà **không phụ thuộc** `D:\Projest` hoặc username nguồn. Gói cần kiểm tra tồn tại file thật, license và hash; chỉ gọi `PORTABLE_READY` sau khi giải nén vào thư mục độc lập, setup và smoke tests chạy thành công.
-
-- Gói **mã nguồn P1–P11 đã thực sự tồn tại**, contracts, tests, fixtures cho D1/D2/D3, dataset được phép chuyển, minimal demo DB, model/checkpoints, ZK circuit/proving key/verifying key hợp lệ, scripts, dependency lock/wheelhouse, manifests và tài liệu; không kèm bí mật/keystore cá nhân/PII.
-- Bắt buộc có `README_SETUP.md`, `setup.ps1`, `smoke_test.ps1`, `run_full_tests.ps1`, `verify_integrity.ps1`, `SHA256SUMS.txt`, `PORTABILITY_TEST_REPORT.md`, `LICENSES_AND_DATA_RIGHTS.md`.
-- Tránh đóng gói `__pycache__`, `.pytest_cache`, temp/log debug, `.venv`, build cache, binaries không cần thiết, SQLite `-wal`/`-shm` chưa checkpoint nhất quán; **giữ** log/manifest bằng chứng nghiệm thu trong thư mục audit cần thiết. Loại khỏi **staging copy**, không xóa từ nguồn.
-- Khi thiếu DB/fixtures lịch sử, không đổi test thành SKIP để làm đẹp. Phải tạo dataset mẫu **rõ là synthetic và không đại diện chứng cứ gốc**, hoặc báo rõ kiểm thử nào không tái hiện được; không biến nó thành bằng chứng lịch sử.
-- Chạy lại test P1–P6 có kiểm soát và các gate P7–P11. Ghi đường dẫn artifact và SHA-256. Phân biệt smoke test trên máy nguồn với **kiểm thử thật trên máy thứ hai**.
-
-## 11. Ma trận kiểm thử và acceptance gates
+## 10. Ma trận kiểm thử và acceptance gates
 
 **Giữ T01–T11 của AGENT v5.1** (Collector, RPC resilience, reorg, rules, verify layers, smart contract, guards, replay, ref checker, prompt injection). Không đổi/giảm assertion chỉ để đạt PASS. Bổ sung:
 
@@ -264,24 +255,22 @@ Giữ pipeline công khai Forta/PTXPhish/MEW, adapter CSV/XLSX/JSON, provenance,
 | T22 | ZKML local Anvil verify | Smart contract verify đúng/sai và log gas/tx hash synthetic |
 | T23 | Full case replay D1/D2 | Báo cáo cuối nối được evidence → alert → analysis → custody/proof |
 | T24 | Privacy/prompt injection/data tamper | Zero secrets/PII on chain; fail-closed; negative tests PASS |
-| T25 | Portable clean-extract | Setup và smoke trên thư mục mới; ghi FAIL/SKIP/ERROR trung thực |
 
 **Trạng thái gate:** chỉ `PASS` khi lệnh thực thi, log, commit, artifact/hash được ghi lại. `DESIGN_ONLY`, `MOCK_ONLY`, `NOT_RUN`, `SKIP`, `PARTIAL`, `BLOCKED` không thể quy đổi thành `PASS`.
 
-## 12. Lộ trình và điều kiện không được nhảy giai đoạn
+## 11. Lộ trình và điều kiện không được nhảy giai đoạn
 
 | Phase | Công việc | Điều kiện hoàn thành |
 |---|---|---|
 | P1–P3 (legacy) | Collector, Evidence, Chain of Custody | Có kiểm thử/hồ sơ nghiệm thu hiện có; chạy lại hồi quy trên baseline trước phát triển mới |
-| P4–P6 (legacy) | Rule, AI Investigator, benchmark nguồn mở | Đối chiếu baseline, xác định 70 SKIP và tình trạng portability; không viết lại thống kê |
+| P4–P6 (legacy) | Rule, AI Investigator, benchmark nguồn mở | Đối chiếu baseline, xác định 70 SKIP và giới hạn tái lập; không viết lại thống kê |
 | **P7** | AI First Responder + nguồn log ngoài EVM | T12–T13 PASS |
 | **P8** | ML + XAI + ATT&CK | T14–T17 PASS |
 | **P9** | ZKML proof + verifier | T20–T22 PASS, không mock |
 | **P10** | DID + custody signatures | T18–T19 PASS |
 | **P11** | End-to-end/security/evaluation | T23–T24 PASS, báo cáo methodology và giới hạn |
-| **P12** | Packaging và kiểm thử chuyển máy | T25 PASS và xác thực SHA-256 |
 
-*Các số P7–P12 là tên nhóm công việc mới của đặc tả này; không suy ra thời gian thực hiện hoặc cam kết có thể hoàn thành tất cả nếu thiếu toolchain, thiết bị hoặc quyền sử dụng dữ liệu.*
+*Các số P7–P11 là tên nhóm công việc mở rộng của đặc tả này; không suy ra thời gian thực hiện hoặc cam kết hoàn thành nếu thiếu toolchain, thiết bị hoặc quyền sử dụng dữ liệu.*
 
 ### Tiêu chí nghiệm thu cuối Đề tài 8
 
@@ -292,14 +281,14 @@ Giữ pipeline công khai Forta/PTXPhish/MEW, adapter CSV/XLSX/JSON, provenance,
 - [ ] Có **Smart Contract CoC** liên kết hash, identity/DID, chữ ký/actor, timestamp và chuyển giao có thể xác minh.
 - [ ] Có **ZKML proof thật** và verifier offline/on-chain Anvil, âm tính khi input/model/output/proof bị sửa.
 - [ ] Không suy diễn AI đúng tuyệt đối, không bịa số liệu, giữ nguyên DB canonical và tính bảo mật khóa/PII.
-- [ ] Có demo D1/D2/D3, log/test/hash, tài liệu kiến trúc/giới hạn, portable được kiểm thử.
+- [ ] Có kiểm tra tích hợp D1/D2/D3, log/test/hash và tài liệu kiến trúc/giới hạn. Việc trình bày demo thuộc báo cáo học thuật, không thay thế quy trình chạy thật bằng Terminal.
 - [ ] Giảng viên/người phụ trách xác nhận phạm vi triển khai bắt buộc của phần ZKML (mức thiết kế/PoC hay triển khai đầy đủ) trước khi tuyên bố đáp ứng toàn bộ yêu cầu học thuật.
 
-## 13. Cấu trúc mã nguồn đề xuất (chỉ tạo khi thật sự triển khai)
+## 12. Cấu trúc mã nguồn đề xuất (chỉ tạo khi thật sự triển khai)
 
 ```text
 blockchain-forensics/
-├── AGENT.md                         # Đặc tả mới v6.0
+├── AGENT.md                         # Đặc tả phạm vi P1–P11 v6.1
 ├── README.md / .env.example         # Không kèm secrets
 ├── collector.py / forensics/        # Mã P1–P6 hiện có, KHÔNG di chuyển vô cớ
 │   ├── adapters/                    # P6 threat intel hiện có
@@ -314,7 +303,7 @@ blockchain-forensics/
 │   ├── src/EvidenceRegistry.sol     # Giữ P3 hiện có
 │   └── src/InferenceVerifier.sol    # [MỚI] nếu chứng minh được EVM verification
 ├── scripts/                         # CLI/repro/integration/benchmark
-├── tests/                           # Legacy + T12–T25
+├── tests/                           # Legacy + T12–T24
 ├── models/                          # Model được version + SHA-256, không chứa PII
 ├── circuits/                        # Circuit & keys kiểm thử (không chứa bí mật thật)
 ├── docs/
@@ -324,17 +313,16 @@ blockchain-forensics/
 │   ├── threat_model.md
 │   └── iso27037_mapping.md
 ├── results/                         # Sinh từ script, có run manifest
-├── audit/                           # Hash/provenance/acceptance logs
-└── portable/                        # Staging có kiểm soát, KHÔNG phải thư mục gốc
+└── audit/                           # Hash/provenance/acceptance logs
 ```
 
 Không làm sai import tương đối, không đổi module path trên repo thật chỉ để cây đẹp. Thư mục `[MỚI]` ở trên là **đề xuất**, chưa được chứng thực có trong repository.
 
-## 14. Báo cáo định kỳ Coding Agent và quy tắc kiểm toán
+## 13. Báo cáo định kỳ Coding Agent và quy tắc kiểm toán
 
 **Trước mỗi milestone:**
 
-1. Đọc AGENT.md v6.0 và code/tests/report của milestone; chụp `git status`, HEAD, hash dữ liệu gốc, danh sách artifact bảo vệ.
+1. Đọc AGENT.md v6.1 và code/tests/report của milestone; chụp `git status`, HEAD, hash dữ liệu gốc, danh sách artifact bảo vệ.
 2. Viết kế hoạch nhỏ, tiêu chí gate, rủi ro, đường dẫn thay đổi. Không chạy lệnh ghi vào master hoặc DB chứng cứ canonical.
 3. Chỉ thay đổi trong branch/worktree cách ly; kiểm tra quyền, license và tài nguyên có sẵn. Cài dependencies hoặc dùng dịch vụ ngoài cần có phê duyệt rõ ràng.
 4. Chạy kiểm thử có bằng chứng **trước/sau** (output thô, exit code, pytest junit, Foundry log, model/proof hashes), phân biệt `PASS`, `FAIL`, `ERROR`, `SKIP`, `NOT_RUN`.
@@ -352,7 +340,7 @@ Không làm sai import tương đối, không đổi module path trên repo th�
 [REVIEW_REQUIRED] [NEXT_STEP]
 ```
 
-## 15. An toàn vận hành và giới hạn pháp chứng
+## 14. An toàn vận hành và giới hạn pháp chứng
 
 - Không tự động tấn công/khai thác/chiếm quyền, không giám sát thiết bị không có sự đồng ý. Mọi host log, memory artifact, IoT sample phải do chủ sở hữu cung cấp/cho phép.
 - Không phát giao dịch lên blockchain công khai khi chưa có phê duyệt tường minh. Không cung cấp API key/seed/private key cho LLM, Git, log hoặc zip; dùng keystore thử nghiệm nếu cần trên Anvil.
@@ -361,10 +349,10 @@ Không làm sai import tương đối, không đổi module path trên repo th�
 - Các khái niệm “bằng chứng có giá trị trước tòa”, “tuân thủ GDPR”, “XAI giải thích hoàn toàn”, “ZKML chứng minh AI đúng” đều cần giới hạn và không được tuyên bố tuyệt đối.
 - Vấn đề bảo toàn **dữ liệu** khác bảo toàn **suy luận**: P3/manifest giải quyết chứng cứ, P9 proof giải quyết đúng phép tính với mạch/model đã cam kết; cả hai không thay thế xác minh provenance từ nguồn.
 
-## 16. Tài liệu nguồn và điều cần xác nhận với thầy
+## 15. Tài liệu nguồn và điều cần xác nhận với thầy
 
 1. **Tài liệu người dùng tải lên:** `sv Ứng dụng blockchain trong ATTT Hướng Dẫn Các chủ đề các nhóm K18 ATTT.docx`, Đề tài 8, trang 10–12: *AI Agents & XAI / MITRE ATT&CK*; *Smart Contract Chain of Custody / DID & chữ ký*; *ZKML proof of inference*.
-2. **Đặc tả tiền nhiệm:** `agent(3).md` (AGENT v5.1). Đây là nền chi tiết P1–P6; bản v6.0 giữ nguyên hợp đồng an toàn/kiểm thử hồi quy nhưng mở rộng phạm vi cho phù hợp Đề tài 8.
+2. **Đặc tả tiền nhiệm:** `agent(3).md` (AGENT v5.1) và AGENT v6.0. Đây là nền chi tiết P1–P6 và các mở rộng P7–P11; bản v6.1 giữ nguyên yêu cầu bảo toàn dữ liệu, kiểm thử hồi quy, AI/XAI, DID/CoC và ZKML, và chuyển hướng triển khai sang Terminal, không yêu cầu phát hành portable Windows.
 3. **Hồ sơ nghiệm thu do người dùng cung cấp:** `P6_05_ACCEPTANCE.md`, `P6_HANDOFF.md`, báo cáo P3/P4/P5. Dữ liệu/commit/test trong các báo cáo là **thông tin được báo cáo**, chưa thể thay kết quả chạy lại repository thực tế.
 4. **Cần xác nhận học thuật:** Mức bắt buộc **ZKML** (thực thi on-chain hoặc prototype); mức bắt buộc DL/GNN so với ML baseline; mức tích hợp dữ liệu ngoài EVM; tiêu chuẩn bảo quản chứng cứ cần chứng minh trong demo. Trước khi có phản hồi, thực hiện theo các gate của tài liệu này, nhưng không tuyên bố đó là những điều kiện thầy đã ký xác nhận.
 
