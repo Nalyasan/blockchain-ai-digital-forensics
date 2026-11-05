@@ -437,8 +437,9 @@ class TestEVMVerifierStudy:
                 "--contracts", str(sol_path),
             ]
             run_res = subprocess.run(cmd, capture_output=True, text=True)
-            # Solc 0.8.24 standard compilation encounters Stack too deep
-            assert (run_res.returncode != 0 and "Stack too deep" in (run_res.stdout + run_res.stderr)) or run_res.returncode == 0
+            # Solc 0.8.24 encounters stack depth limit (standard "Stack too deep" or Yul "too deep in the stack")
+            combined_err = (run_res.stdout + run_res.stderr).lower()
+            assert (run_res.returncode != 0 and ("stack too deep" in combined_err or "too deep" in combined_err)) or run_res.returncode == 0
 
     def test_anvil_bn254_pairing_precompiles(self):
         """Verifies native EVM precompiles 0x06 (ecAdd), 0x07 (ecMul), and 0x08 (ecPairing) on Anvil."""

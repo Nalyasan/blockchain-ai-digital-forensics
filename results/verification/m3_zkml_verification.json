@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "schema_version": "1.0.0",
+    "timestamp_utc": "2026-11-05T05:02:25.078561+00:00",
+    "milestone": "M3",
+    "gate": "Gate T22",
+    "overall_status": "PASS",
+    "run_id": "m3-zkml-1793854945"
+  },
+  "environment": {
+    "chain_id": 31337,
+    "rpc_url": "http://127.0.0.1:60753",
+    "node_type": "Anvil v1.8.7",
+    "solc_version": "0.8.24",
+    "via_ir": true,
+    "is_synthetic": true,
+    "disclaimer": "All transactions executed on local Anvil testnet (synthetic per AGENT.md \u00a77.2)"
+  },
+  "contract_deployment": {
+    "contract_address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "circuit_verifier_address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "deployment_tx_hash": "0xed90eec9769e440caee04c6be390692ec197b70665598edd1a22c917dca605ad (synthetic)",
+    "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "is_synthetic": true
+  },
+  "genuine_verification": {
+    "tx_hash": "0x5485ea09f97ac84946bcd008d700ff44392a73f65bcf470ffd1d19c63854be3f (synthetic)",
+    "block_number": 4,
+    "gas_used": 366916,
+    "status": 1,
+    "verified_valid": true,
+    "is_synthetic": true,
+    "model_hash": "0xd1b9ce8247f8a188355454ef5158280ce7b0d46dfb3388581023e9e01806aeff",
+    "input_commitment": "7ad33a8edf17ff4f87ef8e6be3501d6be953398c43c139eb79a5d488529bf767",
+    "output_score": 1.0,
+    "output_commitment": "0x0000000000000000000000000000000000000000000000000000000000000080",
+    "inference_record_id": "INF-REC-M3-GATE-T22-001",
+    "proof_size_bytes": 5504,
+    "proof_keccak": "0x31ad3f6dc03400f3eb55db0240750895f0e76cfa4dd7b5e37811ee980f1ab609"
+  },
+  "adversarial_replays": [
+    {
+      "case_id": "ADV-LIVE-01",
+      "description": "Bit-Flipped Proof Payload",
+      "rejection_mode": "REVERT",
+      "reverted": true,
+      "passed": true
+    },
+    {
+      "case_id": "ADV-LIVE-02",
+      "description": "Corrupted Input Commitment",
+      "rejection_mode": "REVERT",
+      "reverted": true,
+      "passed": true
+    },
+    {
+      "case_id": "ADV-LIVE-03",
+      "description": "Corrupted Model Commitment",
+      "rejection_mode": "REVERT",
+      "reverted": true,
+      "passed": true
+    },
+    {
+      "case_id": "ADV-LIVE-04",
+      "description": "Spoofed Output Score Commitment",
+      "rejection_mode": "REVERT",
+      "reverted": true,
+      "passed": true
+    },
+    {
+      "case_id": "ADV-LIVE-05",
+      "description": "Truncated 16-Byte Proof Buffer",
+      "rejection_mode": "REVERT",
+      "reverted": true,
+      "passed": true
+    }
+  ],
+  "gate_t22_compliance": {
+    "anvil_deployed": true,
+    "receipt_logged": true,
+    "gas_tracked": true,
+    "synthetic_hashes_documented": true,
+    "adversarial_cases_rejected": true,
+    "all_criteria_met": true
+  }
+}
