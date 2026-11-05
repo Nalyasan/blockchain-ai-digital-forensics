@@ -22,8 +22,8 @@ from forensics.persistence import EvidenceConflictError, insert_verified
 
 log = logging.getLogger("forensics.real_data_ingest")
 
-DEFAULT_RESEARCH_DIR = PROJECT_ROOT.parent / "P4_Research" if (PROJECT_ROOT.parent / "P4_Research").exists() else Path("D:/Projest/P4_Research")
-DEFAULT_DB_PATH = REAL_P4_DB if REAL_P4_DB.exists() else Path("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
+DEFAULT_RESEARCH_DIR = PROJECT_ROOT.parent / "P4_Research"
+DEFAULT_DB_PATH = REAL_P4_DB if REAL_P4_DB.exists() else (PROJECT_ROOT.parent / "worktrees" / "p4_real_integration" / "data" / "real_p4.db")
 
 # Official non-overlapping window boundaries
 EULER_DAI_CALIBRATION_BOUNDS = (16816000, 16817989)

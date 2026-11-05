@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "schema_version": "1.0.0",
+    "timestamp_utc": "2026-11-05T12:45:00Z",
+    "milestone": "M6",
+    "milestone_name": "Portable Release & Final Handover Deliverables",
+    "specification_ref": "AGENT.md v6.0 §10, §11, §16.4 (Gate T25)",
+    "overall_status": "PASS"
+  },
+  "portable_archive": {
+    "file_path": "dist/blockchain_ai_forensics_portable_v6.0.0.zip",
+    "file_size_bytes": 318232248,
+    "file_size_mb": 303.49,
+    "sha256": "C8AD1D0E7E3F1CD91A31FCADADCE4FEEBBF4CC21E51001021DE999BF93843163",
+    "checksum_path": "dist/blockchain_ai_forensics_portable_v6.0.0.zip.sha256",
+    "total_manifest_files": 428,
+    "packaged_project_files": 325,
+    "bundled_offline_wheels": 101,
+    "bundled_solidity_compiler": "tools/foundry/solc-0.8.24.exe"
+  },
+  "clean_extract_verification": {
+    "test_directory": "%TEMP%\\portable_t25_clean_extract",
+    "isolation_status": "ISOLATED_OUTSIDE_REPO",
+    "positive_integrity_check": {
+      "status": "PASS",
+      "verified_files": 428,
+      "canonical_dbs_intact": 3,
+      "exit_code": 0
+    },
+    "negative_tamper_sensitivity": {
+      "target_file": "README_SETUP.md",
+      "tamper_method": "1_byte_bit_flip",
+      "tamper_detected": true,
+      "exit_code_tampered": 1,
+      "exit_code_restored": 0
+    },
+    "offline_setup": {
+      "venv_created": true,
+      "wheels_installed": 101,
+      "offline_mode_enforced": true,
+      "core_imports_verified": true,
+      "exit_code": 0
+    },
+    "smoke_test": {
+      "total_stages": 5,
+      "foundry_tests_passed": 7,
+      "foundry_tests_failed": 0,
+      "real_bn254_kzg_pairing_verified": true,
+      "revert_on_5_tamper_mutations_verified": true,
+      "pytest_smoke_tests_passed": 126,
+      "pytest_smoke_tests_failed": 0,
+      "post_smoke_canonical_db_invariance": "3/3_MATCH",
+      "exit_code": 0
+    }
+  },
+  "second_machine_status": {
+    "gate": "T25-B",
+    "status": "NOT_VERIFIED",
+    "reason": "Requires separate physical Windows machine as mandated by AGENT.md v6.0 §10"
+  }
+}

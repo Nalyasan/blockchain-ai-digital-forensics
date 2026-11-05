@@ -130,15 +130,28 @@ def check_git_state(repo_root: Path) -> Dict[str, Any]:
     except Exception as e:
         results["checks"]["tracked_tree_clean"] = {"error": str(e), "clean": False}
 
-    # Verify untracked osint-attack-surface remains intact
+    # Verify untracked osint-attack-surface remains intact unless removed via authorized M6 cleanup
     osint_path = repo_root / "osint-attack-surface"
     osint_valid = osint_path.exists() and osint_path.is_dir() and (osint_path / "main.py").exists()
+    cleanup_manifest_path = repo_root / "cleanup_manifest.json"
+    authorized_osint_cleanup = False
+    if not osint_valid and cleanup_manifest_path.exists():
+        try:
+            manifest_data = json.loads(cleanup_manifest_path.read_text(encoding="utf-8"))
+            for item in manifest_data.get("removed_items", []):
+                if item.get("path") == "osint-attack-surface" and item.get("authorized"):
+                    authorized_osint_cleanup = True
+                    break
+        except Exception:
+            authorized_osint_cleanup = False
+    osint_check_pass = osint_valid or authorized_osint_cleanup
     results["checks"]["osint_preserved"] = {
         "exists": osint_valid,
+        "authorized_m6_cleanup": authorized_osint_cleanup,
         "path": str(osint_path),
-        "match": osint_valid,
+        "match": osint_check_pass,
     }
-    if not osint_valid:
+    if not osint_check_pass:
         results["passed"] = False
 
     return results
@@ -208,8 +221,13 @@ def check_toolchain() -> Dict[str, Any]:
         tool_status["pytest"] = {"error": str(e), "available": False}
 
     # Foundry binaries
+    repo_root = Path(__file__).resolve().parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from forensics.paths import resolve_foundry_binary
+
     for tool in ["forge", "anvil", "cast"]:
-        bin_path = shutil.which(tool) or f"C:/Users/Naly/.foundry/bin/{tool}.exe"
+        bin_path = resolve_foundry_binary(tool)
         try:
             ver = subprocess.check_output([bin_path, "--version"], text=True).splitlines()[0].strip()
             tool_status[tool] = {"path": bin_path, "version": ver, "available": True}

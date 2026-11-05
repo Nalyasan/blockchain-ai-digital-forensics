@@ -1,6 +1,6 @@
 r"""Benchmark SQLite persistence engine for Phase 6 Public Dataset Benchmark.
 
-Creates and manages D:\Projest\p6_public_benchmark\data\benchmark_p6.db.
+Creates and manages data/benchmark_p6.db (Threat Intelligence benchmark database).
 Enforces strict append-only conflict checking via G5-02 invariant (insert_verified).
 Zero INSERT OR REPLACE. Zero UPDATE on accepted forensic records.
 Strictly ZERO writes to real_p4.db or canonical production tables.
@@ -17,7 +17,7 @@ from forensics.adapters.base import ThreatIntelBatch, ThreatIntelRecord, current
 from forensics.paths import BENCHMARK_DB
 from forensics.persistence import EvidenceConflictError, insert_verified
 
-DEFAULT_BENCHMARK_DB_PATH = BENCHMARK_DB if BENCHMARK_DB.exists() else Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
+DEFAULT_BENCHMARK_DB_PATH = BENCHMARK_DB if BENCHMARK_DB.exists() else (BENCHMARK_DB.parents[2] / "p6_public_benchmark" / "data" / "benchmark_p6.db")
 
 # Prohibited database targets for strict physical database isolation
 FORBIDDEN_DB_NAMES = ("real_p4.db", "forensics.db", "real_p4", "forensics")

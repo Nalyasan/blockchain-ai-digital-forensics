@@ -37,7 +37,7 @@ from forensics.persistence import EvidenceConflictError, insert_verified
 logger = logging.getLogger("forensics.adapters.screening")
 
 # Canonical default paths
-DEFAULT_REAL_P4_DB_PATH = REAL_P4_DB if REAL_P4_DB.exists() else Path("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
+DEFAULT_REAL_P4_DB_PATH = REAL_P4_DB if REAL_P4_DB.exists() else (REAL_P4_DB.parents[2] / "worktrees" / "p4_real_integration" / "data" / "real_p4.db")
 
 # Non-overlapping incident window boundaries
 INCIDENT_BOUNDS: dict[str, tuple[int, int]] = {

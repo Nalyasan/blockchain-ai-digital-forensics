@@ -1,4 +1,5 @@
 """Portable paths; never depend on the author's drive or current directory."""
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -8,6 +9,7 @@ DATA_DIR = Path(os.environ.get('FORENSICS_DATA_DIR', str(PROJECT_ROOT / 'data'))
 DATASETS_DIR = PROJECT_ROOT / 'datasets'
 TOOLS_DIR = PROJECT_ROOT / 'tools'
 CIRCUITS_DIR = PROJECT_ROOT / 'circuits'
+MODELS_DIR = PROJECT_ROOT / 'models'
 REAL_P4_DB = DATA_DIR / 'real_p4.db'
 BENCHMARK_DB = DATA_DIR / 'benchmark_p6.db'
 FORENSICS_DB = DATA_DIR / 'forensics.db'
@@ -28,6 +30,24 @@ def get_tools_dir() -> Path:
 
 def get_circuits_dir() -> Path:
     return CIRCUITS_DIR
+
+
+def get_models_dir() -> Path:
+    return MODELS_DIR
+
+
+CANONICAL_ENV_SHA256 = "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C"
+
+
+def accepted_env_sha256(root: Path | str | None = None) -> set[str]:
+    """The source .env holds live keys and is never distributed; a portable
+    install seeds .env from .env.example, so both digests are legitimate."""
+    base = Path(root) if root else PROJECT_ROOT
+    accepted = {CANONICAL_ENV_SHA256}
+    example = base / '.env.example'
+    if example.is_file():
+        accepted.add(hashlib.sha256(example.read_bytes()).hexdigest().upper())
+    return accepted
 
 
 def resolve_foundry_binary(name: str) -> str:

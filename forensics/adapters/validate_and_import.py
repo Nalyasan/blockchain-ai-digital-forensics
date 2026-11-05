@@ -22,7 +22,7 @@ from forensics.adapters.persistence_benchmark import (
 from forensics.adapters.xlsx_adapter import parse_ptxphish_xlsx
 from forensics.paths import BENCHMARK_DB, PROJECT_ROOT
 
-_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark" if (PROJECT_ROOT.parent / "p6_public_benchmark").exists() else Path("D:/Projest/p6_public_benchmark")
+_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark"
 WORKSPACE_DIR = _P6_BENCH_ROOT
 WORKING_DIR = WORKSPACE_DIR / "datasets" / "working"
 MANIFEST_PATH = WORKSPACE_DIR / "audit" / "dataset_manifest.json"

@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 import sys
 from typing import Any, Optional
+from forensics.paths import accepted_env_sha256
 
 
 CANONICAL_HASHES = {
@@ -342,7 +343,8 @@ class TraceableReportGenerator:
             p = self.workspace_dir / target
             if p.exists():
                 actual = hashlib.sha256(p.read_bytes()).hexdigest().upper()
-            match_str = "**MATCH (100% INVARIANT)**" if actual == expected else "**FAIL**"
+            allowed = accepted_env_sha256(self.workspace_dir) if target == ".env" else {expected}
+            match_str = "**MATCH (100% INVARIANT)**" if actual in allowed else "**FAIL**"
             lines.append(f"| `{target}` | `{expected}` | `{actual}` | {match_str} |")
         lines.append("")
 

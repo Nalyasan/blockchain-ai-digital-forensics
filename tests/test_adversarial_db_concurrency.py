@@ -32,8 +32,8 @@ from forensics.ai.db_readonly import (
 )
 from forensics.paths import DATA_DIR, REAL_P4_DB as CANONICAL_REAL_P4_DB
 
-REAL_P4_DB = CANONICAL_REAL_P4_DB if CANONICAL_REAL_P4_DB.exists() else Path(r"D:\Projest\worktrees\p4_real_integration\data\real_p4.db")
-REAL_P4_DATA_DIR = DATA_DIR if DATA_DIR.exists() else Path(r"D:\Projest\worktrees\p4_real_integration\data")
+REAL_P4_DB = CANONICAL_REAL_P4_DB
+REAL_P4_DATA_DIR = DATA_DIR
 
 
 # Helper top-level function for multiprocessing (must be pickleable)

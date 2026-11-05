@@ -69,8 +69,8 @@ class IndependentGroundTruthRegistry:
         if threat_intel_db_path:
             self.threat_intel_db_path = Path(threat_intel_db_path)
         else:
-            default_p6 = Path("D:/Projest/Blockchain/data/benchmark_p6.db")
-            self.threat_intel_db_path = default_p6 if default_p6.is_file() else None
+            from forensics.paths import BENCHMARK_DB
+            self.threat_intel_db_path = BENCHMARK_DB if BENCHMARK_DB.is_file() else None
         self._cached_threat_entities: set[str] | None = None
 
     def get_threat_intel_entities(self) -> set[str]:

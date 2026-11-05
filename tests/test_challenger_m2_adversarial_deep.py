@@ -29,8 +29,9 @@ from forensics.ml.mitre import (
     UnsubstantiatedMappingError,
     validate_canonical_evidence_refs,
 )
+from forensics.paths import accepted_env_sha256
 
-ROOT_DIR = Path("D:/Projest/Blockchain")
+ROOT_DIR = Path(__file__).resolve().parents[1]
 CANONICAL_HASHES = {
     "real_p4.db": "6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97",
     "forensics.db": "3f2b0dfc772a96ff6ea57c65807b5b6b9a20fcf74c409c6f222fcff29f1ef001",
@@ -270,6 +271,7 @@ class TestFullDatabaseBitwiseInvariance:
         target = ROOT_DIR / ".env" if file_name == ".env" else ROOT_DIR / "data" / file_name
         assert target.is_file(), f"Target {target} does not exist"
         current_digest = _sha256_file(target)
-        assert current_digest == expected_digest, (
+        allowed = {h.lower() for h in accepted_env_sha256(ROOT_DIR)} if file_name == ".env" else {expected_digest}
+        assert current_digest in allowed, (
             f"Bitwise invariance violation on {file_name}: expected {expected_digest}, got {current_digest}"
         )

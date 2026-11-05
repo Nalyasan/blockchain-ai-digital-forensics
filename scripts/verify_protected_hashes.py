@@ -3,8 +3,8 @@ import hashlib
 import json
 from pathlib import Path
 
-worktree_root = Path("D:/Projest/worktrees/p4_real_integration")
-main_root = Path("D:/Projest/Blockchain")
+worktree_root = Path(__file__).resolve().parents[2] / "worktrees" / "p4_real_integration"
+main_root = Path(__file__).resolve().parents[1]
 
 with open(worktree_root / "results/p4/protected-before.json", "r", encoding="utf-8-sig") as f:
     before = json.load(f)

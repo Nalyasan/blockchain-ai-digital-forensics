@@ -2,7 +2,7 @@
 """
 Phase G6C: Clean-Build Regression Verification Harness.
 Performs an automated 12-step verification protocol inside an isolated extraction
-directory (D:/Projest/clean_build_test_G6C) directly from the standalone portable package:
+directory directly from the standalone portable package:
 1. Clean extraction from dist/blockchain_ai_forensics_portable_v1.0.0.zip
 2. Scan for zero project Markdown files (*.md/*.MD)
 3. Pre-execution hash snapshots of canonical databases & .env (assert 4/4 match baseline)
@@ -30,10 +30,10 @@ import time
 import zipfile
 from pathlib import Path
 
-REPO_ROOT = Path("D:/Projest/Blockchain").resolve()
+REPO_ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_PATH = REPO_ROOT / "dist" / "blockchain_ai_forensics_portable_v1.0.0.zip"
-CLEAN_BUILD_DIR = Path("D:/Projest/clean_build_test_G6C").resolve()
-TMP_PYTEST_DIR = Path("D:/Projest/tmp_clean_pytest").resolve()
+CLEAN_BUILD_DIR = (REPO_ROOT.parent / "clean_build_test_G6C").resolve()
+TMP_PYTEST_DIR = (REPO_ROOT.parent / "tmp_clean_pytest").resolve()
 VERIF_DIR = REPO_ROOT / "results" / "verification"
 
 CANONICAL_HASHES = {

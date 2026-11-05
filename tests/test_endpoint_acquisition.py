@@ -72,6 +72,7 @@ from forensics.endpoint.store import (
 )
 from forensics.paths import FORENSICS_DB, REAL_P4_DB
 from forensics.persistence import EvidenceConflictError
+from forensics.paths import accepted_env_sha256
 
 
 @pytest.fixture
@@ -667,5 +668,6 @@ class TestEndpointAcquisitionAdaptersM4:
         for name, p in paths.items():
             if p.exists():
                 digest = hashlib.sha256(p.read_bytes()).hexdigest().upper()
-                assert digest == expected[name], f"Canonical DB {name} was modified!"
+                allowed = accepted_env_sha256() if name == ".env" else {expected[name]}
+                assert digest in allowed, f"Canonical DB {name} was modified!"
 

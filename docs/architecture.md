@@ -2,9 +2,9 @@
 # SYSTEM ARCHITECTURE: VERIFIABLE BLOCKCHAIN + AI DIGITAL FORENSICS
 
 - **Mã tài liệu / Document ID**: `SYSTEM_ARCHITECTURE`
-- **Phiên bản / Version**: 2.0.0 (AGENT.md v6.0 Baseline)
+- **Phiên bản / Version**: 6.0.0 (AGENT.md v6.0 Runtime Verified)
 - **Dự án / Project**: Blockchain + AI Digital Forensics System (Academic PoC — Đề tài 8)
-- **Đặc tả căn cứ / Authoritative Specification**: `AGENT.md v6.0` (`C:\Users\Naly\Downloads\AGENT.md`)
+- **Đặc tả căn cứ / Authoritative Specification**: `AGENT.md` v6.0 (`DAE75E00D95A5F2F67FD4D78ED9B843DD8AA791A24B8D7AC3831A0556F16FB7E`)
 - **Quy chuẩn danh xưng / Naming Standard**: 12 Functional Components (Requirement R4)
 - **Trạng thái / Status**: AUTHORITATIVE & MAINTAINED
 
@@ -144,17 +144,19 @@ flowchart TD
         C06 -->|Screened Threat Context| C05
     end
 
-    subgraph S5["5. Verifiable Proofs & Custody"]
-        C08 -->|Inference Record & Weights| C09["[C09] ZKML Inference\n(Halo2 / EZKL Prover)"]
-        C03 -->|Merkle Root & Storage URI| C10["[C10] Identity & Custody\n(EvidenceRegistryDID.sol)"]
-        C05 -->|Investigation Report Hash| C10
-        C09 -->|KZG Proof & Signals| C10
+    subgraph S5["5. Verifiable Proofs & Custody (Local Anvil Chain 31337)"]
+        C08 -->|Scaled Features & ONNX Hash| C09["[C09] ZKML Inference\n(EZKL Halo2 Prover, circuits/anomaly_detector_v1)"]
+        C09 -->|5,504B Proof + 11 Instances| IV["InferenceVerifier.sol\n(SHA-256 Commitment Binding)"]
+        IV -->|delegate/call verifyProof| HV["Halo2Verifier.sol\n(Real BN254 KZG Pairing 0x06-0x08)"]
+        C03 -->|Merkle Root & Storage URI| C10["[C10] Identity & Custody\n(EvidenceRegistryDID.sol + EIP-712)"]
+        C05 -->|Validated Investigation Digest| C10
+        IV -->|Verified Proof Record & Digest| C10
     end
 
-    subgraph S6["6. Verification & Evaluation"]
-        C10 -->|On-Chain Custody Events| C11["[C11] Integration & Evaluation\n(D1/D2/D3 Replay)"]
-        C10 -.->|Dual-Read Package Validation| C04
-        C11 -->|Verified Artifacts| C12["[C12] Portable Release\n(Standalone Bundle)"]
+    subgraph S6["6. Dual-Read Provenance, Evaluation & Release"]
+        C10 -->|On-Chain Custody & Proof Receipts| C11["[C11] Integration & Evaluation\n(D1 EVM / D2 Host / D3 35-Vector Adversarial)"]
+        C10 -.->|Stage 8 Dual-Read Anchored Manifest| C04
+        C11 -->|Verified Artifacts + SHA256SUMS.txt| C12["[C12] Portable Release\n(Standalone Offline Windows x64 Bundle)"]
     end
 
     style C01 fill:#f9f,stroke:#333,stroke-width:1px
@@ -248,8 +250,8 @@ flowchart TD
 - **Ràng buộc Mật mã học (Cryptographic Binding)**:
   Tính toán mã băm ràng buộc 5 thành phần:
   $$\text{binding\_hash} = \text{SHA256}(\text{model\_hash} \parallel \text{circuit\_version} \parallel \text{input\_commitment} \parallel \text{output\_commitment} \parallel \text{inference\_record\_id})$$
-- **Khả năng Chống can thiệp (Tamper Rejection)**: Tự động từ chối khi sửa đổi bất kỳ byte nào của tệp proof, làm lệch public signals hoặc thay đổi cam kết đầu vào/đầu ra.
-- **Hợp đồng Xác minh On-Chain**: Triển khai `InferenceVerifier.sol` trên Anvil (biên dịch bằng Foundry `--via-ir`), ghi nhận lượng gas tiêu thụ và receipt xác minh.
+- **Khả năng Chống can thiệp (Tamper Rejection)**: Tự động từ chối đóng kín (fail-closed) khi sửa đổi bất kỳ byte nào của tệp proof, làm lệch 11 tín hiệu công khai (`evm_instances`), đổi `model_hash`, hoặc thay đổi cam kết đầu vào/đầu ra.
+- **Hợp đồng Xác minh On-Chain Thực (`Halo2Verifier.sol` + `InferenceVerifier.sol`)**: Triển khai cặp hợp đồng thực trên Anvil (`via_ir = true`, `code_size_limit = 65536`): `InferenceVerifier.sol` tái tính cam kết SHA-256 trên EVM từ 10 tín hiệu đầu vào đã lượng tử hóa (`scale = 7`), kiểm tra cam kết đầu ra `instances[10]`, rồi gọi trực tiếp `Halo2Verifier.sol` thực thi phép ghép cặp đường cong elip BN254 KZG qua precompiles `0x06`/`0x07`/`0x08` (~`1,135,772`–`1,137,038` gas cho proof 5,504 bytes).
 
 ### [C10] Identity & Custody
 - **Trách nhiệm**: Quản lý chuỗi hành trình chứng cứ và danh tính người điều tra trên hợp đồng thông minh blockchain.
@@ -319,13 +321,14 @@ flowchart TD
 [Traceable Audit Report] ◄────── [EvidenceRegistryDID] ◄────── [Evidence Package (URI)]
 ```
 
-### 4.3 Mô hình 3 (Demo D3): Kiểm thử Đối kháng Đa tầng (Adversarial Defense)
-Hệ thống thiết lập 5 cổng kiểm soát đối kháng:
-1. **Cổng 1 (Data Tampering)**: Sửa đổi 1 byte trong dữ liệu thô $\rightarrow$ Evidence Store đối chiếu SHA-256 phát hiện và dừng xử lý (`INTEGRITY_MISMATCH`).
-2. **Cổng 2 (Cognitive Attack)**: Đưa lệnh tiêm mã độc vào tên token on-chain $\rightarrow$ Sanitizer nhận diện 38 mẫu và vô hiệu hóa (`PROMPT_INJECTION_DETECTED`).
-3. **Cổng 3 (Attribution Fabrication)**: AI tạo kết luận không có trong chứng cứ $\rightarrow$ Ref Checker kiểm tra và loại bỏ trích dẫn sai lệch (`UNVERIFIED_CITATION`).
-4. **Cổng 4 (ZKML Proof Tampering)**: Sửa 1 byte trong proof hoặc tráo đổi public signals $\rightarrow$ Verifier từ chối ngay lập tức (`VERIFICATION_FAILED`).
-5. **Cổng 5 (Identity & Replay Attack)**: Dùng lại chữ ký cũ hoặc sai DID/Role $\rightarrow$ Hợp đồng thông minh revert giao dịch (`INVALID_SIGNER` / `NONCE_EXPIRED`).
+### 4.3 Mô hình 3 (Demo D3): Kiểm thử Đối kháng Đa cổng (35 Attack Vectors Across 6 Gateways)
+Kịch bản `scripts/demo_d3_adversarial.py` kiểm chứng thực nghiệm 35 vector tấn công trên 6 cổng phòng vệ, đạt tỷ lệ chặn đóng kín `35/35` (`100%`):
+1. **Cổng 1 — Endpoint First Responder Safety Guard (8 vectors)**: Chặn thực thi shell/command chaining, PowerShell mã hóa Base64, chèn cờ lệnh CLI (`-Command`/`/c`), xóa log, sửa ACL, cô lập mạng, ký giao dịch và path traversal.
+2. **Cổng 2 — ML & XAI Integrity Gate (6 vectors)**: Chặn sai lệch `model_sha256`, thiếu bằng chứng đầu vào, gộp đơn vị token trái phép và đầu vào suy biến `NOT_EXPLAINABLE`.
+3. **Cổng 3 — MITRE & Threat Intelligence Gate (4 vectors)**: Chặn gán kỹ thuật ATT&CK không đủ `required_evidence` (`NOT_MAPPED` abstain) và khử khuẩn CSV formula injection.
+4. **Cổng 4 — AI Investigator & Ref Checker Gate (6 vectors)**: Vô hiệu hóa prompt injection trong dữ liệu on-chain, chặn vượt ngân sách 5 bước công cụ, chặn ghi vào SQLite (`mode=ro`) và bác bỏ trích dẫn bịa đặt (`CONTENT_MISMATCH`).
+5. **Cổng 5 — ZKML Off-Chain & On-Chain BN254 Verifier Gate (5 vectors)**: Sau khi xác minh proof chuẩn `5,504` bytes thành công trên `Halo2Verifier.sol`, tự động revert khi sửa byte proof, sửa tín hiệu công khai (`instances`), tráo `model_hash`, tráo `inputCommitment` hoặc `outputCommitment`.
+6. **Cổng 6 — Identity, DID & Custody Gate (6 vectors)**: Chặn sai ánh xạ `DID ↔ signer`, thiếu quyền RBAC, chữ ký EIP-712 giả mạo, phát lại nonce cũ, hết hạn deadline và xung đột mã băm chứng cứ.
 
 ### 4.4 Mô hình 4: Luồng Xác thực Hai chiều (Anchored Evidence Reverse Loop)
 Để bảo đảm bằng chứng đã được lưu trên blockchain có thể được xác minh độc lập mà không tin tưởng mù quáng vào CSDL cục bộ:
@@ -379,27 +382,27 @@ Hệ thống thiết lập 4 ranh giới tin cậy (Trust Boundaries) nghiêm ng
 ### 6.1 Môi trường Phát triển & Kiểm thử Cục bộ (Local Development)
 - **Hệ điều hành**: Microsoft Windows 10 / Windows 11 (64-bit AMD64).
 - **Môi trường Python**: Python 3.13.14 (64-bit) với môi trường ảo cách ly.
-- **Hạ tầng Blockchain Cục bộ**: Foundry 1.8.7 (`anvil.exe`, `forge.exe`, `cast.exe`) chạy loopback trên `http://127.0.0.1:8545` với chain ID 31337.
-- **Công cụ Kiểm thử**: Pytest 9.2.0 thực thi bộ kiểm thử 1.521 ca kiểm thử; Forge thực thi 112 ca kiểm thử smart contract.
+- **Hạ tầng Blockchain Cục bộ**: Foundry 1.8.6 (`anvil.exe`, `forge.exe`, `cast.exe`) và trình biên dịch `solc-0.8.24.exe` đóng gói sẵn trong `tools/foundry/`, chạy loopback trên `127.0.0.1` với chain ID `31337`.
+- **Công cụ Kiểm thử**: Foundry `forge test --root contracts` thực thi `175/175` ca kiểm thử smart contract (7 bộ kiểm thử, bao gồm `Halo2RealVerifier.t.sol` với BN254 pairing thật); Pytest 9.2.0 thực thi toàn bộ các bộ kiểm thử thành phần và kiểm thử đối kháng.
 
 ### 6.2 Môi trường Bản phát hành Độc lập (Standalone Portable Release)
-- Đóng gói trọn gói trong thư mục `dist/` hoặc thư mục giải nén độc lập.
-- Chạy hoàn toàn offline với thư mục `wheels/` chứa 101 gói Python.
-- Vận hành qua các lệnh PowerShell chuẩn hóa:
+- Đóng gói trọn gói trong `dist/blockchain_ai_forensics_portable_v6.0.0.zip`.
+- Chạy offline với thư mục `wheels/` chứa 101 gói Python nền tảng, kèm `requirements.lock.txt` (113 gói), `SHA256SUMS.txt` và `tools/foundry/` (`forge.exe`, `anvil.exe`, `cast.exe`, `solc-0.8.24.exe`).
+- Vận hành qua các lệnh PowerShell chuẩn hóa theo `AGENT.md` v6.0 §10:
   ```powershell
-  # Cài đặt môi trường độc lập
-  .\setup_env.bat  # hoặc .\setup.ps1
+  # 1. Kiểm tra mã băm SHA256SUMS.txt và 3 CSDL chuẩn
+  powershell -ExecutionPolicy Bypass -File .\verify_integrity.ps1
 
-  # Kích hoạt môi trường
-  .\venv\Scripts\Activate.ps1
+  # 2. Cài đặt môi trường độc lập (.venv & .env mẫu không chứa bí mật)
+  powershell -ExecutionPolicy Bypass -File .\setup.ps1
 
-  # Chạy toàn bộ kiểm thử
-  .\run_tests.bat  # hoặc .\run_full_tests.ps1
+  # 3. Chạy kiểm thử khói cô lập (Foundry BN254 + CLI + Pytest)
+  powershell -ExecutionPolicy Bypass -File .\smoke_test.ps1
 
-  # Chạy thực nghiệm đánh giá
-  .\run_evaluation.bat
+  # 4. Chạy toàn bộ bộ kiểm thử và kịch bản thực nghiệm D1 / D2 / D3
+  powershell -ExecutionPolicy Bypass -File .\run_full_tests.ps1 -IncludeDemos
   ```
-- Kiểm tra tính toàn vẹn gói:
+- Kiểm tra tính toàn vẹn tệp nén từ bên ngoài:
   ```powershell
-  python scripts\portable.py verify <path_to_zip>
+  python scripts\portable.py verify dist\blockchain_ai_forensics_portable_v6.0.0.zip
   ```

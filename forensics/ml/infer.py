@@ -62,7 +62,8 @@ class ForensicMLInferenceEngine:
         model_id: str = "anomaly_detector_v1",
         default_threshold: float = 0.65,
     ):
-        self.models_dir = Path(models_dir or "D:/Projest/Blockchain/models")
+        from forensics.paths import MODELS_DIR
+        self.models_dir = Path(models_dir) if models_dir else MODELS_DIR
         self.model_id = model_id
         self.threshold = default_threshold
 

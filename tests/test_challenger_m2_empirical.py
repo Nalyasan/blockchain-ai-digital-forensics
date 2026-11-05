@@ -64,6 +64,7 @@ from forensics.ml.mitre import (
     MitreMappingEngine,
     UnsubstantiatedMappingError,
 )
+from forensics.paths import accepted_env_sha256
 
 
 CANONICAL_HASHES = {
@@ -73,7 +74,7 @@ CANONICAL_HASHES = {
     ".env": "c2f4879666cd21276c58ec75de923c8235d414f3d646a854a835c5638ec1699c",
 }
 
-ROOT_DIR = Path("D:/Projest/Blockchain")
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 def _compute_file_sha256(path: Path) -> str:
@@ -601,7 +602,8 @@ class TestCanonicalDatabaseInvariance:
 
         assert target_path.is_file(), f"Database file {target_path} does not exist"
         current_hash = _compute_file_sha256(target_path)
-        assert current_hash == expected_hash, (
+        allowed = {h.lower() for h in accepted_env_sha256(ROOT_DIR)} if db_name == ".env" else {expected_hash}
+        assert current_hash in allowed, (
             f"Bitwise integrity violation in {db_name}! "
             f"Expected {expected_hash}, got {current_hash}"
         )

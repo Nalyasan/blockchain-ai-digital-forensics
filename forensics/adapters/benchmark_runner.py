@@ -62,7 +62,7 @@ from forensics.persistence import insert_verified
 
 logger = logging.getLogger("forensics.adapters.benchmark_runner")
 
-_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark" if (PROJECT_ROOT.parent / "p6_public_benchmark").exists() else Path("D:/Projest/p6_public_benchmark")
+_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark"
 DEFAULT_DATASETS_DIR = _P6_BENCH_ROOT / "datasets" / "working"
 DEFAULT_RESULTS_DIR = _P6_BENCH_ROOT / "results"
 DEFAULT_REPORTS_DIR = _P6_BENCH_ROOT / "reports"
@@ -505,7 +505,7 @@ def generate_benchmark_report_md(suite_results: dict[str, Any], output_path: Pat
 
 **Milestone**: Milestone 3: Benchmark Execution & Gate P6-03  
 **Agent**: `worker_p6_m3` (Lead Blockchain Forensics Engineer, AI Security Engineer, Data Engineer & Independent QA Auditor)  
-**Workspace**: `D:\\Projest\\p6_public_benchmark`  
+**Workspace**: `{_P6_BENCH_ROOT}`  
 **Repository Branch**: `feature/p6-public-dataset-benchmark`  
 **Accepted Baseline Commit**: `55003fd7466148ccd8ce806bba83f923399f3074`  
 **Timestamp**: {current_iso_utc()}  
@@ -634,8 +634,8 @@ In open distributed blockchain ledgers, the omission of an address from a public
 All tests executed cleanly with exit code 0:
 
 ```powershell
-Set-Location "D:\\Projest\\p6_public_benchmark\\repo"
-python -m pytest tests/test_p6_adapters.py tests/test_p6_screening.py tests/test_persistence_conflicts.py --basetemp="D:/Projest/p6_public_benchmark/results/pytest_temp" -v
+Set-Location "{_P6_BENCH_ROOT}"
+python -m pytest tests/test_p6_adapters.py tests/test_p6_screening.py tests/test_persistence_conflicts.py -v
 ```
 
 ### Verified Test Categories:

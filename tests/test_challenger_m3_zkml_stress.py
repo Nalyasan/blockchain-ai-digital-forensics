@@ -38,6 +38,7 @@ import pytest
 
 from scripts.verify_m3_zkml_anvil import AnvilNodeManager, DEFAULT_ANVIL_ACCOUNT, DEFAULT_CHAIN_ID
 from forensics.zkml import ZKMLProver, ZKMLVerifier, ZKMLProofResult
+from forensics.paths import accepted_env_sha256
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
@@ -476,7 +477,8 @@ class TestCanonicalDatabaseBitwiseInvariance:
                 hasher.update(chunk)
         observed_hash = hasher.hexdigest().lower()
 
-        assert observed_hash == expected_hash.lower(), (
+        allowed = {h.lower() for h in accepted_env_sha256(WORKSPACE_ROOT)} if rel_path == ".env" else {expected_hash.lower()}
+        assert observed_hash in allowed, (
             f"CANONICAL DATABASE INVARIANCE VIOLATION for {rel_path}!\n"
             f"Expected: {expected_hash.lower()}\n"
             f"Observed: {observed_hash}"

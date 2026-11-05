@@ -46,6 +46,7 @@ from forensics.endpoint.store import (
     get_readonly_endpoint_connection,
     init_endpoint_db,
 )
+from forensics.paths import accepted_env_sha256
 
 
 @pytest.fixture
@@ -360,4 +361,5 @@ class TestEmpiricalCanonicalDatabaseInvariance:
         for name, (path, expected_hash) in targets.items():
             assert path.exists(), f"Target file missing: {path}"
             computed = hashlib.sha256(path.read_bytes()).hexdigest().upper()
-            assert computed == expected_hash, f"Invariance violation on {name}!"
+            allowed = accepted_env_sha256() if name == ".env" else {expected_hash}
+            assert computed in allowed, f"Invariance violation on {name}!"

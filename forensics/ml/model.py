@@ -434,7 +434,8 @@ def check_active_neurons(
 def load_default_model(models_dir: Path | str | None = None) -> CompactAnomalyMLP:
     """Loads default anomaly detector model from models/ or trains default if not found."""
     if models_dir is None:
-        models_dir = Path("D:/Projest/Blockchain/models")
+        from forensics.paths import MODELS_DIR
+        models_dir = MODELS_DIR
     else:
         models_dir = Path(models_dir)
 

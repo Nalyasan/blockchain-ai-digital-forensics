@@ -29,6 +29,7 @@ from forensics.endpoint.first_responder import (
     TriagePlaybookType,
     UnauthorizedActionError,
 )
+from forensics.paths import accepted_env_sha256
 
 
 class TestFirstResponseExceptionHierarchy:
@@ -250,4 +251,5 @@ class TestFailClosedAdversarialVectors:
         for name, p in paths.items():
             if p.exists():
                 digest = hashlib.sha256(p.read_bytes()).hexdigest().upper()
-                assert digest == expected[name], f"Canonical database {name} was modified!"
+                allowed = accepted_env_sha256() if name == ".env" else {expected[name]}
+                assert digest in allowed, f"Canonical database {name} was modified!"

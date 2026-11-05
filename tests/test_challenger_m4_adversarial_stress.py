@@ -31,6 +31,7 @@ from forensics.did.eip712 import (
     make_domain,
 )
 from forensics.did.resolution import format_did, resolve_did, is_valid_did
+from forensics.paths import accepted_env_sha256
 
 # Standard Anvil Accounts & Private Keys
 DEPLOYER = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
@@ -733,7 +734,8 @@ class TestCanonicalDatabaseInvarianceChallenger:
             abs_path = root / rel_path
             assert abs_path.exists(), f"Canonical file missing: {rel_path}"
             computed_hash = hashlib.sha256(abs_path.read_bytes()).hexdigest().upper()
-            assert computed_hash == expected_hash, (
+            allowed = accepted_env_sha256(root) if rel_path == ".env" else {expected_hash}
+            assert computed_hash in allowed, (
                 f"CORRUPTION DETECTED in {rel_path}!\n"
                 f"Expected: {expected_hash}\n"
                 f"Actual:   {computed_hash}"

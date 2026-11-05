@@ -122,7 +122,7 @@ class TestGate3_05_NoteHashAndNoProbing:
         path_like_notes = [
             r"C:\secret.txt",
             r"C:\Windows\System32\drivers\etc\hosts",
-            r"D:\Projest\Blockchain\forensics\evidence_identity.py",
+            str(pathlib.Path(__file__).resolve()),
             "/etc/shadow",
             "/tmp/confidential_evidence.bin",
             "./relative/nonexistent/path/note.log",

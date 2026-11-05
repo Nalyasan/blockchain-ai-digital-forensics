@@ -29,7 +29,8 @@ def main(argv=None):
     is_url = args.source.startswith('https://') or args.source.startswith('http://')
 
     if is_url:
-        cache_dir = PROJECT_ROOT / 'scratch' / 'dataset_cache'
+        import tempfile
+        cache_dir = Path(tempfile.gettempdir()) / 'forensics_dataset_cache'
         cache_dir.mkdir(parents=True, exist_ok=True)
         url_hash = hashlib.sha256(args.source.encode('utf-8')).hexdigest()[:12]
         url_name = Path(urlparse(args.source).path).name or f'labels_{url_hash}.json'

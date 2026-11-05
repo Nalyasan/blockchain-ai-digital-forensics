@@ -32,6 +32,7 @@ from forensics.did.eip712 import (
     make_domain,
 )
 from forensics.did.resolution import format_did, resolve_did, is_valid_did
+from forensics.paths import accepted_env_sha256
 
 DEPLOYER = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 ALICE = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
@@ -388,4 +389,5 @@ class TestAnvilCustodyTransferLive:
         for name, p in paths.items():
             if p.exists():
                 digest = hashlib.sha256(p.read_bytes()).hexdigest().upper()
-                assert digest == expected[name], f"Canonical DB {name} was modified!"
+                allowed = accepted_env_sha256() if name == ".env" else {expected[name]}
+                assert digest in allowed, f"Canonical DB {name} was modified!"

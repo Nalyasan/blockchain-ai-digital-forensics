@@ -2,9 +2,9 @@
 # STANDARDIZED COMPONENT NAMING & ARCHITECTURAL TRACEABILITY CROSS-REFERENCE
 
 - **Mã tài liệu / Document ID**: `NAMING_CROSS_REFERENCE`
-- **Phiên bản / Version**: 2.0.0 (AGENT.md v6.0 Baseline)
+- **Phiên bản / Version**: 6.0.0 (AGENT.md v6.0 Final Verified)
 - **Dự án / Project**: Blockchain + AI Digital Forensics System (Academic PoC — Đề tài 8)
-- **Tài liệu đặc tả căn cứ / Authoritative Specification**: `AGENT.md v6.0` (`C:\Users\Naly\Downloads\AGENT.md`)
+- **Tài liệu đặc tả căn cứ / Authoritative Specification**: `AGENT.md` v6.0 (`DAE75E00D95A5F2F67FD4D78ED9B843DD8AA791A24B8D7AC3831A0556F16FB7E`)
 - **Yêu cầu triển khai / Implementation Requirement**: Requirement R4 (Standardized Functional Naming)
 - **Trạng thái / Status**: ACTIVE & MAINTAINED
 
@@ -60,20 +60,20 @@ Bảng dưới đây thiết lập mối liên kết toàn diện giữa Mã đ�
 | **T09** | AI Investigator bounded execution | **AI Investigator (C05)** | Tuân thủ ngân sách 5 bước và danh sách trắng công cụ (Whitelist) | **DONE** |
 | **T10** | Two-stage Ref Checker | **AI Investigator (C05)** | Xác thực tồn tại và đối chiếu giá trị nội dung trích dẫn chứng cứ | **DONE** |
 | **T11** | Prompt Injection defense | **AI Investigator (C05)** | Ngăn chặn 38 mẫu tiêm mã độc qua nội dung on-chain không tin cậy | **DONE** |
-| **T12** | Multi-source Acquisition (ISO 27037) | **Endpoint Acquisition (C07)** | Thu thập song song nguồn EVM và host logs có manifest, SHA-256 | **PARTIAL** (Đạt EVM & JSONL, hoàn thiện EVTX) |
+| **T12** | Multi-source Acquisition (ISO 27037) | **Endpoint Acquisition (C07)** | Thu thập song song nguồn EVM và host logs JSONL/EVTX có manifest, consent, SHA-256 | **DONE** |
 | **T13** | First Responder policy guards | **Endpoint Acquisition (C07)** | Chặn quyền chạy shell, xóa log, sửa ACL, cô lập mạng, ký giao dịch | **DONE** |
-| **T14** | ML inference reproducibility | **ML/XAI (C08)** | Tái lập suy luận mô hình với mã băm cố định và feature extractor | **PARTIAL** (Hoàn thiện đồng bộ ONNX) |
-| **T15** | ML anti-leakage & ground truth | **ML/XAI (C08)** | Tách độc lập nhãn ground truth, scaler chỉ fit trên train split | **PARTIAL** (Triệt tiêu rò rỉ rule engine) |
-| **T16** | Local XAI quantitative fidelity | **ML/XAI (C08)** | Giải thích cục bộ SHAP, đo lường độ ổn định (stability) và fidelity | **PARTIAL** (Bổ sung số liệu thực nghiệm) |
-| **T17** | Grounded MITRE ATT&CK mapping | **ML/XAI (C08)** | Ánh xạ kỹ thuật kèm bằng chứng bắt buộc và cơ chế `NOT_MAPPED` | **PARTIAL** (Hoàn thiện logic abstain) |
-| **T18** | DID ↔ Signer binding & verification | **Identity & Custody (C10)** | Xác thực quan hệ giữa DID W3C, khóa công khai và địa chỉ ví ký | **DONE** |
-| **T19** | Two-actor custody transfer | **Identity & Custody (C10)** | Quy trình chuyển giao giữa 2 tác viên với biên nhận Anvil thực tế | **PARTIAL** (Hoàn thiện biên nhận khép kín) |
-| **T20** | ZKML real Halo2 positive proof | **ZKML (C09)** | Sinh proof thật bằng Halo2/EZKL, lưu trữ commitment và digests | **DONE** |
-| **T21** | ZKML automated tamper rejection | **ZKML (C09)** | Tự động từ chối khi sửa đổi input, output, model hash, hoặc proof bytes | **DONE** |
-| **T22** | ZKML Anvil on-chain verification | **ZKML (C09)** & **Identity & Custody (C10)** | Triển khai và xác minh proof qua `InferenceVerifier.sol` trên Anvil | **NOT_STARTED** (Kế hoạch M3) |
-| **T23** | End-to-end case replay (D1/D2) | **Integration & Evaluation (C11)** | Replay toàn diện luồng: evidence -> alert -> ML/XAI -> custody/proof | **NOT_STARTED** (Kế hoạch M5) |
-| **T24** | Multi-gateway adversarial defense | **Integration & Evaluation (C11)** | Kiểm thử đối kháng đa tầng: sửa dữ liệu, prompt injection, sai DID | **DONE** |
-| **T25** | Portable clean-extract execution | **Portable Release (C12)** | Giải nén và chạy kiểm thử thành công trên thư mục mới độc lập | **NOT_STARTED** (Kế hoạch M6) |
+| **T14** | ML inference reproducibility | **ML/XAI (C08)** | Tái lập suy luận mô hình với mã băm ONNX cố định (`d1b9ce82...`) và feature extractor | **DONE** |
+| **T15** | ML anti-leakage & ground truth | **ML/XAI (C08)** | Tách độc lập nhãn ground truth, cửa sổ thời gian không rò rỉ, scaler chỉ fit trên train | **DONE** |
+| **T16** | Local XAI quantitative fidelity | **ML/XAI (C08)** | Giải thích cục bộ Exact SHAP, đo lường fidelity ($R^2 = 0.9993$), stability ($0.9999$) và `NOT_EXPLAINABLE` | **DONE** |
+| **T17** | Grounded MITRE ATT&CK mapping | **ML/XAI (C08)** | Ánh xạ kỹ thuật kèm `required_evidence`, phiên bản ATT&CK v14.1 và cơ chế `NOT_MAPPED` | **DONE** |
+| **T18** | DID ↔ Signer binding & verification | **Identity & Custody (C10)** | Xác thực quan hệ giữa DID W3C, khóa công khai, RBAC và chữ ký EIP-712 chống replay | **DONE** |
+| **T19** | Two-actor custody transfer | **Identity & Custody (C10)** | Chuyển giao giữa 2 tác viên với biên nhận Anvil thực tế và đối soát khớp mã băm | **DONE** |
+| **T20** | ZKML real Halo2 positive proof | **ZKML (C09)** | Sinh proof thật `5,504` bytes bằng Halo2/EZKL tại `circuits/anomaly_detector_v1/` | **DONE** |
+| **T21** | ZKML automated tamper rejection | **ZKML (C09)** | Tự động từ chối khi sửa đổi input, output, model hash, public instances hoặc proof bytes | **DONE** |
+| **T22** | ZKML Anvil on-chain verification | **ZKML (C09)** & **Identity & Custody (C10)** | Triển khai `Halo2Verifier.sol` + `InferenceVerifier.sol` trên Anvil (~`1.14M` gas) | **DONE** |
+| **T23** | End-to-end case replay (D1/D2) | **Integration & Evaluation (C11)** | Replay thực nghiệm D1 (EVM 8 pha + re-read) & D2 (Host ISO 27037 6 pha) có báo cáo truy vết | **DONE** |
+| **T24** | Multi-gateway adversarial defense | **Integration & Evaluation (C11)** | Kịch bản D3 chặn đóng kín `35/35` vector tấn công trên 6 cổng phòng vệ; zero PII/secret leak | **DONE** |
+| **T25** | Portable clean-extract execution | **Portable Release (C12)** | Giải nén và kiểm thử sạch trên thư mục độc lập (`DONE`); máy vật lý thứ hai: `NOT_VERIFIED` | **PARTIAL** (Clean-extract `DONE`; máy vật lý thứ hai `NOT_VERIFIED`) |
 
 ---
 

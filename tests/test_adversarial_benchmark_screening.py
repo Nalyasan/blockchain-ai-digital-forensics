@@ -53,9 +53,9 @@ logger = logging.getLogger(__name__)
 
 from forensics.paths import BENCHMARK_DB as CANONICAL_BENCH_DB, PROJECT_ROOT
 
-_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark" if (PROJECT_ROOT.parent / "p6_public_benchmark").exists() else Path("D:/Projest/p6_public_benchmark")
+_P6_BENCH_ROOT = PROJECT_ROOT.parent / "p6_public_benchmark"
 BENCHMARK_METRICS_PATH = _P6_BENCH_ROOT / "results" / "benchmark_metrics.json"
-AUTHENTIC_BENCH_DB_PATH = CANONICAL_BENCH_DB if CANONICAL_BENCH_DB.exists() else Path("D:/Projest/p6_public_benchmark/data/benchmark_p6.db")
+AUTHENTIC_BENCH_DB_PATH = CANONICAL_BENCH_DB if CANONICAL_BENCH_DB.exists() else (_P6_BENCH_ROOT / "data" / "benchmark_p6.db")
 
 
 @pytest.fixture

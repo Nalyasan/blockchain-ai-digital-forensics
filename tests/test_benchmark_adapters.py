@@ -578,15 +578,15 @@ def test_provenance_verification(tmp_path: Path):
 def test_database_isolation():
     """T-P6-12: Verify that real_p4.db and canonical production databases are rejected."""
     with pytest.raises(ValueError) as exc1:
-        assert_database_isolation("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
+        assert_database_isolation("C:/isolated_workspace/worktrees/p4_real_integration/data/real_p4.db")
     assert "Database isolation violation" in str(exc1.value)
 
     with pytest.raises(ValueError) as exc2:
-        assert_database_isolation("D:/Projest/Blockchain/data/forensics.db")
+        assert_database_isolation("C:/isolated_workspace/Blockchain/data/forensics.db")
     assert "Database isolation violation" in str(exc2.value)
 
     with pytest.raises(ValueError) as exc3:
-        init_benchmark_db("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
+        init_benchmark_db("C:/isolated_workspace/worktrees/p4_real_integration/data/real_p4.db")
     assert "Database isolation violation" in str(exc3.value)
 
 

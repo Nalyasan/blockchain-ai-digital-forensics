@@ -12,6 +12,7 @@ from forensics.endpoint.first_responder import (
     ForbiddenActionCategory,
     SafetyGuard,
     TriagePlaybookType,
+    _flatten_payload,
 )
 
 
@@ -78,10 +79,28 @@ class TestNestedParameterInjection:
         assert cat == ForbiddenActionCategory.EVENT_LOG_CLEARING
 
     def test_nested_none_and_numbers(self):
-        payload = {"params": [None, 123, 45.67, True]}
+        # Unknown kwargs are rejected by the strict schema (extra="forbid"), so the
+        # false-positive probe targets the pattern layer and schema-valid scalars.
+        flattened = " ".join(_flatten_payload({"params": [None, 123, 45.67, True]}))
+        for pattern in (
+            SafetyGuard._FORBIDDEN_KEY_RE,
+            SafetyGuard._FORBIDDEN_ISOLATION_RE,
+            SafetyGuard._FORBIDDEN_ACL_RE,
+            SafetyGuard._FORBIDDEN_LOG_RE,
+            SafetyGuard._FORBIDDEN_DELETION_RE,
+            SafetyGuard._FORBIDDEN_SENSITIVE_PATHS_RE,
+            SafetyGuard._FORBIDDEN_SHELL_RE,
+        ):
+            assert not pattern.search(flattened)
+
+        payload = {"target_pid": 123, "name_filter": None, "flag_suspicious_paths": True, "limit": 45}
         is_safe, cat, _ = SafetyGuard.evaluate("triage_running_processes", payload)
         assert is_safe
         assert cat is None
+
+        is_safe, cat, reason = SafetyGuard.evaluate("triage_running_processes", {"params": [None, 123]})
+        assert not is_safe
+        assert "extra_forbidden" in str(reason)
 
 
 class TestTriageHashVerificationPaths:

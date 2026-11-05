@@ -25,7 +25,7 @@ from forensics.ai.db_readonly import (
 )
 from forensics.paths import REAL_P4_DB as CANONICAL_REAL_P4_DB
 
-REAL_P4_DB = CANONICAL_REAL_P4_DB if CANONICAL_REAL_P4_DB.exists() else Path(r"D:\Projest\worktrees\p4_real_integration\data\real_p4.db")
+REAL_P4_DB = CANONICAL_REAL_P4_DB
 EXPECTED_REAL_P4_SHA256 = "6bd9aed48ac2742d0862198bff65994861244ec681dc8abeb3e6f771e7808c97"
 EXPECTED_REAL_P4_SIZE = 5947392
 

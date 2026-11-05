@@ -110,8 +110,8 @@ def _run_cast(args: list[str], timeout: int = 30) -> str:
     except Exception:
         raise RuntimeError("CAST_EXEC_FAILED: không thể chạy công cụ") from None
     if res.returncode != 0:
-        err_msg = res.stderr.strip() if res.stderr else "công cụ không hoàn tất yêu cầu"
-        raise RuntimeError(f"CAST_EXIT_{int(res.returncode)}: {err_msg}")
+        # Tool stderr may echo RPC URLs, passwords or keys; never propagate it.
+        raise RuntimeError(f"CAST_EXIT_{int(res.returncode)}: công cụ không hoàn tất yêu cầu")
     return res.stdout.strip()
 
 def get_rpc_chain_id(rpc_url: str) -> int:

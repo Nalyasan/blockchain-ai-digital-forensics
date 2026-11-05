@@ -40,7 +40,7 @@ from forensics.adapters.xlsx_adapter import (
     recover_numeric_address,
 )
 
-RAW_DATASETS_DIR = Path(r"D:\Projest\p6_public_benchmark\datasets\raw")
+RAW_DATASETS_DIR = Path(__file__).resolve().parents[2] / "p6_public_benchmark" / "datasets" / "raw"
 
 
 # =============================================================================

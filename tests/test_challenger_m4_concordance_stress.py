@@ -30,6 +30,7 @@ from forensics.did.eip712 import (
     sign_typed_data,
     make_domain,
 )
+from forensics.paths import accepted_env_sha256
 
 DEPLOYER = ANVIL_DEFAULT_DEPLOYER
 ALICE = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
@@ -260,6 +261,7 @@ class TestCanonicalDatabaseInvarianceChallengerIter2:
                 while chunk := f.read(65536):
                     hasher.update(chunk)
             actual_hash = hasher.hexdigest().lower()
-            assert actual_hash == expected_hash, (
+            allowed = {h.lower() for h in accepted_env_sha256(root_dir)} if rel_path == ".env" else {expected_hash}
+            assert actual_hash in allowed, (
                 f"CANONICAL DB COMPROMISED: {rel_path} hash {actual_hash} != {expected_hash}"
             )

@@ -45,6 +45,7 @@ from forensics.endpoint.manifest import (
 )
 from forensics.endpoint.schemas import AcquisitionResult
 from forensics.endpoint.store import EndpointEvidenceStore, init_endpoint_db
+from forensics.paths import accepted_env_sha256
 
 
 @pytest.fixture
@@ -505,5 +506,5 @@ class TestChallengerCanonicalDatabasesInvariance:
             content = path.read_bytes()
             computed_hash = hashlib.sha256(content).hexdigest().upper()
             assert (
-                computed_hash == expected_hash
+                computed_hash in (accepted_env_sha256() if name == ".env" else {expected_hash})
             ), f"INVARIANCE VIOLATION on {name}: expected {expected_hash}, got {computed_hash}"

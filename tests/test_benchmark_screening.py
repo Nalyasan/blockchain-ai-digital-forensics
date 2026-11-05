@@ -365,11 +365,11 @@ def test_screen_single_address_lookup(populated_bench_db: Path):
 def test_screening_database_isolation_guard():
     """Verify that assert_database_isolation rejects canonical database paths."""
     forbidden = [
-        "D:/Projest/worktrees/p4_real_integration/data/real_p4.db",
+        "C:/isolated_workspace/worktrees/p4_real_integration/data/real_p4.db",
         "data/real_p4.db",
         "real_p4.db",
         "data/forensics.db",
-        "D:/Projest/Blockchain/data/forensics.db",
+        "C:/isolated_workspace/Blockchain/data/forensics.db",
     ]
     for path in forbidden:
         with pytest.raises(ValueError, match="Database isolation violation"):

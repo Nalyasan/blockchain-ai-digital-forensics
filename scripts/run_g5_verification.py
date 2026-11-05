@@ -18,7 +18,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path("D:/Projest/Blockchain").resolve()
+REPO_ROOT = Path(__file__).resolve().parents[1]
 VERIF_DIR = REPO_ROOT / "results" / "verification"
 TMP_PYTEST = REPO_ROOT.parent / "tmp_pytest_workerG5"
 FORGE_BIN = REPO_ROOT / "tools" / "foundry" / "forge.exe"
@@ -792,7 +792,7 @@ def main():
     # Schema validation assertion
     import jsonschema
 
-    schema_path = Path("D:/Projest/.agents/teamwork/specminer_G5_3/handoff.md")
+    schema_path = REPO_ROOT.parent / ".agents" / "teamwork" / "specminer_G5_3" / "handoff.md"
     text = schema_path.read_text(encoding="utf-8")
     sec = text.split("### 4.2 Exact Schema for")[1].split("### 4.3 Redaction")[0]
     start_idx = sec.find("{")

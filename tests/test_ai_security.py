@@ -59,7 +59,7 @@ from forensics.ai.schemas import (
 from forensics.paths import REAL_P4_DB as CANONICAL_REAL_P4_DB
 
 # Canonical database path from P4-08 worktree
-REAL_P4_DB_PATH = CANONICAL_REAL_P4_DB if CANONICAL_REAL_P4_DB.exists() else Path("D:/Projest/worktrees/p4_real_integration/data/real_p4.db")
+REAL_P4_DB_PATH = CANONICAL_REAL_P4_DB
 
 # Known canonical facts from Euler Finance incident in real_p4.db
 CANON_TX_HASH = "0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d"

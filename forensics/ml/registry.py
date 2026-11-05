@@ -190,7 +190,8 @@ def save_model(
         tuple[Path, str]: (onnx_path, sha256_hash)
     """
     if models_dir is None:
-        target_dir = Path("D:/Projest/Blockchain/models")
+        from forensics.paths import MODELS_DIR
+        target_dir = MODELS_DIR
     else:
         target_dir = Path(models_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -238,7 +239,8 @@ def verify_model_integrity(
 ) -> bool:
     """Verifies that models/<model_id>.onnx matches the SHA-256 recorded in metadata."""
     if models_dir is None:
-        target_dir = Path("D:/Projest/Blockchain/models")
+        from forensics.paths import MODELS_DIR
+        target_dir = MODELS_DIR
     else:
         target_dir = Path(models_dir)
 
@@ -263,7 +265,8 @@ def load_model_metadata(
 ) -> dict[str, Any]:
     """Loads metadata JSON for a registered model."""
     if models_dir is None:
-        target_dir = Path("D:/Projest/Blockchain/models")
+        from forensics.paths import MODELS_DIR
+        target_dir = MODELS_DIR
     else:
         target_dir = Path(models_dir)
     meta_path = target_dir / f"{model_id}_meta.json"

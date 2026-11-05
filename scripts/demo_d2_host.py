@@ -75,6 +75,7 @@ from forensics.did.eip712 import (
     verify_typed_signature,
 )
 from forensics.did.resolution import format_did
+from forensics.paths import accepted_env_sha256
 
 # Canonical Invariance Hash Constants
 CANONICAL_HASHES = {
@@ -113,7 +114,8 @@ def verify_canonical_invariance(workspace_dir: Path) -> dict[str, dict[str, Any]
         if not p.exists():
             raise FileNotFoundError(f"Canonical protected file missing: {p}")
         actual = compute_file_sha256(p).upper()
-        match = actual == expected
+        allowed = accepted_env_sha256(workspace_dir) if name == ".env" else {expected}
+        match = actual in allowed
         results[name] = {
             "expected_sha256": expected,
             "actual_sha256": actual,

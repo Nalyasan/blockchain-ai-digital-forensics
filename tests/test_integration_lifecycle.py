@@ -284,7 +284,6 @@ class TestIntegrationLifecyclePipeline:
         # -------------------------------------------------------------
         prover = ZKMLProver(
             model_path=Path("models/anomaly_detector_v1.onnx"),
-            artifacts_dir=Path("scratch/zkml_artifacts"),
             auto_setup=True,
         )
         feat_list = [float(x) for x in scaled_vec.flatten()]
@@ -410,7 +409,6 @@ class TestIntegrationLifecyclePipeline:
         # Layer 5: P9 ZKML Verifier rejects tampered proofs and spoofed public scores
         prover = ZKMLProver(
             model_path=Path("models/anomaly_detector_v1.onnx"),
-            artifacts_dir=Path("scratch/zkml_artifacts"),
             auto_setup=True,
         )
         verifier = ZKMLVerifier(
