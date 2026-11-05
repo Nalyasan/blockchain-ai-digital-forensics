@@ -178,9 +178,57 @@ class TestAnvilCustodyTransferLive:
                 sender=BOB,
             )
 
-            # Query custody history and assert 100% concordance
+            # Query custody history and assert 100% cryptographic concordance on-chain
             count = client.get_custody_count_did(ev_id)
-            assert count >= 1
+            assert count == 2
+
+            # Verify active custodian transition
+            current_custodian = client.get_current_custodian(ev_id)
+            assert current_custodian == BOB.lower(), f"Expected current custodian Bob, got {current_custodian}"
+
+            hist = client.get_custody_history_did(ev_id)
+            assert len(hist) >= 1
+            raw_hex = "".join(hist[0]["raw_lines"]).lower()
+
+            # Raw word / substring containment assertions
+            assert orig_hash.lower() in raw_hex, "Original evidence hash missing in on-chain custody returndata"
+            assert model_hash.lower() in raw_hex, "Model hash missing in on-chain custody returndata"
+            assert xai_digest.lower() in raw_hex, "XAI digest missing in on-chain custody returndata"
+            assert zkml_proof_hash.lower() in raw_hex, "ZKML proof hash missing in on-chain custody returndata"
+            assert ALICE[2:].lower() in raw_hex, "Alice address missing in on-chain custody returndata"
+            assert BOB[2:].lower() in raw_hex, "Bob address missing in on-chain custody returndata"
+
+            # Adversarial tamper-rejection check
+            tampered_hash = hashlib.sha256(b"adversarial_tampered_payload").hexdigest()
+            assert tampered_hash.lower() not in raw_hex, "Tampered hash unexpectedly present in on-chain custody returndata"
+
+            # Decoded record assertions
+            decoded = hist[0].get("decoded_records")
+            if not decoded:
+                from forensics.did.client import decode_custody_records
+                decoded = decode_custody_records(raw_hex)
+
+            assert len(decoded) == 2, f"Expected 2 custody records, got {len(decoded)}"
+
+            # Record 0: Handover transfer Alice -> Bob
+            rec0 = decoded[0]
+            assert rec0["evidence_id"] == ev_id
+            assert rec0["action"] == 2  # CustodyAction.TRANSFERRED
+            assert rec0["iso_stage"] == 2  # ISOStage.ACQUISITION
+            assert rec0["actor"] == ALICE.lower()
+            assert rec0["recipient"] == BOB.lower()
+            assert rec0["artifact_sha256"] == orig_hash.lower()
+
+            # Record 1: Forensic anchoring by Bob
+            rec1 = decoded[1]
+            assert rec1["evidence_id"] == ev_id
+            assert rec1["action"] == 1  # CustodyAction.ANALYZED
+            assert rec1["iso_stage"] == 3  # ISOStage.PRESERVATION
+            assert rec1["actor"] == BOB.lower()
+            assert rec1["artifact_sha256"] == orig_hash.lower()
+            assert rec1["model_hash"] == model_hash.lower()
+            assert rec1["xai_digest"] == xai_digest.lower()
+            assert rec1["zkml_proof_hash"] == zkml_proof_hash.lower()
 
     def test_live_fail_closed_rejections_gate_t24(self):
         with AnvilTestNode() as node:

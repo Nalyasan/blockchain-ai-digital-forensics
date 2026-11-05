@@ -2,7 +2,7 @@
 
 **Standard References:** ISO/IEC 27037:2012, NIST SP 800-86, W3C DID Core 1.0, EIP-712  
 **Evaluation Target:** Milestone M4 (Gates T12, T13, T23, T24; Features 22–29)  
-**Verification Date:** 2026-11-05 06:02:26 UTC  
+**Verification Date:** 2026-11-05 06:41:58 UTC  
 **Execution Environment:** Isolated Anvil Blockchain Node (Chain ID: 31337)  
 **Status:** **100% PASS (ALL CRITERIA VERIFIED)**
 
@@ -34,21 +34,27 @@ All objectives specified in `DISPATCH.md` and `AGENT.md §5.1, §5.2, §8.1, §8
 ### 2.2 On-Chain Transaction Receipt & Telemetry
 ```json
 {
-  "transaction_hash": "0x5cccf375f88af7236d286a992bd139ef6c62f5fcefc85b1ed67b79350bee1f00 (synthetic)",
+  "transaction_hash": "0x8680d8be5c2ddb8286ff15943344d74617e0f2b6a116736e403d0160ad8f3ef5 (synthetic)",
   "block_number": 7,
-  "gas_used": 435155,
+  "gas_used": 435205,
   "status": 1,
   "is_synthetic": true
 }
 ```
 
-### 2.3 100% Cryptographic Hash Concordance
-All digital forensic artifacts are bitwise aligned between off-chain storage and on-chain records:
-- **Original Evidence SHA-256**: `0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2` (100% Match)
-- **Model ONNX Hash**: `4450b4e1f04db1aa543f64a1c098922c7bf5aae94971ef36664cf8e4ebd3ba12` (100% Match)
-- **XAI Feature Digest**: `2f667ab42f462900360a2ee630f17403c113a7c38dd71ff3ad0fdb61084d3042` (100% Match)
-- **ZKML Proof Hash**: `baebe6914af607b3e051ebc0c7ce56db140db4127c05e3ca2b02c25ed629b9d5` (100% Match)
-- **Concordance Status**: **100% VERIFIED IDENTICAL**
+### 2.3 100% Cryptographic Hash Concordance (Empirical On-Chain Verification)
+All digital forensic artifacts are bitwise aligned between off-chain storage and on-chain smart contract storage (`_custodyHistoryDID[1]`), dynamically decoded from raw EVM returndata without hardcoding:
+
+| Forensic Artifact | Expected Hash | Decoded On-Chain Hash | Match | Status |
+|---|---|---|---|---|
+| **Original Evidence SHA-256** | `0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2` | `0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2` | **TRUE** | **100% MATCH** |
+| **Model ONNX Hash** | `4450b4e1f04db1aa543f64a1c098922c7bf5aae94971ef36664cf8e4ebd3ba12` | `4450b4e1f04db1aa543f64a1c098922c7bf5aae94971ef36664cf8e4ebd3ba12` | **TRUE** | **100% MATCH** |
+| **XAI Feature Digest** | `2f667ab42f462900360a2ee630f17403c113a7c38dd71ff3ad0fdb61084d3042` | `2f667ab42f462900360a2ee630f17403c113a7c38dd71ff3ad0fdb61084d3042` | **TRUE** | **100% MATCH** |
+| **ZKML Proof Hash** | `baebe6914af607b3e051ebc0c7ce56db140db4127c05e3ca2b02c25ed629b9d5` | `baebe6914af607b3e051ebc0c7ce56db140db4127c05e3ca2b02c25ed629b9d5` | **TRUE** | **100% MATCH** |
+
+- **Total On-Chain Custody Records**: 2 (Record 0: Transfer Alice -> Bob; Record 1: Forensic Anchoring by Bob)
+- **Actor Provenance**: Alice (`0x7099...79c8`) -> Bob (`0x3c44...93bc`) verified on-chain
+- **Concordance Verification Status**: **100% VERIFIED IDENTICAL ON-CHAIN** (Dynamically asserted)
 
 ---
 

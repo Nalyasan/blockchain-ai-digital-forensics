@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-11-05T06:02:20.915988+00:00",
+  "timestamp_utc": "2026-11-05T06:41:42.040232+00:00",
   "chain_id": 31337,
   "gates": {
     "T23_custody_handover": "PASS",
@@ -39,11 +39,11 @@
     "custody_transfer": {
       "from_custodian": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
       "to_custodian": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-      "signature": "0x653d9b92a63763aed68f82f4dd36fd714abb97e3b48b7a480d1d92283b006839211e2d1dc615e9be62a38d3fd82715635f1fce11e1f9b4141cf4b345cf84822a1b",
+      "signature": "0xf09f84d094a71b661d3d2bdfa16016b87cb10264314ca97afb0fc08ac72b6b8236f60d7b785b06b2f07399d0ef6913bb6ba5f59e0ad24e1f4d5773692001c0fe1c",
       "receipt": {
-        "transaction_hash": "0x5cccf375f88af7236d286a992bd139ef6c62f5fcefc85b1ed67b79350bee1f00 (synthetic)",
+        "transaction_hash": "0x8680d8be5c2ddb8286ff15943344d74617e0f2b6a116736e403d0160ad8f3ef5 (synthetic)",
         "block_number": 7,
-        "gas_used": 435155,
+        "gas_used": 435205,
         "status": 1,
         "is_synthetic": true
       },
@@ -80,22 +80,33 @@
     }
   },
   "hash_concordance": {
+    "verification_timestamp_utc": "2026-11-05T06:41:56.755330+00:00",
+    "onchain_records_count": 2,
     "original_sha256": {
       "expected": "0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2",
+      "onchain_decoded": "0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2",
+      "match": true,
       "status": "MATCH_100%"
     },
     "model_hash": {
       "expected": "4450b4e1f04db1aa543f64a1c098922c7bf5aae94971ef36664cf8e4ebd3ba12",
+      "onchain_decoded": "4450b4e1f04db1aa543f64a1c098922c7bf5aae94971ef36664cf8e4ebd3ba12",
+      "match": true,
       "status": "MATCH_100%"
     },
     "xai_digest": {
       "expected": "2f667ab42f462900360a2ee630f17403c113a7c38dd71ff3ad0fdb61084d3042",
+      "onchain_decoded": "2f667ab42f462900360a2ee630f17403c113a7c38dd71ff3ad0fdb61084d3042",
+      "match": true,
       "status": "MATCH_100%"
     },
     "zkml_proof_hash": {
       "expected": "baebe6914af607b3e051ebc0c7ce56db140db4127c05e3ca2b02c25ed629b9d5",
+      "onchain_decoded": "baebe6914af607b3e051ebc0c7ce56db140db4127c05e3ca2b02c25ed629b9d5",
+      "match": true,
       "status": "MATCH_100%"
     },
+    "all_matched": true,
     "overall_concordance": "100%"
   },
   "contract_address": "0x5fbdb2315678afecb367f032d93f642f64180aa3"

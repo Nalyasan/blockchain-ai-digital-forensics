@@ -5,6 +5,7 @@ Supports both live local/testnet node execution and deterministic mock mode for 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -94,6 +95,69 @@ class AnvilTestNode:
                     self.proc.kill()
                 except Exception:
                     pass
+
+
+def decode_custody_records(raw_hex: str) -> list[dict[str, Any]]:
+    """Decodes ABI-encoded CustodyRecordDID[] from raw hex string.
+
+    Standard ABI Layout for dynamic array of structs:
+      Word 0: Offset to array data (0x20)
+      Word 1: Array length (uint256)
+      Words 2 .. 2+N-1: Relative offsets to each dynamic element from Word 2
+      Each struct contains 12 static 32-byte fields followed by dynamic signature bytes:
+        Word 0: evidenceId (uint256)
+        Word 1: action (uint8)
+        Word 2: isoStage (uint8)
+        Word 3: role (bytes32)
+        Word 4: actor (address)
+        Word 5: recipient (address)
+        Word 6: artifactSha256 (bytes32)
+        Word 7: noteHash (bytes32)
+        Word 8: modelHash (bytes32)
+        Word 9: xaiDigest (bytes32)
+        Word 10: zkmlProofHash (bytes32)
+        Word 11: timestamp (uint256)
+        Word 12: signature offset
+    """
+    if not raw_hex:
+        return []
+    cleaned = "".join(
+        line.strip().removeprefix("0x").removeprefix("0X")
+        for line in raw_hex.splitlines()
+        if line.strip()
+    )
+    if len(cleaned) < 128:
+        return []
+
+    words = [cleaned[i : i + 64] for i in range(0, len(cleaned), 64)]
+    try:
+        count = int(words[1], 16)
+    except (IndexError, ValueError):
+        return []
+
+    records: list[dict[str, Any]] = []
+    for i in range(count):
+        if 2 + i >= len(words):
+            break
+        elem_offset_bytes = int(words[2 + i], 16)
+        elem_word_idx = 2 + (elem_offset_bytes // 32)
+        if elem_word_idx + 11 < len(words):
+            rec = {
+                "evidence_id": int(words[elem_word_idx], 16),
+                "action": int(words[elem_word_idx + 1], 16),
+                "iso_stage": int(words[elem_word_idx + 2], 16),
+                "role": "0x" + words[elem_word_idx + 3].lower(),
+                "actor": "0x" + words[elem_word_idx + 4][-40:].lower(),
+                "recipient": "0x" + words[elem_word_idx + 5][-40:].lower(),
+                "artifact_sha256": words[elem_word_idx + 6].lower(),
+                "note_hash": words[elem_word_idx + 7].lower(),
+                "model_hash": words[elem_word_idx + 8].lower(),
+                "xai_digest": words[elem_word_idx + 9].lower(),
+                "zkml_proof_hash": words[elem_word_idx + 10].lower(),
+                "timestamp": int(words[elem_word_idx + 11], 16),
+            }
+            records.append(rec)
+    return records
 
 
 class DIDClient:
@@ -443,6 +507,15 @@ class DIDClient:
             result["exists"] = lines[5].lower() == "true"
         return result
 
+    def get_current_custodian(self, evidence_id: int) -> str:
+        """Queries the current active custodian address for an evidenceId."""
+        if self.mock_mode:
+            return self._mock_custody_history[-1].get("recipient", "").lower() if self._mock_custody_history else ""
+        addr = self._require_contract_address()
+        args = ["call", addr, "currentCustodians(uint256)(address)", str(evidence_id), "--rpc-url", self.rpc_url]
+        res = _run_cast(args)
+        return res.strip().lower()
+
     def get_custody_history_did(self, evidence_id: int) -> list[dict[str, Any]]:
         """Queries the full W3C DID chain of custody records for an evidenceId."""
         if self.mock_mode:
@@ -457,9 +530,12 @@ class DIDClient:
         ]
         res = _run_cast(args)
         raw_lines = [line.strip() for line in res.splitlines() if line.strip()]
+        raw_hex = "".join(raw_lines)
+        decoded = decode_custody_records(raw_hex)
         records: list[dict[str, Any]] = [{
             "evidence_id": evidence_id,
             "raw_lines": raw_lines,
+            "decoded_records": decoded,
         }]
         return records
 

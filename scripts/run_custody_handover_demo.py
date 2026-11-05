@@ -225,18 +225,72 @@ def run_handover_demo(port: int | None = None, chain_id: int = 31337) -> dict[st
         logger.info("[+] Forensic evidence anchored successfully by Bob.")
 
         # 6. Phase 4: 100% Cryptographic Hash Concordance
-        logger.info("[+] Phase 4: Verifying 100% Cryptographic Hash Concordance...")
+        logger.info("[+] Phase 4: Verifying 100% Cryptographic Hash Concordance On-Chain...")
         custody_history = client.get_custody_history_did(evidence_id)
+        assert len(custody_history) >= 1, "Failed to retrieve custody history from on-chain"
+
+        raw_lines = custody_history[0].get("raw_lines", [])
+        raw_hex = "".join(raw_lines).lower()
+
+        decoded_records = custody_history[0].get("decoded_records", [])
+        assert len(decoded_records) == 2, f"Expected 2 custody records, got {len(decoded_records)}"
+
+        rec_transfer = decoded_records[0]
+        rec_anchor = decoded_records[1]
+
+        # Provenance verification
+        assert rec_transfer["actor"] == ALICE_ADDRESS.lower(), f"Transfer actor mismatch: {rec_transfer['actor']}"
+        assert rec_transfer["recipient"] == BOB_ADDRESS.lower(), f"Transfer recipient mismatch: {rec_transfer['recipient']}"
+        assert rec_transfer["artifact_sha256"] == original_sha256.lower(), "Artifact SHA256 mismatch in transfer record"
+
+        assert rec_anchor["actor"] == BOB_ADDRESS.lower(), f"Anchor actor mismatch: {rec_anchor['actor']}"
+        assert rec_anchor["artifact_sha256"] == original_sha256.lower(), "Artifact SHA256 mismatch in anchor record"
+        assert rec_anchor["model_hash"] == model_hash.lower(), "Model hash mismatch in anchor record"
+        assert rec_anchor["xai_digest"] == xai_digest.lower(), "XAI digest mismatch in anchor record"
+        assert rec_anchor["zkml_proof_hash"] == zkml_proof_hash.lower(), "ZKML proof hash mismatch in anchor record"
+
+        # Raw substring containment invariant
+        assert original_sha256.lower() in raw_hex, "original_sha256 missing in raw returndata"
+        assert model_hash.lower() in raw_hex, "model_hash missing in raw returndata"
+        assert xai_digest.lower() in raw_hex, "xai_digest missing in raw returndata"
+        assert zkml_proof_hash.lower() in raw_hex, "zkml_proof_hash missing in raw returndata"
+        assert ALICE_ADDRESS[2:].lower() in raw_hex, "Alice address missing in raw returndata"
+        assert BOB_ADDRESS[2:].lower() in raw_hex, "Bob address missing in raw returndata"
+
+        now_iso = datetime.now(timezone.utc).isoformat()
         hash_concordance = {
-            "original_sha256": {"expected": original_sha256, "status": "MATCH_100%"},
-            "model_hash": {"expected": model_hash, "status": "MATCH_100%"},
-            "xai_digest": {"expected": xai_digest, "status": "MATCH_100%"},
-            "zkml_proof_hash": {"expected": zkml_proof_hash, "status": "MATCH_100%"},
+            "verification_timestamp_utc": now_iso,
+            "onchain_records_count": len(decoded_records),
+            "original_sha256": {
+                "expected": original_sha256,
+                "onchain_decoded": rec_anchor["artifact_sha256"],
+                "match": (rec_anchor["artifact_sha256"] == original_sha256.lower()),
+                "status": "MATCH_100%",
+            },
+            "model_hash": {
+                "expected": model_hash,
+                "onchain_decoded": rec_anchor["model_hash"],
+                "match": (rec_anchor["model_hash"] == model_hash.lower()),
+                "status": "MATCH_100%",
+            },
+            "xai_digest": {
+                "expected": xai_digest,
+                "onchain_decoded": rec_anchor["xai_digest"],
+                "match": (rec_anchor["xai_digest"] == xai_digest.lower()),
+                "status": "MATCH_100%",
+            },
+            "zkml_proof_hash": {
+                "expected": zkml_proof_hash,
+                "onchain_decoded": rec_anchor["zkml_proof_hash"],
+                "match": (rec_anchor["zkml_proof_hash"] == zkml_proof_hash.lower()),
+                "status": "MATCH_100%",
+            },
+            "all_matched": True,
             "overall_concordance": "100%",
         }
         telemetry["hash_concordance"] = hash_concordance
         telemetry["gates"]["T23_custody_handover"] = "PASS"
-        logger.info("[+] Gate T23 (2-Actor Custody Handover on Live Anvil): PASS (100% Concordance).")
+        logger.info("[+] Gate T23 (2-Actor Custody Handover on Live Anvil): PASS (100% Cryptographic Concordance Verified On-Chain).")
 
         # 7. Phase 5: Gate T24 Fail-Closed Adversarial Attack Scenarios (5 Vectors)
         logger.info("=" * 70)
@@ -509,13 +563,19 @@ All objectives specified in `DISPATCH.md` and `AGENT.md §5.1, §5.2, §8.1, §8
 {json.dumps(telemetry.get("steps", {}).get("custody_transfer", {}).get("receipt", {}), indent=2)}
 ```
 
-### 2.3 100% Cryptographic Hash Concordance
-All digital forensic artifacts are bitwise aligned between off-chain storage and on-chain records:
-- **Original Evidence SHA-256**: `{telemetry.get("steps", {}).get("registration", {}).get("original_sha256", "N/A")}` (100% Match)
-- **Model ONNX Hash**: `{telemetry.get("hash_concordance", {}).get("model_hash", {}).get("expected", "N/A")}` (100% Match)
-- **XAI Feature Digest**: `{telemetry.get("hash_concordance", {}).get("xai_digest", {}).get("expected", "N/A")}` (100% Match)
-- **ZKML Proof Hash**: `{telemetry.get("hash_concordance", {}).get("zkml_proof_hash", {}).get("expected", "N/A")}` (100% Match)
-- **Concordance Status**: **100% VERIFIED IDENTICAL**
+### 2.3 100% Cryptographic Hash Concordance (Empirical On-Chain Verification)
+All digital forensic artifacts are bitwise aligned between off-chain storage and on-chain smart contract storage (`_custodyHistoryDID[1]`), dynamically decoded from raw EVM returndata without hardcoding:
+
+| Forensic Artifact | Expected Hash | Decoded On-Chain Hash | Match | Status |
+|---|---|---|---|---|
+| **Original Evidence SHA-256** | `{telemetry.get("hash_concordance", {}).get("original_sha256", {}).get("expected", "N/A")}` | `{telemetry.get("hash_concordance", {}).get("original_sha256", {}).get("onchain_decoded", "N/A")}` | **{str(telemetry.get("hash_concordance", {}).get("original_sha256", {}).get("match", False)).upper()}** | **100% MATCH** |
+| **Model ONNX Hash** | `{telemetry.get("hash_concordance", {}).get("model_hash", {}).get("expected", "N/A")}` | `{telemetry.get("hash_concordance", {}).get("model_hash", {}).get("onchain_decoded", "N/A")}` | **{str(telemetry.get("hash_concordance", {}).get("model_hash", {}).get("match", False)).upper()}** | **100% MATCH** |
+| **XAI Feature Digest** | `{telemetry.get("hash_concordance", {}).get("xai_digest", {}).get("expected", "N/A")}` | `{telemetry.get("hash_concordance", {}).get("xai_digest", {}).get("onchain_decoded", "N/A")}` | **{str(telemetry.get("hash_concordance", {}).get("xai_digest", {}).get("match", False)).upper()}** | **100% MATCH** |
+| **ZKML Proof Hash** | `{telemetry.get("hash_concordance", {}).get("zkml_proof_hash", {}).get("expected", "N/A")}` | `{telemetry.get("hash_concordance", {}).get("zkml_proof_hash", {}).get("onchain_decoded", "N/A")}` | **{str(telemetry.get("hash_concordance", {}).get("zkml_proof_hash", {}).get("match", False)).upper()}** | **100% MATCH** |
+
+- **Total On-Chain Custody Records**: {telemetry.get("hash_concordance", {}).get("onchain_records_count", 2)} (Record 0: Transfer Alice -> Bob; Record 1: Forensic Anchoring by Bob)
+- **Actor Provenance**: Alice (`{ALICE_ADDRESS[:6]}...{ALICE_ADDRESS[-4:]}`) -> Bob (`{BOB_ADDRESS[:6]}...{BOB_ADDRESS[-4:]}`) verified on-chain
+- **Concordance Verification Status**: **100% VERIFIED IDENTICAL ON-CHAIN** (Dynamically asserted)
 
 ---
 
