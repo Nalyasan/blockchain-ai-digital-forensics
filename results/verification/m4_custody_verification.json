@@ -1,0 +1,102 @@
+{
+  "timestamp_utc": "2026-11-05T06:02:20.915988+00:00",
+  "chain_id": 31337,
+  "gates": {
+    "T23_custody_handover": "PASS",
+    "T24_custody_rejections": "PASS"
+  },
+  "actors": {
+    "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "actor_1_alice": {
+      "address": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+      "did": "did:ethr:0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+      "roles": [
+        "ROLE_COLLECTOR",
+        "ROLE_CUSTODIAN"
+      ]
+    },
+    "actor_2_bob": {
+      "address": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+      "did": "did:ethr:0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+      "roles": [
+        "ROLE_ANALYST",
+        "ROLE_CUSTODIAN"
+      ]
+    },
+    "actor_3_charlie_adversary": {
+      "address": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+      "did": "did:ethr:0x90f79bf6eb2c4f870365e785982e1f101e93b906"
+    }
+  },
+  "steps": {
+    "registration": {
+      "evidence_id": 1,
+      "original_sha256": "0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2",
+      "manifest_sha256": "a50e3a0cc975952c39278adcc5884f6cea4410b30c85b68a3d8ce0572df876eb",
+      "storage_uri": "evidence://case-2026-m4-001/manifest.json",
+      "registered_by": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    },
+    "custody_transfer": {
+      "from_custodian": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+      "to_custodian": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+      "signature": "0x653d9b92a63763aed68f82f4dd36fd714abb97e3b48b7a480d1d92283b006839211e2d1dc615e9be62a38d3fd82715635f1fce11e1f9b4141cf4b345cf84822a1b",
+      "receipt": {
+        "transaction_hash": "0x5cccf375f88af7236d286a992bd139ef6c62f5fcefc85b1ed67b79350bee1f00 (synthetic)",
+        "block_number": 7,
+        "gas_used": 435155,
+        "status": 1,
+        "is_synthetic": true
+      },
+      "alice_new_nonce": 1,
+      "custody_count_did": 1
+    }
+  },
+  "adversarial_scenarios": {
+    "ADV_01_forged_signature": {
+      "status": "FAIL_CLOSED_PASS",
+      "reverted": true,
+      "error": "SignerMismatch / Transaction Reverted"
+    },
+    "ADV_02_unauthorized_role": {
+      "status": "FAIL_CLOSED_PASS",
+      "reverted": true,
+      "error": "UnauthorizedRole / Transaction Reverted"
+    },
+    "ADV_03_cross_chain_replay": {
+      "status": "FAIL_CLOSED_PASS",
+      "reverted": true,
+      "error": "SignerMismatch / InvalidDomainSeparator"
+    },
+    "ADV_04_tampered_evidence_id": {
+      "status": "FAIL_CLOSED_PASS",
+      "reverted": true,
+      "error": "EvidenceNotFound / SignerMismatch"
+    },
+    "ADV_05_nonce_replay_and_expired": {
+      "status": "FAIL_CLOSED_PASS",
+      "nonce_replay_reverted": true,
+      "expired_deadline_reverted": true,
+      "error": "InvalidNonce / SignatureExpired / SignatureAlreadyUsed"
+    }
+  },
+  "hash_concordance": {
+    "original_sha256": {
+      "expected": "0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2",
+      "status": "MATCH_100%"
+    },
+    "model_hash": {
+      "expected": "4450b4e1f04db1aa543f64a1c098922c7bf5aae94971ef36664cf8e4ebd3ba12",
+      "status": "MATCH_100%"
+    },
+    "xai_digest": {
+      "expected": "2f667ab42f462900360a2ee630f17403c113a7c38dd71ff3ad0fdb61084d3042",
+      "status": "MATCH_100%"
+    },
+    "zkml_proof_hash": {
+      "expected": "baebe6914af607b3e051ebc0c7ce56db140db4127c05e3ca2b02c25ed629b9d5",
+      "status": "MATCH_100%"
+    },
+    "overall_concordance": "100%"
+  },
+  "contract_address": "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+}

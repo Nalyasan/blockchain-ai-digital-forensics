@@ -362,3 +362,167 @@ class DIDClient:
         args = ["call", addr, "getCustodyCountDID(uint256)(uint256)", str(evidence_id), "--rpc-url", self.rpc_url]
         res = _run_cast(args)
         return int(res.strip())
+
+    def register_evidence(
+        self,
+        case_id_bytes32: str,
+        manifest_sha256: str,
+        storage_uri: str,
+        sender: str = ANVIL_DEFAULT_DEPLOYER,
+    ) -> int:
+        """Registers a new evidence package on-chain and returns the evidenceId."""
+        if self.mock_mode:
+            mock_id = len(self._mock_custody_history) + 1
+            return mock_id
+
+        addr = self._require_contract_address()
+
+        # Format case_id to 32 bytes
+        c_id = case_id_bytes32.strip()
+        if not c_id.startswith("0x") and not c_id.startswith("0X"):
+            if len(c_id) == 64 and re.fullmatch(r"^[a-fA-F0-9]{64}$", c_id):
+                c_id = f"0x{c_id}"
+            else:
+                c_id = "0x" + hashlib.sha256(c_id.encode("utf-8")).hexdigest()
+
+        m_hash = manifest_sha256.strip()
+        if not m_hash.startswith("0x") and not m_hash.startswith("0X"):
+            m_hash = f"0x{m_hash}"
+
+        uri = storage_uri.strip()
+        if not uri.startswith("evidence://"):
+            uri = f"evidence://{uri}"
+
+        args = [
+            "send", addr,
+            "registerEvidence(bytes32,bytes32,string)(uint256)",
+            c_id,
+            m_hash,
+            uri,
+            "--rpc-url", self.rpc_url,
+            "--from", sender,
+            "--unlocked",
+        ]
+        _run_cast(args)
+
+        # Query nextEvidenceId - 1
+        res = _run_cast(["call", addr, "nextEvidenceId()(uint256)", "--rpc-url", self.rpc_url])
+        return int(res.strip()) - 1
+
+    def get_evidence(self, evidence_id: int) -> dict[str, Any]:
+        """Queries on-chain evidence details for an evidenceId."""
+        if self.mock_mode:
+            return {
+                "evidence_id": evidence_id,
+                "case_id": "0x" + "11" * 32,
+                "manifest_sha256": "0x" + "22" * 32,
+                "registered_by": ANVIL_DEFAULT_DEPLOYER,
+                "timestamp": int(time.time()),
+                "storage_uri": f"evidence://case-{evidence_id}/manifest.json",
+                "exists": True,
+            }
+
+        addr = self._require_contract_address()
+        args = ["call", addr, "getEvidence(uint256)", str(evidence_id), "--rpc-url", self.rpc_url]
+        res = _run_cast(args)
+        lines = [line.strip() for line in res.splitlines() if line.strip()]
+        result: dict[str, Any] = {
+            "evidence_id": evidence_id,
+            "raw_output": lines,
+            "exists": True,
+        }
+        if len(lines) >= 6:
+            result["case_id"] = lines[0]
+            result["manifest_sha256"] = lines[1]
+            result["registered_by"] = lines[2].lower()
+            try:
+                result["timestamp"] = int(lines[3])
+            except (ValueError, TypeError):
+                result["timestamp"] = lines[3]
+            result["storage_uri"] = lines[4].strip('"')
+            result["exists"] = lines[5].lower() == "true"
+        return result
+
+    def get_custody_history_did(self, evidence_id: int) -> list[dict[str, Any]]:
+        """Queries the full W3C DID chain of custody records for an evidenceId."""
+        if self.mock_mode:
+            return self._mock_custody_history
+
+        addr = self._require_contract_address()
+        args = [
+            "call", addr,
+            "getCustodyHistoryDID(uint256)",
+            str(evidence_id),
+            "--rpc-url", self.rpc_url,
+        ]
+        res = _run_cast(args)
+        raw_lines = [line.strip() for line in res.splitlines() if line.strip()]
+        records: list[dict[str, Any]] = [{
+            "evidence_id": evidence_id,
+            "raw_lines": raw_lines,
+        }]
+        return records
+
+    def transfer_custody_with_sig_receipt(
+        self,
+        evidence_id: int,
+        from_custodian: str,
+        to_custodian: str,
+        artifact_sha256: str,
+        note_hash: str,
+        nonce: int,
+        deadline: int,
+        signature: str,
+        sender: str = ANVIL_DEFAULT_DEPLOYER,
+    ) -> dict[str, Any]:
+        """Submits an EIP-712 authenticated custody transfer and returns full JSON receipt."""
+        if self.mock_mode:
+            self._mock_nonces[from_custodian.lower()] = nonce + 1
+            return {
+                "transaction_hash": f"0x{'11'*32} (synthetic)",
+                "block_number": 1,
+                "gas_used": 142500,
+                "status": 1,
+                "is_synthetic": True,
+            }
+
+        addr = self._require_contract_address()
+        args = [
+            "send", addr,
+            "transferCustodyWithSig(uint256,address,address,bytes32,bytes32,uint256,uint256,bytes)",
+            str(evidence_id),
+            from_custodian.lower(),
+            to_custodian.lower(),
+            artifact_sha256 if artifact_sha256.startswith("0x") else f"0x{artifact_sha256}",
+            note_hash if note_hash.startswith("0x") else f"0x{note_hash}",
+            str(nonce),
+            str(deadline),
+            signature,
+            "--rpc-url", self.rpc_url,
+            "--from", sender,
+            "--unlocked",
+            "--json",
+        ]
+        res_json = _run_cast(args)
+        try:
+            receipt = json.loads(res_json)
+        except json.JSONDecodeError:
+            receipt = {}
+
+        tx_hash = receipt.get("transactionHash", "")
+        bn_raw = receipt.get("blockNumber", "0x0")
+        gu_raw = receipt.get("gasUsed", "0x0")
+        st_raw = receipt.get("status", "0x1")
+
+        block_num = int(bn_raw, 16) if isinstance(bn_raw, str) and bn_raw.startswith("0x") else int(bn_raw or 0)
+        gas_used = int(gu_raw, 16) if isinstance(gu_raw, str) and gu_raw.startswith("0x") else int(gu_raw or 0)
+        status_num = int(st_raw, 16) if isinstance(st_raw, str) and st_raw.startswith("0x") else int(st_raw or 1)
+
+        return {
+            "transaction_hash": f"{tx_hash} (synthetic)",
+            "block_number": block_num,
+            "gas_used": gas_used,
+            "status": status_num,
+            "is_synthetic": True,
+        }
+

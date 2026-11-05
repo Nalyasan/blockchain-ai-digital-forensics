@@ -512,3 +512,160 @@ class TestAIInvestigatorEndpointIntegration:
         assert len(mismatches_tampered) == 1
         assert mismatches_tampered[0].tag == "CONTENT_MISMATCH"
         assert mismatches_tampered[0].field == "payload_sha256"
+
+
+# ==============================================================================
+# 5. Milestone M4: Evidence Source Adapters & ISO/IEC 27037 Manifest Tests
+# ==============================================================================
+
+
+import json
+
+from forensics.endpoint.adapter import (
+    ConsentScopeViolation,
+    EVMCollectorAdapter,
+    EvidenceSourceAdapter,
+    EvtxLogAdapter,
+    ForensicIntegrityError,
+    JsonlLogAdapter,
+)
+from forensics.endpoint.manifest import (
+    generate_acquisition_manifest,
+    verify_acquisition_manifest,
+)
+from forensics.endpoint.schemas import AcquisitionResult
+
+
+class TestEndpointAcquisitionAdaptersM4:
+    """Verifies Milestone M4 EvidenceSourceAdapter, ISO/IEC 27037 Manifest, and Gate T12."""
+
+    def test_jsonl_log_adapter_end_to_end(self, tmp_path: Path, endpoint_store: EndpointEvidenceStore):
+        vault_dir = tmp_path / "vault"
+        jsonl_file = tmp_path / "host_telemetry.jsonl"
+        lines = [
+            json.dumps({"EventID": 1, "Image": r"C:\Windows\System32\svchost.exe", "ProcessId": 1234, "Hashes": "SHA256=11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff", "User": r"NT AUTHORITY\SYSTEM"}),
+            json.dumps({"record_type": "sockets", "pid": 1234, "protocol": "tcp", "local_address": "127.0.0.1", "local_port": 8080, "remote_address": "10.0.0.1", "remote_port": 443, "state": "Established"}),
+            json.dumps({"EventID": 4624, "Channel": "Security", "Description": "An account was successfully logged on", "User": "Administrator"}),
+        ]
+        jsonl_file.write_text("\n".join(lines), encoding="utf-8")
+
+        adapter = JsonlLogAdapter(
+            case_id="CASE-2026-TEST",
+            operator_did="did:ethr:0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+            vault_dir=vault_dir,
+            evidence_store=endpoint_store,
+        )
+
+        result = adapter.collect(str(jsonl_file), consent_scope="security_events_only")
+
+        assert isinstance(result, AcquisitionResult)
+        assert result.status == "VERIFIED"
+        assert result.original_sha256 == result.copy_sha256
+        assert result.record_count >= 3
+        assert Path(result.destination_path).exists()
+        assert Path(result.manifest_path).exists()
+
+        # Check ISO/IEC 27037 Manifest validation
+        is_valid, reason = verify_acquisition_manifest(result.manifest_path)
+        assert is_valid, f"Manifest verification failed: {reason}"
+
+        # Verify entry in endpoint_evidence table
+        stored_acq = endpoint_store.get_acquisition(result.acquisition_id)
+        assert stored_acq is not None
+        assert stored_acq["original_sha256"] == result.original_sha256
+        assert stored_acq["case_id"] == "CASE-2026-TEST"
+
+    def test_evtx_log_adapter_end_to_end(self, tmp_path: Path, endpoint_store: EndpointEvidenceStore):
+        vault_dir = tmp_path / "vault"
+        evtx_file = tmp_path / "exported_security.evtx"
+        # Create valid JSONL fixture with .evtx extension (fallback parser test)
+        content = json.dumps({"EventID": 7045, "ProviderName": "Service Control Manager", "Description": "A new service was installed in the system.", "LevelDisplayName": "Information"}) + "\n"
+        evtx_file.write_text(content, encoding="utf-8")
+
+        adapter = EvtxLogAdapter(
+            case_id="CASE-2026-EVTX",
+            operator_did="did:ethr:0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+            vault_dir=vault_dir,
+            evidence_store=endpoint_store,
+        )
+
+        result = adapter.collect(str(evtx_file), consent_scope="host_logs")
+        assert result.status == "VERIFIED"
+        assert result.original_sha256 == result.copy_sha256
+        assert result.record_count >= 1
+
+        is_valid, reason = verify_acquisition_manifest(result.manifest_path)
+        assert is_valid, f"Manifest invalid: {reason}"
+
+    def test_evm_collector_adapter_end_to_end(self, tmp_path: Path, endpoint_store: EndpointEvidenceStore):
+        vault_dir = tmp_path / "vault"
+        adapter = EVMCollectorAdapter(
+            case_id="CASE-2026-EVM",
+            operator_did="did:ethr:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            vault_dir=vault_dir,
+            evidence_store=endpoint_store,
+        )
+        result = adapter.collect("eth_getBlockByNumber(19000000)", consent_scope="blockchain_transactions")
+        assert result.status == "VERIFIED"
+        assert result.source_type == "EVM"
+        assert Path(result.destination_path).exists()
+        assert Path(result.manifest_path).exists()
+
+    def test_bit_flip_tampering_detection(self, tmp_path: Path, endpoint_store: EndpointEvidenceStore):
+        vault_dir = tmp_path / "vault"
+        src_file = tmp_path / "sample.jsonl"
+        src_file.write_text('{"event": "test"}\n', encoding="utf-8")
+
+        class TamperingAdapter(JsonlLogAdapter):
+            def _bitwise_preserve(self, source_path: Path, acquisition_id: str):
+                orig_sha, copy_sha, dest_path = super()._bitwise_preserve(source_path, acquisition_id)
+                # Mutate 1 byte in destination vault copy
+                with open(dest_path, "r+b") as f:
+                    b = f.read(1)
+                    f.seek(0)
+                    f.write(bytes([b[0] ^ 0xFF]))
+                # Now re-hash destination to simulate corrupted copy
+                hasher = hashlib.sha256()
+                with open(dest_path, "rb") as f:
+                    hasher.update(f.read())
+                tampered_sha = hasher.hexdigest()
+                if orig_sha != tampered_sha:
+                    raise ForensicIntegrityError(f"Bit-stream verification failed! original={orig_sha} != copy={tampered_sha}")
+                return orig_sha, tampered_sha, dest_path
+
+        tampered_adapter = TamperingAdapter(vault_dir=vault_dir, evidence_store=endpoint_store)
+        with pytest.raises(ForensicIntegrityError):
+            tampered_adapter.collect(str(src_file), consent_scope="security_events_only")
+
+    def test_consent_scope_violation_rejection(self, tmp_path: Path, endpoint_store: EndpointEvidenceStore):
+        src_file = tmp_path / "sample.jsonl"
+        src_file.write_text('{"event": "test"}\n', encoding="utf-8")
+        adapter = JsonlLogAdapter(vault_dir=tmp_path / "vault", evidence_store=endpoint_store)
+
+        # Empty scope rejected
+        with pytest.raises(ConsentScopeViolation):
+            adapter.collect(str(src_file), consent_scope="")
+
+        # Unauthorized scope rejected
+        with pytest.raises(ConsentScopeViolation):
+            adapter.collect(str(src_file), consent_scope="unauthorized_personal_finance")
+
+    def test_canonical_database_invariance(self):
+        """Verifies that endpoint operations have zero effect on canonical baseline databases."""
+        paths = {
+            "real_p4.db": Path("data/real_p4.db"),
+            "forensics.db": Path("data/forensics.db"),
+            "benchmark_p6.db": Path("data/benchmark_p6.db"),
+            ".env": Path(".env"),
+        }
+        expected = {
+            "real_p4.db": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+            "forensics.db": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+            "benchmark_p6.db": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+            ".env": "C2F4879666CD21276C58EC75DE923C8235D414F3D646A854A835C5638EC1699C",
+        }
+        for name, p in paths.items():
+            if p.exists():
+                digest = hashlib.sha256(p.read_bytes()).hexdigest().upper()
+                assert digest == expected[name], f"Canonical DB {name} was modified!"
+

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Sequence, Union
 
 from forensics.endpoint.schemas import (
+    AcquisitionResult,
     BaseEndpointRecord,
     EventRecord,
     ProcessRecord,
@@ -163,11 +164,34 @@ CREATE TABLE IF NOT EXISTS triage_audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_triage_audit_case ON triage_audit_log(case_id);
 CREATE INDEX IF NOT EXISTS idx_triage_audit_time ON triage_audit_log(completed_at_utc);
+
+-- 6. Dedicated Immutable Acquisition Registry (ISO/IEC 27037)
+CREATE TABLE IF NOT EXISTS endpoint_evidence (
+    acquisition_id TEXT PRIMARY KEY,
+    source_type TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    consent_scope TEXT NOT NULL,
+    original_sha256 TEXT NOT NULL,
+    copy_sha256 TEXT NOT NULL,
+    record_count INTEGER NOT NULL DEFAULT 0,
+    timestamp_utc TEXT NOT NULL,
+    destination_path TEXT NOT NULL,
+    manifest_path TEXT NOT NULL,
+    operator_or_agent_did TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    audit_notes TEXT,
+    recorded_at_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ep_ev_case ON endpoint_evidence(case_id);
+CREATE INDEX IF NOT EXISTS idx_ep_ev_src ON endpoint_evidence(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_ep_ev_sha ON endpoint_evidence(original_sha256);
+CREATE INDEX IF NOT EXISTS idx_ep_ev_time ON endpoint_evidence(timestamp_utc);
 """
 
 
 def init_endpoint_db(db_path: Path | str | None = None) -> Path:
-    """Initializes endpoint_evidence.db with all 5 tables and indexes."""
+    """Initializes endpoint_evidence.db with all 6 tables and indexes."""
     target_path = Path(db_path or get_endpoint_evidence_db()).resolve()
     target_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(target_path) as conn:
@@ -415,3 +439,57 @@ class EndpointEvidenceStore:
             )
             conn.commit()
             return inserted
+
+    def insert_acquisition(self, result: Union[AcquisitionResult, dict[str, Any]]) -> bool:
+        """Appends acquisition record into endpoint_evidence table with replay protection."""
+        if hasattr(result, "model_dump"):
+            rec_dict = result.model_dump()
+        else:
+            rec_dict = dict(result)
+
+        now_utc = datetime.now(timezone.utc).isoformat()
+        metadata_dict = rec_dict.get("metadata", {})
+        if not isinstance(metadata_dict, (dict, list)):
+            metadata_dict = {}
+
+        row = {
+            "acquisition_id": str(rec_dict["acquisition_id"]),
+            "source_type": str(rec_dict["source_type"]),
+            "source_id": str(rec_dict["source_id"]),
+            "consent_scope": str(rec_dict["consent_scope"]),
+            "original_sha256": str(rec_dict["original_sha256"]).lower().strip(),
+            "copy_sha256": str(rec_dict["copy_sha256"]).lower().strip(),
+            "record_count": int(rec_dict.get("record_count", 0)),
+            "timestamp_utc": str(rec_dict["timestamp_utc"]),
+            "destination_path": str(rec_dict["destination_path"]),
+            "manifest_path": str(rec_dict["manifest_path"]),
+            "operator_or_agent_did": str(rec_dict["operator_or_agent_did"]),
+            "case_id": str(rec_dict["case_id"]),
+            "status": str(rec_dict.get("status", "VERIFIED")),
+            "audit_notes": json.dumps(metadata_dict, sort_keys=True),
+            "recorded_at_utc": str(rec_dict.get("recorded_at_utc", now_utc)),
+        }
+
+        with self._get_write_connection() as conn:
+            inserted = insert_verified(
+                conn,
+                "endpoint_evidence",
+                row,
+                keys=("acquisition_id",),
+                replay_metadata=("recorded_at_utc",),
+                json_fields=("audit_notes",),
+            )
+            conn.commit()
+            return inserted
+
+    def get_acquisition(self, acquisition_id: str) -> dict[str, Any] | None:
+        """Queries an acquisition record from endpoint_evidence by acquisition_id."""
+        with self.get_readonly_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM endpoint_evidence WHERE acquisition_id = ?",
+                (str(acquisition_id),),
+            ).fetchone()
+            if not row:
+                return None
+            return dict(row)
+

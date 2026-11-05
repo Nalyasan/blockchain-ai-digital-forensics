@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal, Sequence, Union
 
+from pydantic import BaseModel, ConfigDict, Field
+
 
 def canonical_json(data: dict[str, Any]) -> str:
     """Serializes a dictionary to canonical JSON (sorted keys, no extraneous whitespace)."""
@@ -95,6 +97,10 @@ class EventRecord(BaseEndpointRecord):
     channel: str  # Event channel, e.g. 'System', 'Application', 'Security'
     description: str
     level: str  # e.g. 'Information', 'Warning', 'Error', 'Critical'
+    user_account: str = ""  # Extracted account/subject name (e.g. SYSTEM, DOMAIN\\user)
+    process_hash: str = ""  # SHA-256 process hash if present in telemetry event
+    process_id: int = 0  # Target process PID
+    raw_payload_json: str = ""  # Verbatim JSON payload preserving unmapped fields
 
 
 @dataclass(frozen=True)
@@ -166,6 +172,10 @@ def create_endpoint_record(
             channel=str(payload.get("channel", "System") or "System"),
             description=str(payload.get("description", "") or ""),
             level=str(payload.get("level", "Information") or "Information"),
+            user_account=str(payload.get("user_account", "") or ""),
+            process_hash=str(payload.get("process_hash", "") or ""),
+            process_id=int(payload.get("process_id", 0) or 0),
+            raw_payload_json=str(payload.get("raw_payload_json", "") or ""),
         )
     elif record_type == "system_info":
         return SystemInfoRecord(
@@ -179,3 +189,105 @@ def create_endpoint_record(
         )
     else:
         raise ValueError(f"Unknown endpoint record_type: '{record_type}'")
+
+
+class AcquisitionResult(BaseModel):
+    """Immutable result envelope returned by all EvidenceSourceAdapter implementations."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    acquisition_id: str = Field(..., description="Unique deterministic acquisition identifier, e.g. acq_<uuid16>")
+    source_type: Literal["EVM", "HOST_LOG_JSONL", "HOST_LOG_EVTX", "OSQUERY_LIVE", "WMI_LIVE"]
+    source_id: str = Field(..., description="Logical or host identifier of source, e.g. HOST-01:sysmon.jsonl")
+    consent_scope: str = Field(..., description="Explicit authorized scope parameter, e.g. 'security_events_only'")
+    original_sha256: str = Field(..., description="SHA-256 hex digest of original source artifact before ingestion")
+    copy_sha256: str = Field(..., description="SHA-256 hex digest of bit-stream preserved artifact in evidence vault")
+    record_count: int = Field(..., ge=0, description="Total number of valid parsed records extracted")
+    timestamp_utc: str = Field(..., description="ISO-8601 UTC timestamp marking acquisition completion")
+    destination_path: str = Field(..., description="Path to preserved raw evidence file in vault")
+    manifest_path: str = Field(..., description="Path to ISO/IEC 27037 acquisition_manifest.json")
+    operator_or_agent_did: str = Field(..., description="W3C DID or identifier of investigator/agent")
+    case_id: str = Field(..., description="Forensic case or incident identifier")
+    status: Literal["VERIFIED", "INTEGRITY_MISMATCH", "CONSENT_VIOLATION", "PARTIAL_RECOVERY"] = "VERIFIED"
+    records: list[dict[str, Any]] = Field(default_factory=list, description="Extracted normalized record dictionaries")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Extended acquisition and environment metadata")
+
+
+class CaseMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    case_id: str
+    investigator_id: str
+    operator_did: str
+    consent_scope: str
+    organization: str = "Digital Forensics Unit"
+
+
+class EnvironmentState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hostname: str = ""
+    os_name: str = ""
+    os_version: str = ""
+    architecture: str = ""
+
+
+class EvidenceSourceInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_type: str
+    source_id: str
+    original_path: str
+    size_bytes: int = Field(..., ge=0)
+    environment_state: EnvironmentState = Field(default_factory=EnvironmentState)
+
+
+class AcquisitionProcessInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    acquisition_method: Literal["BITWISE_STREAM_COPY", "LIVE_API_SNAPSHOT", "EVM_RPC_EXTRACT"]
+    tool_name: str
+    tool_version: str
+    python_version: str
+    git_commit: str = ""
+    start_time_utc: str
+    completion_time_utc: str
+    records_ingested: int = Field(..., ge=0)
+
+
+class CryptographicVerificationInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hash_algorithm: Literal["SHA-256"] = "SHA-256"
+    original_sha256: str
+    copy_sha256: str
+    bitwise_match: bool
+    verification_status: Literal["VERIFIED_IDENTICAL", "INTEGRITY_MISMATCH"]
+
+
+class PreservationInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    vault_file_path: str
+    destination_db: str
+    destination_table: str
+    read_only_enforced: bool = True
+
+
+class AuditTrailEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stage: Literal["IDENTIFICATION", "COLLECTION", "ACQUISITION", "PRESERVATION"]
+    timestamp_utc: str
+    description: str
+    status: Literal["OK", "WARN", "FAIL"] = "OK"
+
+
+class AcquisitionManifest(BaseModel):
+    """ISO/IEC 27037:2012 Digital Evidence Acquisition Manifest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    standard: Literal["ISO/IEC 27037:2012"] = "ISO/IEC 27037:2012"
+    manifest_version: Literal["1.0.0"] = "1.0.0"
+    acquisition_id: str
+    case_metadata: CaseMetadata
+    evidence_source: EvidenceSourceInfo
+    acquisition_process: AcquisitionProcessInfo
+    cryptographic_verification: CryptographicVerificationInfo
+    preservation: PreservationInfo
+    audit_trail: list[AuditTrailEntry] = Field(default_factory=list)
+

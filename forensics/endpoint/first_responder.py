@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from forensics.endpoint.daemon import TelemetryProvider, get_default_provider, query_endpoint
 from forensics.endpoint.schemas import canonical_json, compute_payload_sha256
@@ -43,9 +43,10 @@ logger = logging.getLogger("forensics.endpoint.first_responder")
 
 
 class ForbiddenActionCategory(str, enum.Enum):
-    """The 5 strictly prohibited action categories for AI First Responder."""
+    """The strictly prohibited action categories for AI First Responder."""
 
     ARBITRARY_SHELL = "arbitrary_shell_execution"
+    FILE_MODIFICATION_OR_DELETION = "file_modification_or_log_deletion"
     EVENT_LOG_CLEARING = "event_log_clearing"
     ACL_ALTERATION = "file_permission_or_acl_alteration"
     AUTOMATED_NETWORK_ISOLATION = "automated_network_isolation"
@@ -67,8 +68,8 @@ class FirstResponseError(Exception):
     pass
 
 
-class DangerousActionError(FirstResponseError):
-    """Raised when an autonomous action violates security boundary guards."""
+class SecurityBoundaryViolation(FirstResponseError):
+    """Raised when an autonomous action or parameter violates security boundaries."""
 
     def __init__(
         self,
@@ -85,9 +86,97 @@ class DangerousActionError(FirstResponseError):
         self.timestamp_utc = datetime.now(timezone.utc).isoformat()
 
 
+class DangerousActionError(SecurityBoundaryViolation):
+    """Raised when an autonomous action violates security boundary guards (backward-compatible alias)."""
+    pass
+
+
+class UnauthorizedActionError(DangerousActionError):
+    """Raised when an unwhitelisted action name or tool is invoked."""
+
+    def __init__(self, action_attempted: str, reason: Optional[str] = None):
+        super().__init__(
+            category=ForbiddenActionCategory.ARBITRARY_SHELL,
+            action_attempted=action_attempted,
+            reason=reason or f"Action '{action_attempted}' is not in authorized triage playbook whitelist.",
+        )
+
+
+class ParameterBoundaryViolation(DangerousActionError):
+    """Raised when a parameter fails strict type, range, whitelist, or sanitization validation."""
+
+    def __init__(
+        self,
+        category: ForbiddenActionCategory,
+        param_name: str,
+        param_value: Any,
+        reason: str,
+    ):
+        super().__init__(
+            category=category,
+            action_attempted=f"param:{param_name}",
+            reason=f"Parameter '{param_name}' violation: {reason}",
+        )
+        self.param_name = param_name
+        self.param_value = param_value
+
+
 class PlaybookExecutionError(FirstResponseError):
     """Raised when an authorized non-destructive triage playbook encounters an error."""
     pass
+
+
+class NetworkConnectionsParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_pid: Optional[int] = Field(None, ge=0, le=4194304)
+    remote_ip: Optional[str] = Field(None, max_length=128)
+    state_filter: Literal["ESTABLISHED", "LISTENING", "ALL", "Established", "Listening", "All"] = "ALL"
+    limit: int = Field(100, ge=1, le=1000)
+    provider: Optional[Any] = None
+    force_mock: Optional[bool] = False
+    case_id: Optional[str] = None
+
+
+class RunningProcessesParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_pid: Optional[int] = Field(None, ge=0, le=4194304)
+    name_filter: Optional[str] = Field(None, max_length=128)
+    flag_suspicious_paths: bool = True
+    limit: int = Field(100, ge=1, le=1000)
+    provider: Optional[Any] = None
+    force_mock: Optional[bool] = False
+    case_id: Optional[str] = None
+
+
+class SystemEventsParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    start_time_utc: Optional[Union[datetime, str]] = None
+    end_time_utc: Optional[Union[datetime, str]] = None
+    channel: str = Field("System", max_length=255)
+    event_ids: Optional[list[int]] = None
+    limit: int = Field(100, ge=1, le=5000)
+    provider: Optional[Any] = None
+    force_mock: Optional[bool] = False
+    case_id: Optional[str] = None
+
+
+class PersistenceIndicatorsParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope: Literal["all", "registry_run", "startup_folder", "scheduled_tasks", "services"] = "all"
+    include_system: bool = False
+    case_id: Optional[str] = None
+    provider: Optional[Any] = None
+    force_mock: Optional[bool] = False
+
+
+class HashVerificationParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    file_path: Union[str, Path]
+    known_malicious_hashes: Optional[Union[set[str], list[str]]] = None
+    case_id: Optional[str] = None
+    provider: Optional[Any] = None
+    force_mock: Optional[bool] = False
+
 
 
 class ActionBlockedResult(BaseModel):
@@ -284,6 +373,26 @@ class SafetyGuard:
         re.IGNORECASE,
     )
 
+    # 6. Destructive file operations and process termination
+    _FORBIDDEN_DELETION_RE = re.compile(
+        r"\b(?:rm(?:\.exe)?(?:\s+-[rf]+|\s+--recursive)?|del(?:\.exe)?|rmdir(?:\.exe)?|erase(?:\.exe)?|unlink|shred|wipe|srm)\b"
+        r"|\b(?:format(?:\.exe)?\s+[a-zA-Z]:|mkfs\b|dd\s+if=)"
+        r"|\b(?:taskkill(?:\.exe)?|pkill|kill\s+-\d+|Stop-Process)\b"
+        r"|\b(?:sc(?:\.exe)?\s+(?:stop|delete|config)|Stop-Service|Set-Service)\b"
+        r"|\b(?:reg(?:\.exe)?\s+(?:delete|add|copy)|Remove-ItemProperty)\b",
+        re.IGNORECASE,
+    )
+
+    # 7. Sensitive system paths, configuration hives, and directory traversal
+    _FORBIDDEN_SENSITIVE_PATHS_RE = re.compile(
+        r"\b(?:\.env|id_rsa|id_ecdsa|id_ed25519|private_key(?:\.pem)?|privkey|keystore(?:\.json)?|wallet\.dat)\b"
+        r"|(?:system32[\\/]config[\\/](?:sam|system|security|software))"
+        r"|(?:/etc/(?:shadow|passwd|sudoers))"
+        r"|(?:\.ethereum[\\/]keystore)"
+        r"|\.\.[/\\]",  # Path traversal
+        re.IGNORECASE,
+    )
+
     # Dedicated shell injection metacharacter check for file_path
     _SHELL_INJECTION_RE = re.compile(
         r"[;&|`><]|\$\(|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)\s*[\$a-zA-Z_][^)]*\)|\n|\r"
@@ -304,7 +413,7 @@ class SafetyGuard:
         if norm_action == "triage_hash_verification" and params:
             file_path = str(params.get("file_path", "")).strip()
             if file_path:
-                if cls._FORBIDDEN_KEY_RE.search(file_path):
+                if cls._FORBIDDEN_KEY_RE.search(file_path) or cls._FORBIDDEN_SENSITIVE_PATHS_RE.search(file_path):
                     return (
                         False,
                         ForbiddenActionCategory.KEY_SIGNING,
@@ -336,6 +445,14 @@ class SafetyGuard:
                 "Autonomous private key access or transaction signing is strictly prohibited.",
             )
 
+        # Check Sensitive Paths and directory traversal
+        if cls._FORBIDDEN_SENSITIVE_PATHS_RE.search(full_text):
+            return (
+                False,
+                ForbiddenActionCategory.KEY_SIGNING,
+                "Autonomous access to sensitive configuration, credential, or SAM hive is strictly prohibited.",
+            )
+
         # Check Category 4: Automated network isolation
         if cls._FORBIDDEN_ISOLATION_RE.search(full_text):
             return (
@@ -360,6 +477,14 @@ class SafetyGuard:
                 "Event log clearing, truncation, or log tampering detected.",
             )
 
+        # Check Category: Destructive file operations and process termination
+        if cls._FORBIDDEN_DELETION_RE.search(full_text):
+            return (
+                False,
+                ForbiddenActionCategory.FILE_MODIFICATION_OR_DELETION,
+                "File deletion, formatting, process termination, or service tampering detected.",
+            )
+
         # Check Category 1: Arbitrary shell execution
         if cls._FORBIDDEN_SHELL_RE.search(full_text):
             return (
@@ -377,6 +502,26 @@ class SafetyGuard:
                 f"Action '{action_name}' is not in authorized triage playbook whitelist.",
             )
 
+        # Validate parameters against playbook schema
+        if params:
+            schema_map = {
+                TriagePlaybookType.NETWORK_CONNECTIONS.value: NetworkConnectionsParams,
+                TriagePlaybookType.RUNNING_PROCESSES.value: RunningProcessesParams,
+                TriagePlaybookType.SYSTEM_EVENTS.value: SystemEventsParams,
+                TriagePlaybookType.PERSISTENCE_INDICATORS.value: PersistenceIndicatorsParams,
+                TriagePlaybookType.HASH_VERIFICATION.value: HashVerificationParams,
+            }
+            model_cls = schema_map.get(norm_action)
+            if model_cls:
+                try:
+                    model_cls.model_validate(params)
+                except ValidationError as val_err:
+                    return (
+                        False,
+                        ForbiddenActionCategory.ARBITRARY_SHELL,
+                        f"Parameter validation failed: {val_err}",
+                    )
+
         return True, None, None
 
     @classmethod
@@ -386,11 +531,23 @@ class SafetyGuard:
         """Validates action against safety policy. Raises DangerousActionError if violated."""
         is_safe, category, reason = cls.evaluate(action_name, params)
         if not is_safe:
+            cat = category or ForbiddenActionCategory.ARBITRARY_SHELL
+            reas = reason or "Action blocked by safety policy."
+            if "not in authorized triage playbook whitelist" in reas:
+                raise UnauthorizedActionError(action_attempted=action_name, reason=reas)
+            if "Parameter validation failed" in reas:
+                raise ParameterBoundaryViolation(
+                    category=cat,
+                    param_name=list(params.keys())[0] if params else "params",
+                    param_value=params,
+                    reason=reas,
+                )
             raise DangerousActionError(
-                category=category or ForbiddenActionCategory.ARBITRARY_SHELL,
+                category=cat,
                 action_attempted=action_name,
-                reason=reason or "Action blocked by safety policy.",
+                reason=reas,
             )
+
 
 
 # Playbook Implementations
@@ -722,6 +879,15 @@ class AIFirstResponder:
             cat = category or ForbiddenActionCategory.ARBITRARY_SHELL
             reas = reason or "Action blocked by safety policy."
             if strict_fail_fast:
+                if "not in authorized triage playbook whitelist" in reas:
+                    raise UnauthorizedActionError(action_attempted=action, reason=reas)
+                if "Parameter validation failed" in reas:
+                    raise ParameterBoundaryViolation(
+                        category=cat,
+                        param_name=list(kwargs.keys())[0] if kwargs else "params",
+                        param_value=kwargs,
+                        reason=reas,
+                    )
                 raise DangerousActionError(
                     category=cat, action_attempted=action, reason=reas
                 )
