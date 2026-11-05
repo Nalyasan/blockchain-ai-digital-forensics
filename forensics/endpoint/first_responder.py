@@ -396,6 +396,9 @@ class SafetyGuard:
     # Dedicated shell injection metacharacter check for file_path
     _SHELL_INJECTION_RE = re.compile(
         r"[;&|`><]|\$\(|\((?!\s*(?:x86|x64|\d+)\s*\)\s*)\s*[\$a-zA-Z_][^)]*\)|\n|\r"
+        r"|(?:\s+-(?:e(?:nc(?:oded\w*)?)?|c(?:ommand)?|executionpolicy\s+bypass)\b)"
+        r"|\b(?:iex|Invoke-Expression|Invoke-Command)\b",
+        re.IGNORECASE,
     )
 
     @classmethod
@@ -437,7 +440,6 @@ class SafetyGuard:
 
         full_text = " ".join(tokens)
 
-        # Check Category 5: Autonomous private key access or transaction signing (most sensitive)
         if cls._FORBIDDEN_KEY_RE.search(full_text):
             return (
                 False,
@@ -445,15 +447,6 @@ class SafetyGuard:
                 "Autonomous private key access or transaction signing is strictly prohibited.",
             )
 
-        # Check Sensitive Paths and directory traversal
-        if cls._FORBIDDEN_SENSITIVE_PATHS_RE.search(full_text):
-            return (
-                False,
-                ForbiddenActionCategory.KEY_SIGNING,
-                "Autonomous access to sensitive configuration, credential, or SAM hive is strictly prohibited.",
-            )
-
-        # Check Category 4: Automated network isolation
         if cls._FORBIDDEN_ISOLATION_RE.search(full_text):
             return (
                 False,
@@ -461,7 +454,6 @@ class SafetyGuard:
                 "Automated network isolation requires human approval; autonomous execution blocked.",
             )
 
-        # Check Category 3: ACL alteration
         if cls._FORBIDDEN_ACL_RE.search(full_text):
             return (
                 False,
@@ -469,7 +461,6 @@ class SafetyGuard:
                 "File permission, ownership change, or ACL alteration detected.",
             )
 
-        # Check Category 2: Event log clearing
         if cls._FORBIDDEN_LOG_RE.search(full_text):
             return (
                 False,
@@ -477,7 +468,6 @@ class SafetyGuard:
                 "Event log clearing, truncation, or log tampering detected.",
             )
 
-        # Check Category: Destructive file operations and process termination
         if cls._FORBIDDEN_DELETION_RE.search(full_text):
             return (
                 False,
@@ -485,7 +475,13 @@ class SafetyGuard:
                 "File deletion, formatting, process termination, or service tampering detected.",
             )
 
-        # Check Category 1: Arbitrary shell execution
+        if cls._FORBIDDEN_SENSITIVE_PATHS_RE.search(full_text):
+            return (
+                False,
+                ForbiddenActionCategory.KEY_SIGNING,
+                "Autonomous access to sensitive configuration, credential, or SAM hive is strictly prohibited.",
+            )
+
         if cls._FORBIDDEN_SHELL_RE.search(full_text):
             return (
                 False,

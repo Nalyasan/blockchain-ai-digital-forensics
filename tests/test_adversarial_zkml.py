@@ -57,7 +57,6 @@ def default_model_path() -> Path:
 def zkml_prover(default_model_path) -> ZKMLProver:
     return ZKMLProver(
         model_path=default_model_path,
-        artifacts_dir=Path("scratch/zkml_artifacts"),
         auto_setup=True,
     )
 

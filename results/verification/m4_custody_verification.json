@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-11-05T06:41:42.040232+00:00",
+  "timestamp_utc": "2026-11-05T06:51:23.529242+00:00",
   "chain_id": 31337,
   "gates": {
     "T23_custody_handover": "PASS",
@@ -39,11 +39,11 @@
     "custody_transfer": {
       "from_custodian": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
       "to_custodian": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-      "signature": "0xf09f84d094a71b661d3d2bdfa16016b87cb10264314ca97afb0fc08ac72b6b8236f60d7b785b06b2f07399d0ef6913bb6ba5f59e0ad24e1f4d5773692001c0fe1c",
+      "signature": "0xb50d50da056aaf0322afcdef9ebbe57b0656cbb949c953a141d7f7700049c030429762859c35379e6b582622f58ebd27d323c810152badff2963002a56515aba1c",
       "receipt": {
-        "transaction_hash": "0x8680d8be5c2ddb8286ff15943344d74617e0f2b6a116736e403d0160ad8f3ef5 (synthetic)",
+        "transaction_hash": "0x3fae799e41852128bb68cfaea9086f5429ef2597c6c42c549dac036e57927ada (synthetic)",
         "block_number": 7,
-        "gas_used": 435205,
+        "gas_used": 435181,
         "status": 1,
         "is_synthetic": true
       },
@@ -80,7 +80,7 @@
     }
   },
   "hash_concordance": {
-    "verification_timestamp_utc": "2026-11-05T06:41:56.755330+00:00",
+    "verification_timestamp_utc": "2026-11-05T06:51:27.801486+00:00",
     "onchain_records_count": 2,
     "original_sha256": {
       "expected": "0520b11a39b797bfb7b656939cdffb03818db371e0e7596299afca8ef39027b2",

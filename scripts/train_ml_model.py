@@ -44,7 +44,7 @@ def main():
           f"Test={len(test_split)} (pos={sum(test_split.labels)})")
 
     print("3. Generating and validating models/dataset_manifest.json...")
-    models_dir = Path("D:/Projest/Blockchain/models")
+    models_dir = Path(__file__).resolve().parent.parent / "models"
     manifest_p, manifest_sha256 = generate_dataset_manifest(
         REAL_P4_DB, prepared, output_path=models_dir / "dataset_manifest.json"
     )

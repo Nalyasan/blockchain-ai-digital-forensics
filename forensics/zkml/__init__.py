@@ -31,7 +31,7 @@ from forensics.zkml.circuit import (
     setup_circuit_srs,
     setup_keys,
 )
-from forensics.zkml.prover import ZKMLProofResult, ZKMLProver
+from forensics.zkml.prover import ProofResult, ZKMLProofResult, ZKMLProver
 from forensics.zkml.verifier import ZKMLVerifier, verify_proof
 
 __all__ = [
@@ -51,6 +51,7 @@ __all__ = [
     "setup_circuit_srs",
     "setup_keys",
     "generate_witness",
+    "ProofResult",
     "ZKMLProofResult",
     "ZKMLProver",
     "ZKMLVerifier",

@@ -2,8 +2,8 @@
 
 **Standard Compliances**: ISO/IEC 27037:2012, NIST SP 800-86, RFC 3227, RFC 6962, W3C DID Core 1.0, EIP-712  
 **Evaluation Status**: **100% PASS (VERIFIED FORENSICALLY SOUND)**  
-**Generated UTC**: `2026-11-05T10:29:12.712747Z`  
-**Run ID**: `run_d2_1793874552`  
+**Generated UTC**: `2026-11-05T11:46:35.754490Z`  
+**Run ID**: `run_d2_1793879195`  
 
 ---
 
@@ -24,7 +24,7 @@ Integration Demo D2 demonstrates a fully verifiable, forensically sound, end-to-
 
 | Property | Value |
 |---|---|
-| **Acquisition ID** | `acq_576e13408161` |
+| **Acquisition ID** | `acq_656c2134bb48` |
 | **Source Type** | `HOST_LOG_JSONL` |
 | **Source Identifier** | `VAL-NODE-01:host_logs.jsonl` |
 | **Consent Scope** | `security_events_only` (ISO/IEC 27037 Authorized) |
@@ -32,7 +32,7 @@ Integration Demo D2 demonstrates a fully verifiable, forensically sound, end-to-
 | **Copy SHA-256** | `d3a264f7f63a3c894b2ce8e136587cfde69148982cc2ca6f753cb8d3f238fbf1` |
 | **Bitwise Concordance** | **100% IDENTICAL (PASS)** |
 | **Records Ingested** | 12 |
-| **Acquisition Manifest** | `C:\Users\Naly\AppData\Local\Temp\demo_d2_rhxdlxsa\evidence_vault\acq_576e13408161\acquisition_manifest.json` |
+| **Acquisition Manifest** | `C:\Users\Naly\AppData\Local\Temp\demo_d2_9yzqlohk\evidence_vault\acq_656c2134bb48\acquisition_manifest.json` |
 
 ---
 
@@ -70,11 +70,11 @@ Integration Demo D2 demonstrates a fully verifiable, forensically sound, end-to-
 
 - **Contract Address**: `0x5fbdb2315678afecb367f032d93f642f64180aa3`
 - **Evidence ID**: `1`
-- **RFC 6962 Merkle Root Hash**: `45fb7d8ea4dbf14dc8dd4307a4ece42442904af82517257c993d9c9f6e1e41b6`
-- **Canonical Storage URI**: `evidence://sha256/e06de7f8382fb143e9730170a0d6c8e069f052f21e326b54cb3087582f242e03/45fb7d8ea4dbf14dc8dd4307a4ece42442904af82517257c993d9c9f6e1e41b6/manifest.json`
+- **RFC 6962 Merkle Root Hash**: `60eda2ea6d7d002faa7240ba58d4d501d5c692f0a6a0b32ac272257a8e5918a0`
+- **Canonical Storage URI**: `evidence://sha256/e06de7f8382fb143e9730170a0d6c8e069f052f21e326b54cb3087582f242e03/60eda2ea6d7d002faa7240ba58d4d501d5c692f0a6a0b32ac272257a8e5918a0/manifest.json`
 - **Custody Handover**: From `0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Alice)` To `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (Bob)`
-- **Transaction Hash**: `0xef310decc77730996c6b5350d7e93896d799267f8ecab5172f4b57f904823807 (synthetic) (synthetic)`
-- **Gas Used**: 444497
+- **Transaction Hash**: `0x513e4eb5a488e7b431bca7f9ef28b898875379b930bfe65ad439c07c5b6f6a8e (synthetic) (synthetic)`
+- **Gas Used**: 468435
 - **ZKML Model Status**: `ARCHITECTURAL_LIMITATION (Host telemetry model not applicable per AGENT.md §9.1)`
 
 ---

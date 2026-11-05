@@ -30,10 +30,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
-# Windows & Foundry environment setup
-foundry_bin = os.path.expanduser("~/.foundry/bin")
-if os.path.isdir(foundry_bin) and foundry_bin not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = f"{foundry_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+for _cand_dir in (REPO_ROOT / "tools" / "foundry", Path(os.path.expanduser("~/.foundry/bin"))):
+    if _cand_dir.is_dir() and str(_cand_dir) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{_cand_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
 if "HOME" not in os.environ and "USERPROFILE" in os.environ:
     os.environ["HOME"] = os.environ["USERPROFILE"]
@@ -46,12 +49,7 @@ if hasattr(sys.stderr, "reconfigure"):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("demo_d3_adversarial")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-# Forensic module imports
-from forensics.paths import REAL_P4_DB, FORENSICS_DB, BENCHMARK_DB
+from forensics.paths import REAL_P4_DB, FORENSICS_DB, BENCHMARK_DB, resolve_foundry_binary
 from forensics.endpoint.first_responder import (
     AIFirstResponder,
     SafetyGuard,
@@ -484,63 +482,35 @@ class DemoD3Runner:
         with AnvilTestNode(chain_id=self.chain_id, port=self.port) as node:
             logger.info(f"Connected to ephemeral Anvil node at {node.rpc_url} (Chain ID {self.chain_id})")
 
-            # --- Gateway 5: ZKML Verifier on Live Anvil (5 vectors) ---
-            logger.info("[Gateway 5] Replaying 5 adversarial vectors on live ZKML verifier...")
+            logger.info("[Gateway 5] Replaying 5 adversarial vectors on live BN254 Halo2Verifier + InferenceVerifier...")
             g5_results: list[dict[str, Any]] = []
 
-            # 1. Generate valid proof baseline first
             prover = ZKMLProver(
                 model_path=self.workspace_dir / "models" / "anomaly_detector_v1.onnx",
-                artifacts_dir=self.workspace_dir / "scratch" / "zkml_artifacts",
                 auto_setup=True,
             )
             valid_feats = [12.0, 2.0, 3.0, 23.0, 22.8, 0.66, 3.0, 0.0, 0.0, 0.96]
             proof_res = prover.prove(valid_feats)
             assert proof_res.is_valid is True, "Baseline proof generation failed"
 
-            # 2. Deploy MockCircuitVerifier & InferenceVerifier
-            cast_bin = shutil.which("cast") or os.path.expanduser("~/.foundry/bin/cast.exe")
-            forge_bin = shutil.which("forge") or os.path.expanduser("~/.foundry/bin/forge.exe")
-
-            keccak_res = subprocess.run(
-                [cast_bin, "keccak", proof_res.hex_proof],
-                capture_output=True, text=True, check=True
-            )
-            proof_keccak = keccak_res.stdout.strip()
-
-            q_score = int(round(proof_res.output_score * 128))
-            output_comm = "0x" + q_score.to_bytes(32, byteorder="big").hex()
-
-            contracts_root = self.workspace_dir / "contracts"
+            forge_bin = resolve_foundry_binary("forge")
             res_circ = subprocess.run([
-                forge_bin, "create", "contracts/src/InferenceVerifier.sol:MockCircuitVerifier",
+                forge_bin, "create", "src/Halo2Verifier.sol:Halo2Verifier",
+                "--root", "contracts",
                 "--rpc-url", node.rpc_url,
                 "--unlocked",
                 "--from", ANVIL_DEFAULT_DEPLOYER,
                 "--broadcast",
-                "--constructor-args", proof_keccak,
             ], capture_output=True, text=True, check=True, cwd=str(self.workspace_dir))
 
             addr_match_circ = re.search(r"Deployed to:\s*(0x[0-9a-fA-F]{40})", res_circ.stdout)
             if not addr_match_circ:
-                raise RuntimeError("Failed to parse MockCircuitVerifier address")
+                raise RuntimeError("Failed to parse Halo2Verifier address")
             circ_addr = addr_match_circ.group(1)
 
-            # Set commitments
-            in_comm_int = str(int(proof_res.input_commitment, 16))
-            out_comm_int = str(int(output_comm, 16))
-            _run_cast([
-                "send", circ_addr,
-                "setExpectedCommitments(uint256,uint256)",
-                in_comm_int, out_comm_int,
-                "--rpc-url", node.rpc_url,
-                "--from", ANVIL_DEFAULT_DEPLOYER,
-                "--unlocked",
-            ])
-
-            # Deploy InferenceVerifier
             res_iv = subprocess.run([
-                forge_bin, "create", "contracts/src/InferenceVerifier.sol:InferenceVerifier",
+                forge_bin, "create", "src/InferenceVerifier.sol:InferenceVerifier",
+                "--root", "contracts",
                 "--rpc-url", node.rpc_url,
                 "--unlocked",
                 "--from", ANVIL_DEFAULT_DEPLOYER,
@@ -554,11 +524,21 @@ class DemoD3Runner:
             iv_addr = addr_match_iv.group(1)
 
             valid_hex_proof = proof_res.hex_proof
+            instances_arg = "[" + ",".join(str(x) for x in proof_res.evm_instances) + "]"
             m_clean = prover.model_hash
-            in_clean = proof_res.input_commitment
-            out_clean = output_comm
+            in_clean = "0x" + proof_res.input_commitment.removeprefix("0x")
+            out_clean = proof_res.output_commitment
 
-            # ADV-G5-01: 1-bit flip in proof bytes
+            # Confirm authentic baseline passes real BN254 pairing check before testing rejections.
+            _run_cast([
+                "send", iv_addr,
+                "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)(bool)",
+                valid_hex_proof, instances_arg, m_clean, in_clean, out_clean, "REC_G5_BASELINE",
+                "--rpc-url", node.rpc_url,
+                "--from", ANVIL_DEFAULT_DEPLOYER,
+                "--unlocked",
+            ])
+
             corrupted_proof = bytearray(proof_res.proof_bytes)
             corrupted_proof[100] ^= 0x01
             hex_corrupted = "0x" + corrupted_proof.hex()
@@ -566,8 +546,8 @@ class DemoD3Runner:
             try:
                 _run_cast([
                     "send", iv_addr,
-                    "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)(bool)",
-                    hex_corrupted, m_clean, in_clean, out_clean, "REC_G5_01",
+                    "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)(bool)",
+                    hex_corrupted, instances_arg, m_clean, in_clean, out_clean, "REC_G5_01",
                     "--rpc-url", node.rpc_url,
                     "--from", ANVIL_DEFAULT_DEPLOYER,
                     "--unlocked",
@@ -575,16 +555,15 @@ class DemoD3Runner:
             except RuntimeError:
                 g5_1_reverted = True
             assert g5_1_reverted is True, "ADV-G5-01 failed: bit-flipped proof did not revert"
-            v5_1 = {"case_id": "ADV-G5-01", "gateway": "gateway_5_zkml_verifier", "name": "1-bit flip in Halo2 proof calldata", "status": "REJECTED_FAIL_CLOSED", "actual_outcome": "EVM Revert (Proof verification failed)"}
+            v5_1 = {"case_id": "ADV-G5-01", "gateway": "gateway_5_zkml_verifier", "name": "1-bit flip in Halo2 proof calldata", "status": "REJECTED_FAIL_CLOSED", "actual_outcome": "EVM Revert (BN254 pairing verification failed)"}
             g5_results.append(v5_1); all_vectors.append(v5_1)
 
-            # ADV-G5-02: Corrupted input commitment
             g5_2_reverted = False
             try:
                 _run_cast([
                     "send", iv_addr,
-                    "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)(bool)",
-                    valid_hex_proof, m_clean, "0x" + "ff"*32, out_clean, "REC_G5_02",
+                    "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)(bool)",
+                    valid_hex_proof, instances_arg, m_clean, "0x" + "ff"*32, out_clean, "REC_G5_02",
                     "--rpc-url", node.rpc_url,
                     "--from", ANVIL_DEFAULT_DEPLOYER,
                     "--unlocked",
@@ -595,13 +574,12 @@ class DemoD3Runner:
             v5_2 = {"case_id": "ADV-G5-02", "gateway": "gateway_5_zkml_verifier", "name": "Corrupted input commitment", "status": "REJECTED_FAIL_CLOSED", "actual_outcome": "EVM Revert (Input commitment mismatch)"}
             g5_results.append(v5_2); all_vectors.append(v5_2)
 
-            # ADV-G5-03: Corrupted model architecture hash
             g5_3_reverted = False
             try:
                 _run_cast([
                     "send", iv_addr,
-                    "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)(bool)",
-                    valid_hex_proof, "0x" + "ee"*32, in_clean, out_clean, "REC_G5_03",
+                    "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)(bool)",
+                    valid_hex_proof, instances_arg, "0x" + "ee"*32, in_clean, out_clean, "REC_G5_03",
                     "--rpc-url", node.rpc_url,
                     "--from", ANVIL_DEFAULT_DEPLOYER,
                     "--unlocked",
@@ -612,13 +590,12 @@ class DemoD3Runner:
             v5_3 = {"case_id": "ADV-G5-03", "gateway": "gateway_5_zkml_verifier", "name": "Corrupted model architecture hash", "status": "REJECTED_FAIL_CLOSED", "actual_outcome": "EVM Revert (Model hash mismatch)"}
             g5_results.append(v5_3); all_vectors.append(v5_3)
 
-            # ADV-G5-04: Spoofed output score commitment
             g5_4_reverted = False
             try:
                 _run_cast([
                     "send", iv_addr,
-                    "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)(bool)",
-                    valid_hex_proof, m_clean, in_clean, "0x" + "dd"*32, "REC_G5_04",
+                    "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)(bool)",
+                    valid_hex_proof, instances_arg, m_clean, in_clean, "0x" + "dd"*32, "REC_G5_04",
                     "--rpc-url", node.rpc_url,
                     "--from", ANVIL_DEFAULT_DEPLOYER,
                     "--unlocked",
@@ -629,13 +606,12 @@ class DemoD3Runner:
             v5_4 = {"case_id": "ADV-G5-04", "gateway": "gateway_5_zkml_verifier", "name": "Spoofed output score commitment", "status": "REJECTED_FAIL_CLOSED", "actual_outcome": "EVM Revert (Output commitment mismatch)"}
             g5_results.append(v5_4); all_vectors.append(v5_4)
 
-            # ADV-G5-05: Truncated 16-byte proof calldata
             g5_5_reverted = False
             try:
                 _run_cast([
                     "send", iv_addr,
-                    "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)(bool)",
-                    "0x112233445566778899aabbccddeeff00", m_clean, in_clean, out_clean, "REC_G5_05",
+                    "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)(bool)",
+                    "0x112233445566778899aabbccddeeff00", instances_arg, m_clean, in_clean, out_clean, "REC_G5_05",
                     "--rpc-url", node.rpc_url,
                     "--from", ANVIL_DEFAULT_DEPLOYER,
                     "--unlocked",
@@ -649,6 +625,8 @@ class DemoD3Runner:
             telemetry["gateways"]["gateway_5_zkml_verifier"] = {
                 "total_vectors": len(g5_results),
                 "rejected_fail_closed": len([r for r in g5_results if r["status"] == "REJECTED_FAIL_CLOSED"]),
+                "halo2_verifier_address": circ_addr,
+                "inference_verifier_address": iv_addr,
                 "vectors": g5_results,
             }
 

@@ -3,6 +3,8 @@
 .env.*
 !.env.example
 *.key
+!circuits/anomaly_detector_v1/vk.key
+circuits/anomaly_detector_v1/pk.key
 *.pem
 
 # Databases & Runtime Data

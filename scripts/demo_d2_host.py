@@ -23,10 +23,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Windows & Foundry environment setup
-foundry_bin = os.path.expanduser("~/.foundry/bin")
-if os.path.isdir(foundry_bin) and foundry_bin not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = f"{foundry_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+for _cand_dir in (REPO_ROOT / "tools" / "foundry", Path(os.path.expanduser("~/.foundry/bin"))):
+    if _cand_dir.is_dir() and str(_cand_dir) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{_cand_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
 if "HOME" not in os.environ and "USERPROFILE" in os.environ:
     os.environ["HOME"] = os.environ["USERPROFILE"]
@@ -38,10 +41,6 @@ if hasattr(sys.stderr, "reconfigure"):
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("demo_d2_host")
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 # Forensic module imports
 from forensics.paths import REAL_P4_DB, FORENSICS_DB, BENCHMARK_DB, ENDPOINT_EVIDENCE_DB
@@ -390,7 +389,7 @@ class DemoD2Runner:
             )
 
             threat_intel_match = ExternalLabel(
-                source="Benchmark_P6_ThreatIntel",
+                source="ThreatIntelligence_ScreeningFeed",
                 address_or_tx="0x" + hashlib.sha256(b"198.51.100.42").hexdigest()[:40],
                 category="exploit",
                 entity_name="SUSPICIOUS_C2_HOST",

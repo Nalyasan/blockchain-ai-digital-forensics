@@ -2,7 +2,7 @@
 
 **Standard References:** ISO/IEC 27037:2012, NIST SP 800-86, W3C DID Core 1.0, EIP-712  
 **Evaluation Target:** Milestone M4 (Gates T12, T13, T23, T24; Features 22–29)  
-**Verification Date:** 2026-11-05 06:41:58 UTC  
+**Verification Date:** 2026-11-05 06:51:29 UTC  
 **Execution Environment:** Isolated Anvil Blockchain Node (Chain ID: 31337)  
 **Status:** **100% PASS (ALL CRITERIA VERIFIED)**
 
@@ -34,9 +34,9 @@ All objectives specified in `DISPATCH.md` and `AGENT.md §5.1, §5.2, §8.1, §8
 ### 2.2 On-Chain Transaction Receipt & Telemetry
 ```json
 {
-  "transaction_hash": "0x8680d8be5c2ddb8286ff15943344d74617e0f2b6a116736e403d0160ad8f3ef5 (synthetic)",
+  "transaction_hash": "0x3fae799e41852128bb68cfaea9086f5429ef2597c6c42c549dac036e57927ada (synthetic)",
   "block_number": 7,
-  "gas_used": 435205,
+  "gas_used": 435181,
   "status": 1,
   "is_synthetic": true
 }

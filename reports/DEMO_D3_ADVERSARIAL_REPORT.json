@@ -1,8 +1,8 @@
 {
-  "report_id": "D3-ADV-REPLAY-1793875244",
+  "report_id": "D3-ADV-REPLAY-1793879204",
   "demo_name": "Demo D3 Multi-Gateway Adversarial Replay",
   "specification_ref": "AGENT.md v6.0 \u00a79.1, \u00a711 (Gates T13, T15, T16, T17, T21, T22, T24)",
-  "timestamp_utc": "2026-11-05T10:40:44.381831Z",
+  "timestamp_utc": "2026-11-05T11:46:44.093073Z",
   "environment": {
     "os": "Windows",
     "python_version": "3.13.14",
@@ -243,13 +243,15 @@
     "gateway_5_zkml_verifier": {
       "total_vectors": 5,
       "rejected_fail_closed": 5,
+      "halo2_verifier_address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "inference_verifier_address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "vectors": [
         {
           "case_id": "ADV-G5-01",
           "gateway": "gateway_5_zkml_verifier",
           "name": "1-bit flip in Halo2 proof calldata",
           "status": "REJECTED_FAIL_CLOSED",
-          "actual_outcome": "EVM Revert (Proof verification failed)"
+          "actual_outcome": "EVM Revert (BN254 pairing verification failed)"
         },
         {
           "case_id": "ADV-G5-02",

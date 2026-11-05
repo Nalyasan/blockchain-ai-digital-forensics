@@ -486,6 +486,32 @@ def verify_package(manifest_path_or_dir, db_path=None, *, declaration_diagnostic
                                        csv_rows(content['asset_transfers.csv']), csv_rows(content['timeline.csv']),
                                        jsonl(content['audit_events.jsonl']), declaration_diagnostic=declaration_diagnostic)
             coverage = 'FULL'
+        elif not issues and version == '1.0.0':
+            blocks_v1 = jsonl(content['raw_blocks.jsonl'])
+            transfers_v1 = csv_rows(content['asset_transfers.csv'])
+            audits_v1 = jsonl(content['audit_events.jsonl'])
+            start_b, end_b = m['block_range']['start_block'], m['block_range']['end_block']
+            canonical_nums = set()
+            for blk in blocks_v1:
+                num = blk.get('number')
+                need(integer(num) and start_b <= num <= end_b)
+                if blk.get('status') == 'canonical':
+                    need(num not in canonical_nums)
+                    canonical_nums.add(num)
+            counts_v1 = m['counts']
+            for k, actual in {'total_blocks': len(blocks_v1), 'canonical_blocks': len(canonical_nums),
+                              'asset_transfers': len(transfers_v1), 'audit_events': len(audits_v1)}.items():
+                need(type(counts_v1.get(k)) is int and counts_v1[k] == actual)
+            gaps_v1, cursor = [], start_b
+            for num in sorted(canonical_nums):
+                if num > cursor:
+                    gaps_v1.append([cursor, num - 1])
+                cursor = num + 1
+            if cursor <= end_b:
+                gaps_v1.append([cursor, end_b])
+            integrity_v1 = m['integrity_checks']
+            need(integrity_v1.get('gaps') == gaps_v1 and type(integrity_v1.get('gaps_count')) is int
+                 and integrity_v1['gaps_count'] == sum(b - a + 1 for a, b in gaps_v1))
         if inventory(root) != initial:
             raise VerificationError(Reason.UNSTABLE)
         if issues:

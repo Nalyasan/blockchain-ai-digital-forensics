@@ -53,10 +53,9 @@ TOPIC_CUSTODY_RECORDED = "0xcf6b2d07eec198ac5313cb4e7be0d697c16d152be5eb56184111
 # Danh sách chain_id cho phép (Anvil & Sepolia)
 ALLOWED_CHAIN_IDS = {31337, 11155111}
 
-# Đường dẫn tới công cụ cast
-CAST_BIN = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "foundry", "cast.exe")
-if not os.path.exists(CAST_BIN):
-    CAST_BIN = "cast"
+from forensics.paths import resolve_foundry_binary
+
+CAST_BIN = resolve_foundry_binary("cast")
 
 def safe_redact_error(msg: str) -> str:
     """Do not expose untrusted tool output; secrets need not have a known format."""

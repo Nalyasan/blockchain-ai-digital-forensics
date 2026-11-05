@@ -12,7 +12,8 @@ interface ICircuitVerifier {
 
 /**
  * @title MockCircuitVerifier
- * @notice Verifier contract simulating/delegating Halo2 pairing validation, instance commitments, and tamper rejection.
+ * @dev Auxiliary unit-test stub ONLY for isolating outer InferenceVerifier guards.
+ *      Never used for Gate T09/T22 or Demo D1/D3 acceptance, which deploy real Halo2Verifier.sol.
  */
 contract MockCircuitVerifier is ICircuitVerifier {
     bytes32 public expectedProofHash;
@@ -68,8 +69,9 @@ contract MockCircuitVerifier is ICircuitVerifier {
  *      EvidenceRegistry.sol or EvidenceRegistryDID.sol.
  */
 contract InferenceVerifier is IInferenceVerifier {
-    // --- Constants ---
     uint256 public constant MIN_PROOF_LENGTH = 64;
+    uint256 public constant BN254_SCALAR_MODULUS = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001;
+    uint256 public constant HALO2_INSTANCE_COUNT = 11;
 
     // --- Storage Variables ---
     address public override owner;
@@ -289,6 +291,25 @@ contract InferenceVerifier is IInferenceVerifier {
             uint256[] memory circuitInstances;
             if (instances.length > 0) {
                 circuitInstances = instances;
+                if (instances.length == HALO2_INSTANCE_COUNT) {
+                    bytes32 derivedInputComm = _computeHalo2InputCommitment(instances);
+                    if (derivedInputComm != inputCommitment) {
+                        uint256 gasMismatchIn = startGas - gasleft();
+                        emit InferenceVerified(modelCommitment, inputCommitment, outputCommitment, inferenceRecordId, false, gasMismatchIn);
+                        if (revertOnFailure) {
+                            revert CircuitVerificationFailed("Input commitment mismatch against Halo2 instances");
+                        }
+                        return false;
+                    }
+                    if (bytes32(instances[HALO2_INSTANCE_COUNT - 1]) != outputCommitment) {
+                        uint256 gasMismatchOut = startGas - gasleft();
+                        emit InferenceVerified(modelCommitment, inputCommitment, outputCommitment, inferenceRecordId, false, gasMismatchOut);
+                        if (revertOnFailure) {
+                            revert CircuitVerificationFailed("Output commitment mismatch against Halo2 instance");
+                        }
+                        return false;
+                    }
+                }
             } else {
                 circuitInstances = new uint256[](2);
                 circuitInstances[0] = uint256(inputCommitment);
@@ -357,6 +378,32 @@ contract InferenceVerifier is IInferenceVerifier {
         );
 
         return true;
+    }
+
+    /**
+     * @dev Reconstructs the 80-byte little-endian signed int64 buffer from the 10 Halo2 quantized
+     *      input field elements so on-chain SHA-256 matches off-chain compute_input_commitment().
+     */
+    function _computeHalo2InputCommitment(uint256[] memory instances) internal pure returns (bytes32) {
+        bytes memory buf = new bytes(80);
+        uint256 halfMod = BN254_SCALAR_MODULUS / 2;
+        for (uint256 i = 0; i < 10; i++) {
+            uint256 u = instances[i];
+            int64 signedVal = u > halfMod
+                ? -int64(uint64(BN254_SCALAR_MODULUS - u))
+                : int64(uint64(u));
+            uint64 raw = uint64(signedVal);
+            uint256 base = i * 8;
+            buf[base] = bytes1(uint8(raw));
+            buf[base + 1] = bytes1(uint8(raw >> 8));
+            buf[base + 2] = bytes1(uint8(raw >> 16));
+            buf[base + 3] = bytes1(uint8(raw >> 24));
+            buf[base + 4] = bytes1(uint8(raw >> 32));
+            buf[base + 5] = bytes1(uint8(raw >> 40));
+            buf[base + 6] = bytes1(uint8(raw >> 48));
+            buf[base + 7] = bytes1(uint8(raw >> 56));
+        }
+        return sha256(buf);
     }
 
     // --- View Functions ---

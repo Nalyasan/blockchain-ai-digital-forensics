@@ -2,13 +2,13 @@
   "demo_id": "DEMO_D1_EVM_INCIDENT_REPLAY",
   "version": "6.0.0",
   "status": "PASS",
-  "timestamp_utc": "2026-11-05T10:19:32.129665Z",
+  "timestamp_utc": "2026-11-05T11:46:25.208744Z",
   "execution_environment": {
     "os": "Windows",
     "python_version": "3.13.14",
     "chain_id": 31337,
     "incident": "euler",
-    "rpc_url": "http://127.0.0.1:49306"
+    "rpc_url": "http://127.0.0.1:52049"
   },
   "canonical_database_invariance": {
     "real_p4.db": {
@@ -35,14 +35,14 @@
   "pipeline_stages": {
     "stage_1_ingestion": {
       "incident": "euler",
-      "acquisition_id": "acq_97024a070ec8",
+      "acquisition_id": "acq_f8e93afc3eb1",
       "source_type": "EVM",
       "consent_scope": "blockchain_transactions",
       "original_sha256": "6abaf787c109f29293f71a33beaa89bae9553c00af91ffc2fff1627c2ef6762e",
       "copy_sha256": "6abaf787c109f29293f71a33beaa89bae9553c00af91ffc2fff1627c2ef6762e",
       "bitstream_verified": true,
-      "package_dir": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d1__k1kt56a\\pkg_evm_1793873972",
-      "package_manifest_sha256": "ab0e69275d6ecc0575506e0208b65c2643dfea8449817fbbdee5dc28747e98d5",
+      "package_dir": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d1_n7p0epd2\\pkg_evm_1793879185",
+      "package_manifest_sha256": "64035dfe82fcf24535b97312de12a4c656509bb9865c93f05d7bf645001c2d2b",
       "package_verification_status": "VALID"
     },
     "stage_2_rule_detection": {
@@ -56,9 +56,9 @@
       ],
       "alerts_count": 58,
       "detected_rules": [
-        "rapid_pass_through",
-        "high_frequency",
         "large_transfer",
+        "high_frequency",
+        "rapid_pass_through",
         "fan_in_out"
       ],
       "primary_exploit_tx": "0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d",
@@ -66,6 +66,7 @@
     },
     "stage_3_ml_inference": {
       "model_id": "anomaly_detector_v1",
+      "model_sha256": "d1b9ce8247f8a188355454ef5158280ce7b0d46dfb3388581023e9e01806aeff",
       "parameters_count": 321,
       "entity_address": "0x583c21631c48d442b5c0e605d624f54a0b366c72",
       "raw_features": {
@@ -917,17 +918,19 @@
     "stage_6_zkml_proving": {
       "circuit_family": "Halo2 / KZG on BN254",
       "proof_bytes_length": 5504,
+      "public_signals_count": 11,
       "is_valid": true,
-      "input_commitment": "5b5b1b8bf4832b30f7c6a19b55d0344514d1cdab77f608c9a68e59b43c88335f",
+      "input_commitment": "0x5b5b1b8bf4832b30f7c6a19b55d0344514d1cdab77f608c9a68e59b43c88335f",
       "output_score": 0.8672,
       "output_commitment": "0x000000000000000000000000000000000000000000000000000000000000006f",
-      "onchain_verifier_address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "verification_gas_used": 366844,
-      "synthetic_tx_hash": "0x9e91a33c3322e3d4a4190e74428d0b0c8b02fc29c73fc759a55902f171ebd13d (synthetic)",
+      "halo2_verifier_address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "onchain_verifier_address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "verification_gas_used": 1137038,
+      "synthetic_tx_hash": "0x8c3eee475e220e2321955c6de19eabbf6996c89e5d065b0a2a5293c289578a3d (synthetic)",
       "tamper_rejection_verified": true
     },
     "stage_7_custody_did": {
-      "contract_address": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
+      "contract_address": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
       "actors": {
         "alice_collector": {
           "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
@@ -941,20 +944,20 @@
       "registration": {
         "evidence_id": 1,
         "case_id": "CASE-2026-D1-EULER",
-        "manifest_sha256": "ab0e69275d6ecc0575506e0208b65c2643dfea8449817fbbdee5dc28747e98d5",
+        "manifest_sha256": "64035dfe82fcf24535b97312de12a4c656509bb9865c93f05d7bf645001c2d2b",
         "storage_uri": "evidence://case-2026-d1-euler/manifest.json"
       },
       "custody_handover": {
         "from": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
         "to": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-        "signature": "0xc55f5e33d7ae033db24a0cd27a09a1cef3d64077be155ef4e78d6b30862b774a068908211d8705b2f24dfed1ef49955fecdce9f2f456cba1d94a1aff5dd946c21c",
-        "gas_used": 435193,
-        "synthetic_tx_hash": "0xa3094d86a09f71782832be9830a56ee60ba0b38cccfa2240f3f7ea57d5c13306 (synthetic) (synthetic)"
+        "signature": "0x451c831ba7dc89b9c2b8a2eddd0855cc5087ac08e129f8c10c89cc25124a2fd90c0d442ddb2c98e4df44ac0dcfe218d6c6fb8c820ec4769f8f98bdc762f055381b",
+        "gas_used": 459107,
+        "synthetic_tx_hash": "0xa0d5dedaa1df63da073b30ab868d6a3ec282595b05099c220dc687c4e4fef48a (synthetic) (synthetic)"
       },
       "forensic_anchoring": {
         "model_hash": "0xd1b9ce8247f8a188355454ef5158280ce7b0d46dfb3388581023e9e01806aeff",
         "xai_digest": "0xd2d19f2881fa4fd459e2c4ef6dcd3a973688393c43ea975d2e345124a594a518",
-        "zkml_proof_hash": "0x0xcd8e9146557f3e5bb4ee1e5a606af2c81eb23c84e290a6d28e8b7d10a7eae42e",
+        "zkml_proof_hash": "0x381407fa0db8a98fcfcee4ed82be2f243e3ec98171da89d200b5d4bcbde4785b",
         "artifact_sha256": "6abaf787c109f29293f71a33beaa89bae9553c00af91ffc2fff1627c2ef6762e"
       },
       "hash_concordance": {
@@ -963,8 +966,8 @@
       }
     },
     "stage_8_reread_provenance": {
-      "onchain_queried_manifest_sha256": "0xab0e69275d6ecc0575506e0208b65c2643dfea8449817fbbdee5dc28747e98d5",
-      "reloaded_package_manifest_sha256": "0xab0e69275d6ecc0575506e0208b65c2643dfea8449817fbbdee5dc28747e98d5",
+      "onchain_queried_manifest_sha256": "0x64035dfe82fcf24535b97312de12a4c656509bb9865c93f05d7bf645001c2d2b",
+      "reloaded_package_manifest_sha256": "0x64035dfe82fcf24535b97312de12a4c656509bb9865c93f05d7bf645001c2d2b",
       "manifest_match": true,
       "package_integrity_verified": true,
       "reloaded_transfers_count": 478,

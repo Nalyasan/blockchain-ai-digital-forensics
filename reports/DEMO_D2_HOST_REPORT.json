@@ -1,8 +1,8 @@
 {
   "demo_id": "DEMO_D2_HOST",
   "title": "Integration Demo D2: Host Log Incident Replay per ISO/IEC 27037",
-  "run_id": "run_d2_1793874552",
-  "timestamp_utc": "2026-11-05T10:29:12.712747Z",
+  "run_id": "run_d2_1793879195",
+  "timestamp_utc": "2026-11-05T11:46:35.754490Z",
   "status": "PASS",
   "canonical_database_invariance": {
     "real_p4.db": {
@@ -28,18 +28,18 @@
   },
   "phases": {
     "phase_1_acquisition": {
-      "acquisition_id": "acq_576e13408161",
+      "acquisition_id": "acq_656c2134bb48",
       "source_type": "HOST_LOG_JSONL",
       "source_id": "VAL-NODE-01:host_logs.jsonl",
       "consent_scope": "security_events_only",
       "original_sha256": "d3a264f7f63a3c894b2ce8e136587cfde69148982cc2ca6f753cb8d3f238fbf1",
       "copy_sha256": "d3a264f7f63a3c894b2ce8e136587cfde69148982cc2ca6f753cb8d3f238fbf1",
       "bitwise_match": true,
-      "manifest_path": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d2_rhxdlxsa\\evidence_vault\\acq_576e13408161\\acquisition_manifest.json",
+      "manifest_path": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d2_9yzqlohk\\evidence_vault\\acq_656c2134bb48\\acquisition_manifest.json",
       "records_ingested": 12
     },
     "phase_2_database_isolation": {
-      "destination_db": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d2_rhxdlxsa\\endpoint_evidence.db",
+      "destination_db": "C:\\Users\\Naly\\AppData\\Local\\Temp\\demo_d2_9yzqlohk\\endpoint_evidence.db",
       "canonical_hashes_verified": {
         "real_p4.db": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
         "forensics.db": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
@@ -78,8 +78,8 @@
       "mismatches_count": 0
     },
     "phase_5_evidence_package": {
-      "rfc6962_merkle_root": "45fb7d8ea4dbf14dc8dd4307a4ece42442904af82517257c993d9c9f6e1e41b6",
-      "canonical_storage_uri": "evidence://sha256/e06de7f8382fb143e9730170a0d6c8e069f052f21e326b54cb3087582f242e03/45fb7d8ea4dbf14dc8dd4307a4ece42442904af82517257c993d9c9f6e1e41b6/manifest.json",
+      "rfc6962_merkle_root": "60eda2ea6d7d002faa7240ba58d4d501d5c692f0a6a0b32ac272257a8e5918a0",
+      "canonical_storage_uri": "evidence://sha256/e06de7f8382fb143e9730170a0d6c8e069f052f21e326b54cb3087582f242e03/60eda2ea6d7d002faa7240ba58d4d501d5c692f0a6a0b32ac272257a8e5918a0/manifest.json",
       "leaf_count": 5
     },
     "phase_5_onchain_custody": {
@@ -89,8 +89,8 @@
       "handover": {
         "from_actor": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Alice)",
         "to_actor": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (Bob)",
-        "transaction_hash": "0xef310decc77730996c6b5350d7e93896d799267f8ecab5172f4b57f904823807 (synthetic) (synthetic)",
-        "gas_used": 444497,
+        "transaction_hash": "0x513e4eb5a488e7b431bca7f9ef28b898875379b930bfe65ad439c07c5b6f6a8e (synthetic) (synthetic)",
+        "gas_used": 468435,
         "block_number": 7
       },
       "concordance": {

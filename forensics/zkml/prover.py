@@ -1,15 +1,11 @@
-"""ZKML Prover: Halo2 Proof Generation via EZKL (Phase 4 / P9).
+"""ZKML Prover: Halo2 Proof Generation via EZKL.
 
-Responsibilities:
-1. Orchestrate circuit compilation, SRS, and proving key lifecycle.
-2. Generate witness traces from transaction feature vectors.
-3. Synthesize genuine Halo2 cryptographic proofs (pi) via KZG polynomial commitments.
-4. Bind proof digests, model SHA-256, input commitments, and output anomaly scores.
-5. Strictly adhere to R5: zero mock proofs.
+Orchestrates circuit compilation, SRS, proving/verification key lifecycle, witness
+traces, and Halo2 KZG proof synthesis with strict model-to-circuit hash binding.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import os
@@ -17,7 +13,6 @@ from pathlib import Path
 import tempfile
 from typing import Any, Sequence
 
-# Windows Environment Guard for EZKL
 if "HOME" not in os.environ and "USERPROFILE" in os.environ:
     os.environ["HOME"] = os.environ["USERPROFILE"]
 
@@ -34,13 +29,13 @@ from forensics.zkml.circuit import (
     setup_circuit_srs,
     setup_keys,
 )
-from forensics.zkml.export import get_model_architecture_summary
 
 BN254_SCALAR_MODULUS = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+DEFAULT_CIRCUIT_DIR = Path(__file__).resolve().parents[2] / "circuits" / "anomaly_detector_v1"
 
 
 def decode_instance_element(inst_hex: str) -> int:
-    """Decodes a 32-byte little-endian hex scalar field element to a signed integer."""
+    """Decode a 32-byte little-endian BN254 scalar field element into a signed integer."""
     clean_hex = inst_hex[2:] if inst_hex.startswith("0x") else inst_hex
     raw_bytes = bytes.fromhex(clean_hex)
     u = int.from_bytes(raw_bytes, byteorder="little")
@@ -49,35 +44,103 @@ def decode_instance_element(inst_hex: str) -> int:
     return u
 
 
+def encode_evm_instance_uint256(inst_hex: str) -> int:
+    """Convert EZKL's 32-byte little-endian scalar field hex into EVM uint256 instance representation."""
+    clean_hex = inst_hex[2:] if inst_hex.startswith("0x") else inst_hex
+    return int.from_bytes(bytes.fromhex(clean_hex), byteorder="little")
+
+
 class ProverError(Exception):
     """Raised when proof generation or setup fails."""
-    pass
 
 
 @dataclass
 class ZKMLProofResult:
     """Encapsulates a verified Halo2 inference proof and public commitments."""
     proof_bytes: bytes
-    hex_proof: str
-    proof_hash: str
-    model_hash: str
-    input_commitment: str
-    output_score: float
-    raw_instances: list[list[str]]
-    is_valid: bool
-    metadata: dict[str, Any]
+    hex_proof: str = ""
+    proof_hash: str = ""
+    model_hash: str = ""
+    input_commitment: str = ""
+    output_score: float = 0.0
+    raw_instances: list[list[str]] = field(default_factory=lambda: [[]])
+    is_valid: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
     raw_proof_dict: dict[str, Any] | None = None
 
+    def __init__(
+        self,
+        proof_bytes: bytes,
+        hex_proof: str | None = None,
+        proof_hash: str | None = None,
+        model_hash: str = "",
+        input_commitment: str = "",
+        output_score: float = 0.0,
+        raw_instances: list[list[str]] | None = None,
+        is_valid: bool = True,
+        metadata: dict[str, Any] | None = None,
+        raw_proof_dict: dict[str, Any] | None = None,
+        *,
+        public_inputs: list[list[str]] | None = None,
+        output_commitment: str | None = None,
+        circuit_version: str | None = None,
+        proof_time_sec: float | None = None,
+    ):
+        self.proof_bytes = bytes(proof_bytes)
+        self.hex_proof = hex_proof or ("0x" + self.proof_bytes.hex())
+        self.proof_hash = proof_hash or ("0x" + hashlib.sha256(self.proof_bytes).hexdigest())
+        self.model_hash = model_hash
+        self.input_commitment = input_commitment
+        self.output_score = float(output_score)
+        self.raw_instances = raw_instances if raw_instances is not None else (public_inputs if public_inputs is not None else [[]])
+        self.is_valid = bool(is_valid)
+        meta = dict(metadata) if metadata else {}
+        if output_commitment is not None:
+            meta.setdefault("output_commitment", output_commitment)
+        if circuit_version is not None:
+            meta.setdefault("circuit_version", circuit_version)
+        if proof_time_sec is not None:
+            meta.setdefault("proof_time_sec", proof_time_sec)
+        self.metadata = meta
+        self.raw_proof_dict = raw_proof_dict
+
+    @property
+    def public_inputs(self) -> list[list[str]]:
+        return self.raw_instances
+
+    @property
+    def evm_instances(self) -> list[int]:
+        if not self.raw_instances or not self.raw_instances[0]:
+            return []
+        return [encode_evm_instance_uint256(h) for h in self.raw_instances[0]]
+
+    @property
+    def output_commitment(self) -> str:
+        evm_inst = self.evm_instances
+        if evm_inst:
+            return "0x" + evm_inst[-1].to_bytes(32, byteorder="big").hex()
+        q_score = int(round(self.output_score * 128))
+        return "0x" + q_score.to_bytes(32, byteorder="big", signed=False).hex()
+
+    @property
+    def circuit_version(self) -> str:
+        return str(self.metadata.get("version", getattr(ezkl, "__version__", "halo2-kzg-v1")))
+
+    @property
+    def proof_time_sec(self) -> float:
+        return float(self.metadata.get("proof_time_sec", 0.0))
+
     def to_dict(self) -> dict[str, Any]:
-        """Serializes proof result to JSON-compatible dictionary."""
         return {
             "proof_hash": self.proof_hash,
             "hex_proof": self.hex_proof,
             "proof": list(self.proof_bytes),
             "instances": self.raw_instances,
+            "evm_instances": self.evm_instances,
             "proof_bytes_length": len(self.proof_bytes),
             "model_hash": self.model_hash,
             "input_commitment": self.input_commitment,
+            "output_commitment": self.output_commitment,
             "output_score": self.output_score,
             "raw_instances": self.raw_instances,
             "is_valid": self.is_valid,
@@ -85,7 +148,6 @@ class ZKMLProofResult:
         }
 
     def save(self, path: Path | str) -> Path:
-        """Saves proof payload to a JSON file compatible with ezkl verify."""
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         if self.raw_proof_dict:
@@ -107,6 +169,7 @@ class ZKMLProofResult:
             }
         d["model_hash"] = self.model_hash
         d["input_commitment"] = self.input_commitment
+        d["output_commitment"] = self.output_commitment
         d["output_score"] = self.output_score
         d["proof_hash"] = self.proof_hash
         d["raw_instances"] = self.raw_instances
@@ -117,7 +180,6 @@ class ZKMLProofResult:
 
     @classmethod
     def load(cls, path: Path | str) -> ZKMLProofResult:
-        """Loads proof payload from a JSON file."""
         p = Path(path)
         with open(p, "r", encoding="utf-8") as f:
             d = json.load(f)
@@ -138,6 +200,9 @@ class ZKMLProofResult:
         )
 
 
+ProofResult = ZKMLProofResult
+
+
 class ZKMLProver:
     """Manages circuit lifecycle and synthesizes genuine Halo2 ZKML proofs."""
 
@@ -156,14 +221,8 @@ class ZKMLProver:
         if not self.model_path.is_file():
             raise ProverError(f"ONNX model file not found: {self.model_path}")
 
-        # Compute model SHA-256 digest
         self.model_hash = "0x" + hashlib.sha256(self.model_path.read_bytes()).hexdigest()
-
-        # Configure directory for cached circuit artifacts
-        if artifacts_dir:
-            self.artifacts_dir = Path(artifacts_dir)
-        else:
-            self.artifacts_dir = Path("scratch/zkml_artifacts")
+        self.artifacts_dir = Path(artifacts_dir) if artifacts_dir else DEFAULT_CIRCUIT_DIR
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
         self.settings_path = Path(settings_path) if settings_path else self.artifacts_dir / "settings.json"
@@ -171,54 +230,87 @@ class ZKMLProver:
         self.pk_path = Path(pk_path) if pk_path else self.artifacts_dir / "pk.key"
         self.vk_path = Path(vk_path) if vk_path else self.artifacts_dir / "vk.key"
         self.srs_path = Path(srs_path) if srs_path else self.artifacts_dir / "kzg.srs"
+        self.meta_path = self.artifacts_dir / "circuit_meta.json"
 
         if auto_setup:
             self.setup()
 
+    def _is_circuit_stale(self) -> bool:
+        """Invalidate cached circuit artifacts when the ONNX model digest changes."""
+        if not self.compiled_path.is_file():
+            return False
+        if not self.meta_path.is_file():
+            return True
+        try:
+            meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
+            return str(meta.get("model_sha256", "")).lower() != self.model_hash.lower()
+        except Exception:
+            return True
+
     def setup(self) -> None:
-        """Prepares settings, compiled circuit, SRS, and proving/verifying keys if missing."""
-        # 1. Settings
+        """Prepare settings, compiled circuit, SRS, and proving/verifying keys with model-hash sync."""
+        stale = self._is_circuit_stale()
+        if stale:
+            for stale_file in (self.settings_path, self.compiled_path, self.pk_path, self.vk_path, self.meta_path):
+                if stale_file.is_file():
+                    stale_file.unlink()
+
         if not self.settings_path.is_file():
             cfg = CircuitConfig()
             generate_circuit_settings(self.model_path, self.settings_path, cfg)
 
-        # Read logrows and scale from settings
         with open(self.settings_path, "r", encoding="utf-8") as f:
             settings_data = json.load(f)
         self.logrows = settings_data.get("run_args", {}).get("logrows", 14)
         self.input_scale = settings_data.get("run_args", {}).get("input_scale", 7)
 
-        # 2. Circuit Compilation
         if not self.compiled_path.is_file():
             compile_circuit(self.model_path, self.compiled_path, self.settings_path)
 
-        # 3. SRS
         if not self.srs_path.is_file() or self.srs_path.stat().st_size == 0:
             setup_circuit_srs(self.srs_path, logrows=self.logrows)
 
-        # 4. Prover & Verifier Keys
+        expected_vk_sha = None
+        if self.meta_path.is_file():
+            try:
+                expected_vk_sha = json.loads(self.meta_path.read_text(encoding="utf-8")).get("vk_sha256")
+            except Exception:
+                expected_vk_sha = None
+
         if not self.pk_path.is_file() or not self.vk_path.is_file():
             setup_keys(self.compiled_path, self.vk_path, self.pk_path, self.srs_path)
+            actual_vk_sha = hashlib.sha256(self.vk_path.read_bytes()).hexdigest()
+            if expected_vk_sha and actual_vk_sha.lower() != expected_vk_sha.lower():
+                raise ProverError(
+                    f"Deterministic VK mismatch after key setup: expected {expected_vk_sha}, got {actual_vk_sha}"
+                )
+
+        vk_sha = hashlib.sha256(self.vk_path.read_bytes()).hexdigest()
+        compiled_sha = hashlib.sha256(self.compiled_path.read_bytes()).hexdigest()
+        srs_sha = hashlib.sha256(self.srs_path.read_bytes()).hexdigest()
+        meta_payload = {
+            "model_sha256": self.model_hash,
+            "compiled_sha256": compiled_sha,
+            "vk_sha256": vk_sha,
+            "srs_sha256": srs_sha,
+            "ezkl_version": getattr(ezkl, "__version__", "unknown"),
+            "logrows": self.logrows,
+            "input_scale": self.input_scale,
+        }
+        self.meta_path.write_text(json.dumps(meta_payload, indent=2), encoding="utf-8")
 
     def prove(
         self,
         feature_vector: Sequence[float] | dict[str, float] | Any,
         output_proof_path: Path | str | None = None,
     ) -> ZKMLProofResult:
-        """Synthesizes a genuine Halo2 zero-knowledge proof for the input feature vector.
+        """Synthesize a genuine Halo2 zero-knowledge proof for a 10-feature input vector."""
+        import time as _time
 
-        Args:
-            feature_vector: 10-dimensional real-valued transaction feature vector.
-            output_proof_path: Optional path to store the EZKL proof JSON.
-
-        Returns:
-            ZKMLProofResult containing proof bytes, proof SHA-256 hash, and commitments.
-        """
-        # Ensure setup is complete
-        if not self.pk_path.is_file() or not self.compiled_path.is_file():
+        t0 = _time.perf_counter()
+        if not self.pk_path.is_file() or not self.compiled_path.is_file() or self._is_circuit_stale():
             self.setup()
 
-        # Parse feature vector
         if isinstance(feature_vector, dict):
             from forensics.ml.features import FEATURE_NAMES
             raw_features = [float(feature_vector.get(k, 0.0)) for k in FEATURE_NAMES]
@@ -235,20 +327,17 @@ class ZKMLProver:
         if len(raw_features) != 10:
             raise ProverError(f"Feature vector must have exactly 10 features, got {len(raw_features)}")
 
-        # Create temporary working directory for this proof synthesis
         with tempfile.TemporaryDirectory(prefix="zkml_proof_") as tmp_dir_str:
             tmp_dir = Path(tmp_dir_str)
             witness_path = tmp_dir / "witness.json"
             proof_file = Path(output_proof_path) if output_proof_path else tmp_dir / "proof.json"
             proof_file.parent.mkdir(parents=True, exist_ok=True)
 
-            # 1. Witness Generation
             try:
                 generate_witness(raw_features, self.compiled_path, witness_path)
             except Exception as e:
                 raise ProverError(f"Witness generation failed: {e}") from e
 
-            # 2. Halo2 Proof Generation
             try:
                 ezkl.prove(
                     str(witness_path),
@@ -263,10 +352,10 @@ class ZKMLProver:
             if not proof_file.is_file():
                 raise ProverError(f"Proof file was not created: {proof_file}")
 
-            # 3. Parse proof file
             with open(proof_file, "r", encoding="utf-8") as f:
                 proof_data = json.load(f)
 
+        elapsed_sec = round(_time.perf_counter() - t0, 4)
         raw_proof_ints = proof_data.get("proof", [])
         if not raw_proof_ints:
             raise ProverError("Synthesized proof data has empty proof buffer")
@@ -280,7 +369,6 @@ class ZKMLProver:
         if not instances or not instances[0]:
             raise ProverError("Proof data missing public instances")
 
-        # Decode authentic output score directly from instances[0][-1]
         try:
             raw_out_hex = instances[0][-1]
             q_out = decode_instance_element(raw_out_hex)
@@ -288,7 +376,6 @@ class ZKMLProver:
         except Exception as e:
             raise ProverError(f"Failed to decode cryptographic output instance: {e}") from e
 
-        # Extract pretty score if present and cross-validate against proven_score
         output_score = proven_score
         pretty_inputs = proof_data.get("pretty_public_inputs", {})
         rescaled_outputs = pretty_inputs.get("rescaled_outputs", [])
@@ -318,6 +405,7 @@ class ZKMLProver:
                 "logrows": self.logrows,
                 "input_scale": self.input_scale,
                 "proof_length_bytes": len(proof_bytes),
+                "proof_time_sec": elapsed_sec,
             },
             raw_proof_dict=proof_data,
         )

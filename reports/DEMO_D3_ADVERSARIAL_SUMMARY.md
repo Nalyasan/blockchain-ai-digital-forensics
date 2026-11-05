@@ -2,8 +2,8 @@
 
 **Specification Reference**: `AGENT.md v6.0 §9.1, §11 (Gates T13, T15, T16, T17, T21, T22, T24)`  
 **Evaluation Status**: **100% PASS (35/35 ATTACK VECTORS REJECTED FAIL-CLOSED)**  
-**Generated UTC**: `2026-11-05T10:40:44.381831Z`  
-**Report ID**: `D3-ADV-REPLAY-1793875244`  
+**Generated UTC**: `2026-11-05T11:46:44.093073Z`  
+**Report ID**: `D3-ADV-REPLAY-1793879204`  
 
 ---
 
@@ -58,7 +58,7 @@ Integration Demo D3 executes an exhaustive multi-gateway adversarial stress repl
 | `ADV-G4-04` | `gateway_4_ai_investigator` | Hidden Unicode & Bidi override injection | Expected Fail-Closed | `Control characters stripped and NFKC normalized` |
 | `ADV-G4-05` | `gateway_4_ai_investigator` | Hallucinated non-existent transaction hash | Expected Fail-Closed | `is_valid=False (missing_refs=['tx:0xffffffffffffffffffffffff` |
 | `ADV-G4-06` | `gateway_4_ai_investigator` | Altered raw transfer amount in fact | Expected Fail-Closed | `CONTENT_MISMATCH (amount_raw bit-for-bit check failed)` |
-| `ADV-G5-01` | `gateway_5_zkml_verifier` | 1-bit flip in Halo2 proof calldata | Expected Fail-Closed | `EVM Revert (Proof verification failed)` |
+| `ADV-G5-01` | `gateway_5_zkml_verifier` | 1-bit flip in Halo2 proof calldata | Expected Fail-Closed | `EVM Revert (BN254 pairing verification failed)` |
 | `ADV-G5-02` | `gateway_5_zkml_verifier` | Corrupted input commitment | Expected Fail-Closed | `EVM Revert (Input commitment mismatch)` |
 | `ADV-G5-03` | `gateway_5_zkml_verifier` | Corrupted model architecture hash | Expected Fail-Closed | `EVM Revert (Model hash mismatch)` |
 | `ADV-G5-04` | `gateway_5_zkml_verifier` | Spoofed output score commitment | Expected Fail-Closed | `EVM Revert (Output commitment mismatch)` |

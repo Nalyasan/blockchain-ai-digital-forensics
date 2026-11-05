@@ -1,10 +1,13 @@
 """Portable paths; never depend on the author's drive or current directory."""
 import os
 from pathlib import Path
+import shutil
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.environ.get('FORENSICS_DATA_DIR', str(PROJECT_ROOT / 'data'))).resolve()
 DATASETS_DIR = PROJECT_ROOT / 'datasets'
 TOOLS_DIR = PROJECT_ROOT / 'tools'
+CIRCUITS_DIR = PROJECT_ROOT / 'circuits'
 REAL_P4_DB = DATA_DIR / 'real_p4.db'
 BENCHMARK_DB = DATA_DIR / 'benchmark_p6.db'
 FORENSICS_DB = DATA_DIR / 'forensics.db'
@@ -23,6 +26,31 @@ def get_tools_dir() -> Path:
     return PROJECT_ROOT / 'tools'
 
 
+def get_circuits_dir() -> Path:
+    return CIRCUITS_DIR
+
+
+def resolve_foundry_binary(name: str) -> str:
+    """Prefer bundled tools/foundry binaries so execution works without host Foundry installs."""
+    clean = name[:-4] if name.lower().endswith('.exe') else name
+    for candidate in (
+        TOOLS_DIR / 'foundry' / f'{clean}.exe',
+        TOOLS_DIR / 'foundry' / clean,
+    ):
+        if candidate.is_file():
+            return str(candidate.resolve())
+    found = shutil.which(clean)
+    if found:
+        return found
+    for candidate in (
+        Path(os.path.expanduser(f'~/.foundry/bin/{clean}.exe')),
+        Path(os.path.expanduser(f'~/.foundry/bin/{clean}')),
+    ):
+        if candidate.is_file():
+            return str(candidate.resolve())
+    return f'{clean}.exe' if os.name == 'nt' else clean
+
+
 def get_forensics_db() -> Path:
     return FORENSICS_DB
 
@@ -37,5 +65,3 @@ def get_benchmark_db() -> Path:
 
 def get_endpoint_evidence_db() -> Path:
     return Path(os.environ.get("ENDPOINT_EVIDENCE_DB", str(DATA_DIR / "endpoint_evidence.db"))).resolve()
-
-

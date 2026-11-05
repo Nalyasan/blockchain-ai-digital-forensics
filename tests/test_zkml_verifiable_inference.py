@@ -83,7 +83,6 @@ def zkml_prover(default_model_path) -> ZKMLProver:
     """Module-scoped prover instance with pre-warmed circuit artifacts."""
     return ZKMLProver(
         model_path=default_model_path,
-        artifacts_dir=Path("scratch/zkml_artifacts"),
         auto_setup=True,
     )
 
@@ -427,8 +426,9 @@ class TestEVMVerifierStudy:
         assert sol_path.is_file()
         assert sol_path.stat().st_size > 10000
 
-        # Attempt standard forge build without --via-ir to document Solc stack depth limit
-        forge_bin = Path("tools/foundry/forge.exe")
+        # Attempt forge build to verify EVM Solidity artifact syntax and Solc stack/via-ir behavior
+        from forensics.paths import resolve_foundry_binary
+        forge_bin = Path(resolve_foundry_binary("forge"))
         if forge_bin.is_file():
             cmd = [
                 str(forge_bin),
@@ -436,9 +436,14 @@ class TestEVMVerifierStudy:
                 "--root", "contracts",
                 "--contracts", str(sol_path),
             ]
-            run_res = subprocess.run(cmd, capture_output=True, text=True)
-            # Solc 0.8.24 encounters stack depth limit (standard "Stack too deep" or Yul "too deep in the stack")
-            combined_err = (run_res.stdout + run_res.stderr).lower()
+            run_res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            combined_err = ((run_res.stdout or "") + (run_res.stderr or "")).lower()
             assert (run_res.returncode != 0 and ("stack too deep" in combined_err or "too deep" in combined_err)) or run_res.returncode == 0
 
     def test_anvil_bn254_pairing_precompiles(self):

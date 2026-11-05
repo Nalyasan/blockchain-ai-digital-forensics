@@ -1,42 +1,46 @@
 {
   "metadata": {
-    "schema_version": "1.0.0",
-    "timestamp_utc": "2026-11-05T05:02:25.078561+00:00",
+    "schema_version": "1.1.0",
+    "timestamp_utc": "2026-11-05T11:45:28.104685+00:00",
     "milestone": "M3",
     "gate": "Gate T22",
     "overall_status": "PASS",
-    "run_id": "m3-zkml-1793854945"
+    "run_id": "m3-zkml-1793879128"
   },
   "environment": {
     "chain_id": 31337,
-    "rpc_url": "http://127.0.0.1:60753",
-    "node_type": "Anvil v1.8.7",
+    "rpc_url": "http://127.0.0.1:51984",
+    "node_type": "Anvil",
     "solc_version": "0.8.24",
     "via_ir": true,
+    "optimizer": false,
     "is_synthetic": true,
     "disclaimer": "All transactions executed on local Anvil testnet (synthetic per AGENT.md \u00a77.2)"
   },
   "contract_deployment": {
-    "contract_address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "contract_address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     "circuit_verifier_address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-    "deployment_tx_hash": "0xed90eec9769e440caee04c6be390692ec197b70665598edd1a22c917dca605ad (synthetic)",
+    "circuit_verifier_contract": "contracts/src/Halo2Verifier.sol:Halo2Verifier",
+    "halo2_deployed_bytecode_bytes": 41861,
+    "deployment_tx_hash": "0xa4d684d627a2be10561466d9baa48425aa11bce4ed394e7d7d26b1a091e41a3a (synthetic)",
     "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
     "is_synthetic": true
   },
   "genuine_verification": {
-    "tx_hash": "0x5485ea09f97ac84946bcd008d700ff44392a73f65bcf470ffd1d19c63854be3f (synthetic)",
-    "block_number": 4,
-    "gas_used": 366916,
+    "tx_hash": "0x196567ccbc0871f3f53f573bbf29452d276cd09e6c3a3cba7c99d14d0b1c0189 (synthetic)",
+    "block_number": 3,
+    "gas_used": 1135772,
     "status": 1,
     "verified_valid": true,
     "is_synthetic": true,
     "model_hash": "0xd1b9ce8247f8a188355454ef5158280ce7b0d46dfb3388581023e9e01806aeff",
-    "input_commitment": "7ad33a8edf17ff4f87ef8e6be3501d6be953398c43c139eb79a5d488529bf767",
+    "input_commitment": "0x7ad33a8edf17ff4f87ef8e6be3501d6be953398c43c139eb79a5d488529bf767",
     "output_score": 1.0,
     "output_commitment": "0x0000000000000000000000000000000000000000000000000000000000000080",
     "inference_record_id": "INF-REC-M3-GATE-T22-001",
     "proof_size_bytes": 5504,
-    "proof_keccak": "0x31ad3f6dc03400f3eb55db0240750895f0e76cfa4dd7b5e37811ee980f1ab609"
+    "public_signals_count": 11,
+    "proof_keccak": "0x3f0620b5345408a34e5e4f196bc9573d135017646ce383646b5e01d535589125"
   },
   "adversarial_replays": [
     {
@@ -73,10 +77,18 @@
       "rejection_mode": "REVERT",
       "reverted": true,
       "passed": true
+    },
+    {
+      "case_id": "ADV-LIVE-06",
+      "description": "Mutated Public Instance Signal",
+      "rejection_mode": "REVERT",
+      "reverted": true,
+      "passed": true
     }
   ],
   "gate_t22_compliance": {
     "anvil_deployed": true,
+    "real_halo2_pairing_verifier": true,
     "receipt_logged": true,
     "gas_tracked": true,
     "synthetic_hashes_documented": true,

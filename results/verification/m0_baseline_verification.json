@@ -1,6 +1,6 @@
 {
   "audit_name": "Milestone M0 Baseline Audit & Invariance Certification",
-  "timestamp_utc": "2026-11-05T10:42:08.211436+00:00",
+  "timestamp_utc": "2026-11-05T10:52:36.956725+00:00",
   "repository_root": "D:\\Projest\\Blockchain",
   "overall_status": "PASS",
   "git_state": {
@@ -12,13 +12,13 @@
         "match": true
       },
       "commit": {
-        "actual": "039a26bae49d5e599ad920282c9af0aebcbd75e4",
+        "actual": "1f9f309ccdc5193116029976ccf315d6ffb314ff",
         "expected_base": "d7145333dcd1f0955e016f66ada78b806c84e581",
         "is_valid": true
       },
       "tracked_tree_clean": {
         "clean": false,
-        "diff_output": "D forensics/evaluation.py\n M reports/M3_ZKML_VERIFICATION_REPORT.md\n M reports/M4_ACQUISITION_CUSTODY_REPORT.md\n M reports/ZKML_VERIFICATION.md\n M results/verification/m0_baseline_verification.json\n M results/verification/m3_zkml_verification.json\n M results/verification/m4_custody_verification.json"
+        "diff_output": "M reports/DEMO_D1_EVM_REPORT.json\n M reports/DEMO_D1_EVM_SUMMARY.md\n M reports/DEMO_D2_HOST_REPORT.json\n M reports/DEMO_D2_HOST_SUMMARY.md\n M reports/M3_ZKML_VERIFICATION_REPORT.md\n M reports/M4_ACQUISITION_CUSTODY_REPORT.md\n M reports/ZKML_VERIFICATION.md\n M results/verification/m0_baseline_verification.json\n M results/verification/m3_zkml_verification.json\n M results/verification/m4_custody_verification.json"
       },
       "osint_preserved": {
         "exists": true,

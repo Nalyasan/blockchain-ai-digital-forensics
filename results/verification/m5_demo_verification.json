@@ -1,7 +1,7 @@
 {
   "metadata": {
     "schema_version": "1.0.0",
-    "timestamp_utc": "2026-11-05T10:41:45Z",
+    "timestamp_utc": "2026-11-05T11:47:00Z",
     "milestone": "M5",
     "milestone_name": "End-to-End Real Demos & Adversarial Replay (D1, D2, D3)",
     "specification_ref": "AGENT.md v6.0 §9.1, §9.2, §11 (Gates T12-T24)",
@@ -14,8 +14,11 @@
       "status": "PASS",
       "target_incident": "Euler Finance DAI Liquidation Attack",
       "stages_executed": 8,
-      "proof_type": "Halo2 BN254 KZG",
+      "proof_type": "Halo2 BN254 KZG (Real Halo2Verifier.sol Pairing)",
       "proof_bytes_length": 5504,
+      "halo2_verifier_contract": "contracts/src/Halo2Verifier.sol",
+      "inference_verifier_contract": "contracts/src/InferenceVerifier.sol",
+      "verification_gas_used": 1137038,
       "onchain_zkml_verified": true,
       "onchain_did_custody_verified": true,
       "reread_branch_verified": true,

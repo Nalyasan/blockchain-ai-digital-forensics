@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from forensics.paths import resolve_foundry_binary
 from forensics.onchain import _run_cast, CAST_BIN, rpc_read, ALLOWED_CHAIN_IDS
 from forensics.did.resolution import format_did
 from forensics.did.eip712 import (
@@ -49,10 +50,9 @@ class AnvilTestNode:
         return port
 
     def __enter__(self) -> AnvilTestNode:
-        root_dir = Path(__file__).resolve().parents[2]
-        anvil_bin = root_dir / "tools" / "foundry" / "anvil.exe"
-        if not anvil_bin.exists():
-            anvil_bin = Path("anvil")
+        from forensics.paths import resolve_foundry_binary
+
+        anvil_bin = resolve_foundry_binary("anvil")
 
         cmd = [
             str(anvil_bin),
@@ -188,14 +188,11 @@ class DIDClient:
             return self.contract_address
 
         root_dir = Path(__file__).resolve().parents[2]
-        forge_bin = root_dir / "tools" / "foundry" / "forge.exe"
-        if not forge_bin.exists():
-            forge_bin = Path("forge")
-
+        forge_bin = resolve_foundry_binary("forge")
         contracts_root = root_dir / "contracts"
 
         cmd = [
-            str(forge_bin), "create",
+            forge_bin, "create",
             "src/EvidenceRegistryDID.sol:EvidenceRegistryDID",
             "--root", str(contracts_root),
             "--rpc-url", self.rpc_url,

@@ -34,31 +34,26 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
-# Windows & Foundry environment setup
-foundry_bin = os.path.expanduser("~/.foundry/bin")
-if os.path.isdir(foundry_bin) and foundry_bin not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = f"{foundry_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+for _cand_dir in (REPO_ROOT / "tools" / "foundry", Path(os.path.expanduser("~/.foundry/bin"))):
+    if _cand_dir.is_dir() and str(_cand_dir) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{_cand_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
 if "HOME" not in os.environ and "USERPROFILE" in os.environ:
     os.environ["HOME"] = os.environ["USERPROFILE"]
 
-# Configure UTF-8 encoding
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-# Configure logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("demo_d1_evm")
 
-# Project root setup
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-# Imports from forensics modules
-from forensics.paths import REAL_P4_DB, FORENSICS_DB
+from forensics.paths import REAL_P4_DB, FORENSICS_DB, resolve_foundry_binary
 from forensics.endpoint.adapter import EVMCollectorAdapter
 from forensics.endpoint.store import EndpointEvidenceStore
 from forensics.evidence import export_evidence
@@ -243,6 +238,17 @@ class DemoD1Runner:
         start_ts = min((b["block_time_utc"] for b in blocks_data), default="2023-03-13T08:50:00Z")
         end_ts = max((b["block_time_utc"] for b in blocks_data), default="2023-03-13T09:10:00Z")
 
+        canonical_nums = sorted({int(b["number"]) for b in blocks_data if b.get("status") == "canonical"})
+        gaps: list[list[int]] = []
+        cursor = self.test_start
+        for num in canonical_nums:
+            if num > cursor:
+                gaps.append([cursor, num - 1])
+            cursor = num + 1
+        if cursor <= self.test_end:
+            gaps.append([cursor, self.test_end])
+        gaps_count = sum(b - a + 1 for a, b in gaps)
+
         manifest = {
             "manifest_version": "1.0.0",
             "case_id": self.case_id,
@@ -254,8 +260,8 @@ class DemoD1Runner:
             "rpc_label": "eth-mainnet",
             "block_timestamps_utc": {"start": start_ts, "end": end_ts},
             "software": {"version": "6.0.0"},
-            "counts": {"total_blocks": len(blocks_data), "canonical_blocks": len(blocks_data), "transactions": len(set(t["tx_hash"] for t in transfers_data)), "asset_transfers": len(transfers_data), "audit_events": 1, "receipts": 0},
-            "integrity_checks": {"gaps": [], "gaps_count": 0, "verify_local": {"status": "PASSED", "mismatches": 0}, "verify_derived": {"status": "PASSED", "mismatches": 0}},
+            "counts": {"total_blocks": len(blocks_data), "canonical_blocks": len(canonical_nums), "transactions": len(set(t["tx_hash"] for t in transfers_data)), "asset_transfers": len(transfers_data), "audit_events": 1, "receipts": 0},
+            "integrity_checks": {"gaps": gaps, "gaps_count": gaps_count, "verify_local": {"status": "PASSED", "mismatches": 0}, "verify_derived": {"status": "PASSED", "mismatches": 0}},
             "finalization": {"confirmations": 2, "observed_head": self.test_end + 12, "is_finalized": True, "unfinalized_blocks": [], "unfinalized_blocks_count": 0},
             "sanitized_config": {"RPC_LABEL": "eth-mainnet", "RPC_SYNTHETIC": False},
             "package_digest": pkg_digest,
@@ -382,9 +388,12 @@ class DemoD1Runner:
 
         corroborator = DualEngineCorroborator(self.canonical_db)
         corroborated = corroborator.corroborate(entity_address=self.exploiter_addr, ml_score=ml_score, rule_alerts=alerts)
+        onnx_model_path = self.workspace_dir / "models" / "anomaly_detector_v1.onnx"
+        model_sha256 = compute_file_sha256(onnx_model_path)
 
         telemetry["pipeline_stages"]["stage_3_ml_inference"] = {
             "model_id": "anomaly_detector_v1",
+            "model_sha256": model_sha256,
             "parameters_count": 321,
             "entity_address": self.exploiter_addr,
             "raw_features": {k: float(feat_dict.get(k, 0.0)) for k in FEATURE_NAMES},
@@ -467,7 +476,7 @@ class DemoD1Runner:
             }],
             "ml_detections": [{
                 "model_id": "anomaly_detector_v1",
-                "model_sha256": "d4b5a6c7e8f90123456789abcdef0123456789abcdef0123456789abcdef0123",
+                "model_sha256": model_sha256,
                 "entity_address": self.exploiter_addr,
                 "score": ml_score,
                 "classification": classification,
@@ -497,11 +506,9 @@ class DemoD1Runner:
             "observed_facts_count": 1,
         }
 
-        # Stage 6: Real ZKML Halo2 Proof Generation & On-Chain Anvil Verification
         logger.info("[Stage 6] Generating real 5,504-byte Halo2 BN254 KZG proof & verifying on Anvil...")
         prover = ZKMLProver(
-            model_path=self.workspace_dir / "models" / "anomaly_detector_v1.onnx",
-            artifacts_dir=self.workspace_dir / "scratch" / "zkml_artifacts",
+            model_path=onnx_model_path,
             auto_setup=True,
         )
         feat_list = [float(x) for x in scaled_vec.flatten()]
@@ -509,7 +516,6 @@ class DemoD1Runner:
         assert proof_res.is_valid is True, "Halo2 proof generation failed"
         assert len(proof_res.proof_bytes) == 5504, f"Proof length is {len(proof_res.proof_bytes)}, expected 5504"
 
-        # Verify offline with ZKMLVerifier
         verifier = ZKMLVerifier(
             settings_path=prover.settings_path,
             vk_path=prover.vk_path,
@@ -518,75 +524,54 @@ class DemoD1Runner:
         )
         assert verifier.verify(proof_res, feature_vector=feat_list) is True, "Offline ZKML verification failed"
 
-        # Start ephemeral Anvil node for Stages 6 & 7
         with AnvilTestNode(port=self.port, chain_id=self.chain_id) as node:
             logger.info(f"Connected to ephemeral Anvil node at {node.rpc_url} (Chain ID {self.chain_id})")
             telemetry["execution_environment"]["rpc_url"] = node.rpc_url
 
-            # Deploy MockCircuitVerifier and InferenceVerifier.sol
-            cast_bin = os.path.expanduser("~/.foundry/bin/cast.exe")
-            forge_bin = os.path.expanduser("~/.foundry/bin/forge.exe")
+            cast_bin = resolve_foundry_binary("cast")
+            forge_bin = resolve_foundry_binary("forge")
+            input_comm_hex = "0x" + proof_res.input_commitment.removeprefix("0x")
+            output_comm = proof_res.output_commitment
+            instances_arg = "[" + ",".join(str(x) for x in proof_res.evm_instances) + "]"
 
-            # 1. Compute proof keccak
-            keccak_res = subprocess.run(
-                [cast_bin, "keccak", proof_res.hex_proof],
-                capture_output=True, text=True, check=True
-            )
-            proof_keccak = keccak_res.stdout.strip()
-
-            q_score = int(round(proof_res.output_score * 128))
-            output_comm = "0x" + q_score.to_bytes(32, byteorder="big").hex()
-
-            # 2. Deploy MockCircuitVerifier
-            logger.info("Deploying MockCircuitVerifier on Anvil...")
+            logger.info("Deploying real EZKL BN254 pairing Halo2Verifier.sol on Anvil...")
             res_circ = subprocess.run([
-                forge_bin, "create", "contracts/src/InferenceVerifier.sol:MockCircuitVerifier",
+                forge_bin, "create", "src/Halo2Verifier.sol:Halo2Verifier",
+                "--root", "contracts",
                 "--rpc-url", node.rpc_url,
                 "--unlocked",
                 "--from", ANVIL_DEFAULT_DEPLOYER,
                 "--broadcast",
-                "--constructor-args", proof_keccak,
             ], capture_output=True, text=True, check=True, cwd=str(self.workspace_dir))
             addr_match_circ = re.search(r"Deployed to:\s*(0x[0-9a-fA-F]{40})", res_circ.stdout)
             if not addr_match_circ:
-                raise RuntimeError("Failed to parse MockCircuitVerifier address")
-            circuit_verifier_addr = addr_match_circ.group(1)
+                raise RuntimeError("Failed to parse Halo2Verifier address")
+            halo2_verifier_addr = addr_match_circ.group(1)
 
-            # 3. Configure expected commitments on circuit verifier
-            subprocess.run([
-                cast_bin, "send", circuit_verifier_addr,
-                "setExpectedCommitments(uint256,uint256)",
-                str(int(proof_res.input_commitment, 16)),
-                str(int(output_comm, 16)),
-                "--rpc-url", node.rpc_url,
-                "--unlocked",
-                "--from", ANVIL_DEFAULT_DEPLOYER,
-            ], capture_output=True, text=True, check=True)
-
-            # 4. Deploy InferenceVerifier
             logger.info("Deploying InferenceVerifier.sol on Anvil...")
             res_inf = subprocess.run([
-                forge_bin, "create", "contracts/src/InferenceVerifier.sol:InferenceVerifier",
+                forge_bin, "create", "src/InferenceVerifier.sol:InferenceVerifier",
+                "--root", "contracts",
                 "--rpc-url", node.rpc_url,
                 "--unlocked",
                 "--from", ANVIL_DEFAULT_DEPLOYER,
                 "--broadcast",
-                "--constructor-args", circuit_verifier_addr, proof_res.model_hash, "true",
+                "--constructor-args", halo2_verifier_addr, proof_res.model_hash, "true",
             ], capture_output=True, text=True, check=True, cwd=str(self.workspace_dir))
             addr_match_inf = re.search(r"Deployed to:\s*(0x[0-9a-fA-F]{40})", res_inf.stdout)
             if not addr_match_inf:
                 raise RuntimeError("Failed to parse InferenceVerifier address")
             inference_verifier_addr = addr_match_inf.group(1)
 
-            # 5. Call verifyInferenceProof
-            logger.info("Executing genuine on-chain ZKML verification transaction...")
+            logger.info("Executing genuine on-chain BN254 pairing verification transaction...")
             inf_rec_id = "INF-REC-D1-EVM-001"
             res_tx = subprocess.run([
                 cast_bin, "send", inference_verifier_addr,
-                "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)",
+                "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)",
                 proof_res.hex_proof,
+                instances_arg,
                 proof_res.model_hash,
-                proof_res.input_commitment,
+                input_comm_hex,
                 output_comm,
                 inf_rec_id,
                 "--rpc-url", node.rpc_url,
@@ -597,16 +582,16 @@ class DemoD1Runner:
             receipt = json.loads(res_tx.stdout)
             gas_used_zkml = int(receipt.get("gasUsed", "0x0"), 16)
             tx_hash_zkml = receipt.get("transactionHash", "0x00")
-            assert int(receipt.get("status", "0x0"), 16) == 1, "verifyInferenceProof reverted on valid proof"
+            assert int(receipt.get("status", "0x0"), 16) == 1, "verifyInferenceProofWithInstances reverted on valid proof"
 
-            # 6. Mini tamper check: Mutate proof byte -> verify failure
             tampered_hex = "0x" + ("00" if proof_res.hex_proof[2:4] != "00" else "ff") + proof_res.hex_proof[4:]
             tamper_res = subprocess.run([
                 cast_bin, "send", inference_verifier_addr,
-                "verifyInferenceProof(bytes,bytes32,bytes32,bytes32,string)",
+                "verifyInferenceProofWithInstances(bytes,uint256[],bytes32,bytes32,bytes32,string)",
                 tampered_hex,
+                instances_arg,
                 proof_res.model_hash,
-                proof_res.input_commitment,
+                input_comm_hex,
                 output_comm,
                 "INF-REC-D1-TAMPER",
                 "--rpc-url", node.rpc_url,
@@ -614,14 +599,17 @@ class DemoD1Runner:
                 "--from", ANVIL_DEFAULT_DEPLOYER,
             ], capture_output=True, text=True)
             tamper_rejected = tamper_res.returncode != 0
+            assert tamper_rejected is True, "Tampered Halo2 proof must revert on real BN254 pairing verifier"
 
             telemetry["pipeline_stages"]["stage_6_zkml_proving"] = {
                 "circuit_family": "Halo2 / KZG on BN254",
                 "proof_bytes_length": len(proof_res.proof_bytes),
+                "public_signals_count": len(proof_res.evm_instances),
                 "is_valid": True,
-                "input_commitment": proof_res.input_commitment,
+                "input_commitment": input_comm_hex,
                 "output_score": round(proof_res.output_score, 4),
                 "output_commitment": output_comm,
+                "halo2_verifier_address": halo2_verifier_addr,
                 "onchain_verifier_address": inference_verifier_addr,
                 "verification_gas_used": gas_used_zkml,
                 "synthetic_tx_hash": f"{tx_hash_zkml} (synthetic)",
@@ -725,9 +713,9 @@ class DemoD1Runner:
                     "synthetic_tx_hash": f"{handover_receipt.get('transaction_hash', '0x0')} (synthetic)",
                 },
                 "forensic_anchoring": {
-                    "model_hash": proof_res.model_hash,
+                    "model_hash": m_hash_clean,
                     "xai_digest": xai_digest,
-                    "zkml_proof_hash": "0x" + proof_res.proof_hash,
+                    "zkml_proof_hash": p_hash_clean,
                     "artifact_sha256": acq_result.original_sha256,
                 },
                 "hash_concordance": {
@@ -867,7 +855,7 @@ class DemoD1Runner:
             "| 3 | Neural Anomaly Detection | `CompactAnomalyMLP` (321 params), score >= 0.70 | **PASS** |",
             "| 4 | Quantitative XAI & MITRE | Exact Shapley ($R^2 \\ge 0.80$, stability $\\ge 0.85$), grounded MITRE | **PASS** |",
             "| 5 | Cognitive AI Investigator | Offline FunctionModel, 5-step budget, RefChecker 100% | **PASS** |",
-            "| 6 | Real ZKML Halo2 Verification | 5,504-byte Halo2 proof on Anvil `InferenceVerifier.sol` | **PASS** |",
+            "| 6 | Real ZKML Halo2 Verification | 5,504-byte Halo2 BN254 pairing proof on Anvil `Halo2Verifier.sol` + `InferenceVerifier.sol` | **PASS** |",
             "| 7 | DID 2-Actor Custody Handover | Alice -> Bob EIP-712 transfer on `EvidenceRegistryDID.sol` | **PASS** |",
             "| 8 | Re-Read Provenance Branch | Smart contract manifest query -> disk read -> RuleEngine alert match | **PASS** |",
             "",
