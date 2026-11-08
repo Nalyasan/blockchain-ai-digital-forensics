@@ -499,8 +499,9 @@ def get_alerts(
     rows = cursor.fetchall()
 
     results: list[dict[str, Any]] = []
+    col_names = [c[0] for c in cursor.description] if cursor.description else []
     for row in rows:
-        item = dict(row)
+        item = dict(row) if hasattr(row, "keys") else dict(zip(col_names, row))
         raw_refs = item.get("evidence_refs")
         if isinstance(raw_refs, str) and raw_refs.strip():
             try:

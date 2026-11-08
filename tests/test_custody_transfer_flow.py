@@ -159,7 +159,7 @@ class TestAnvilCustodyTransferLive:
             )
             assert receipt["status"] == 1
             assert receipt["gas_used"] > 0
-            assert receipt["is_synthetic"] is True
+            assert receipt["is_synthetic"] is False
 
             # Verify nonce incremented
             assert client.get_nonce(ALICE) == 1

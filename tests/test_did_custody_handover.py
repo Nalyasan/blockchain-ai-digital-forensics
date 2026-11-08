@@ -427,8 +427,8 @@ class TestDIDClient:
     def test_did_client_role_constants_match_contract(self):
         """Verifies Python keccak256 role constants match Solidity contract role definitions."""
         import subprocess
-        root_dir = Path(__file__).resolve().parents[1]
-        cast_bin = root_dir / "tools" / "foundry" / "cast.exe"
+        from forensics.paths import resolve_foundry_binary
+        cast_bin = resolve_foundry_binary("cast")
 
         for role_name, expected_hash in [
             ("ROLE_COLLECTOR", ROLE_COLLECTOR),

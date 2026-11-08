@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Chứng cứ - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Chứng cứ & Hiện vật số{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Info Banner -->
+  <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div>
+      <h2 class="text-sm font-bold text-slate-100 uppercase tracking-wider text-cyan-400">Kho Lưu trữ & Quản lý Chứng cứ Số</h2>
+      <p class="text-xs text-slate-400 mt-1">
+        Bảo toàn toàn vẹn dữ liệu chuỗi khối và nhật ký trạm cuối theo tiêu chuẩn <strong>ISO/IEC 27037</strong> và <strong>RFC 6962</strong> Merkle Audit Trees.
+      </p>
+    </div>
+    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 shrink-0">
+      Chế độ Bảo vệ: Read-Only (Chỉ đọc)
+    </span>
+  </div>
+
+  <!-- Session-specific Evidence Section (Data Isolation) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-lg">📁</span>
+        <h3 class="font-bold text-slate-100 text-sm">Hiện vật Chứng cứ Theo Phiên Điều tra</h3>
+      </div>
+      {% if selected_job %}
+      <span class="text-xs text-cyan-400 font-mono">Phiên: {{ selected_job.run_id }} (Vụ việc: {{ selected_job.case_id }})</span>
+      {% endif %}
+    </div>
+
+    {% if selected_job and selected_job.artifacts %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+        <span class="text-slate-400 block text-[11px]">Bảng kê Chứng cứ (Manifest):</span>
+        <span class="font-bold text-slate-200">evidence_manifest.json</span>
+        <a href="/api/investigations/{{ selected_job.run_id }}/artifacts/evidence_manifest.json" target="_blank" class="text-[11px] text-cyan-400 hover:underline block pt-1">Tải bảng kê &rarr;</a>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+        <span class="text-slate-400 block text-[11px]">Biên bản Chuỗi Lưu ký:</span>
+        <span class="font-bold text-slate-200">custody_receipts.json</span>
+        <a href="/api/investigations/{{ selected_job.run_id }}/artifacts/custody_receipts.json" target="_blank" class="text-[11px] text-cyan-400 hover:underline block pt-1">Tải biên bản &rarr;</a>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+        <span class="text-slate-400 block text-[11px]">Nhật ký Giám định:</span>
+        <span class="font-bold text-slate-200">execution_log.txt</span>
+        <a href="/api/investigations/{{ selected_job.run_id }}/artifacts/execution_log.txt" target="_blank" class="text-[11px] text-cyan-400 hover:underline block pt-1">Xem nhật ký &rarr;</a>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+        <span class="text-slate-400 block text-[11px]">Báo cáo Kết luận:</span>
+        <span class="font-bold text-slate-200">report.html</span>
+        <a href="/api/investigations/{{ selected_job.run_id }}/artifacts/report.html" target="_blank" class="text-[11px] text-cyan-400 hover:underline block pt-1">Mở báo cáo &rarr;</a>
+      </div>
+    </div>
+    {% else %}
+    <div class="p-6 text-center text-slate-500 bg-slate-950/60 rounded-lg border border-slate-800/80">
+      <p class="text-xs text-slate-400 font-semibold">Chưa có dữ liệu điều tra</p>
+      <p class="text-[11px] text-slate-500 mt-1">Phiên điều tra được chọn chưa có chứng cứ hoặc chưa được khởi tạo. Vui lòng chọn phiên đã xử lý ở thanh trên cùng.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Ingested Evidence Files for Active Case -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-lg">📥</span>
+        <h3 class="font-bold text-slate-100 text-sm">Tệp Chứng cứ Đã Nhập Cho Vụ Việc</h3>
+      </div>
+      <div class="flex items-center space-x-3">
+        {% if current_case_id %}
+        <span class="text-xs text-emerald-400 font-mono">Vụ việc: {{ current_case_id }}</span>
+        {% endif %}
+        <a href="/launcher?action=ingest{% if current_case_id %}&continue_case={{ current_case_id }}{% endif %}" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-lg transition flex items-center space-x-1 shadow">
+          <span>➕</span>
+          <span>Nhập thêm tệp</span>
+        </a>
+      </div>
+    </div>
+
+    <div id="case-evidence-container">
+      <div id="case-evidence-loading" class="p-4 text-center text-xs text-slate-500">
+        Đang tải danh sách chứng cứ cho vụ việc...
+      </div>
+      <div id="case-evidence-empty" class="hidden p-6 text-center text-slate-500 bg-slate-950/60 rounded-lg border border-slate-800/80">
+        <p class="text-xs text-slate-400 font-semibold">Chưa có tệp chứng cứ nào được tải lên cho vụ việc này</p>
+        <p class="text-[11px] text-slate-500 mt-1">Sử dụng nút "Nhập thêm tệp" ở trên hoặc chức năng "Nhập tệp chứng cứ" tại Khởi chạy điều tra để tiếp nhận tệp.</p>
+      </div>
+      <div id="case-evidence-table-wrapper" class="hidden overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="p-3">Tên tệp & Định danh</th>
+              <th class="p-3">Mã băm SHA-256 Chuẩn vị</th>
+              <th class="p-3">Nguồn / Định dạng</th>
+              <th class="p-3">Thời điểm nhập (UTC)</th>
+              <th class="p-3 text-center">Số bản ghi</th>
+              <th class="p-3 text-center">Bất thường</th>
+              <th class="p-3 text-right">Phiên điều tra</th>
+            </tr>
+          </thead>
+          <tbody id="case-evidence-tbody" class="divide-y divide-slate-800/80 font-mono">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canonical Databases Grid (Integrity Verification Reference) -->
+  <div class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Cơ sở dữ liệu Chứng cứ Chuẩn (Đóng băng Bất biến)</h3>
+      <span class="text-xs text-slate-500">Đối chiếu SHA-256 Bitwise</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for db_name, db in canonical_dbs.items() %}
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">🗄️</span>
+            <div>
+              <h3 class="font-bold text-slate-100 text-sm font-mono">{{ db_name }}</h3>
+              <span class="text-[11px] text-slate-500 font-mono">{{ db.path }}</span>
+            </div>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 text-cyan-400 border border-slate-700">
+            {{ (db.size_bytes / 1024 / 1024)|round(2) }} MB
+          </span>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <div>
+            <span class="text-slate-400">Mã băm SHA-256 Chuẩn vị:</span>
+            <div class="p-2 bg-slate-950 rounded font-mono text-cyan-400 text-[11px] break-all border border-slate-800 select-all">
+              {{ db.sha256 }}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+            <div class="p-2 rounded bg-slate-950/60 border border-slate-800/80">
+              <span class="text-slate-400">Trạng thái Bất biến:</span>
+              <p class="font-bold text-emerald-400 mt-0.5">100% Khớp Bitwise</p>
+            </div>
+            <div class="p-2 rounded bg-slate-950/60 border border-slate-800/80">
+              <span class="text-slate-400">Cơ chế Truy cập:</span>
+              <p class="font-bold text-slate-200 mt-0.5">SQLite URI (mode=ro)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Evidence Packaging & Standards -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Quy chuẩn Đóng gói & Giám định Chứng cứ Điện tử</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-400">
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <strong class="text-slate-200 block mb-1">1. Định danh Hiện vật</strong>
+        Mỗi tệp xuất ra đều được tính toán SHA-256 độc lập, đóng gói vào <code>evidence_manifest.json</code> và kiểm kê trước/sau khi chạy.
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <strong class="text-slate-200 block mb-1">2. Cách ly Thư mục</strong>
+        Mỗi phiên ghi vào thư mục riêng biệt <code>reports/investigations/&lt;run_id&gt;/</code>, tuyệt đối không ghi đè dữ liệu gốc.
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <strong class="text-slate-200 block mb-1">3. Neo giữ On-Chain</strong>
+        Mã băm gói chứng cứ được neo vào hợp đồng <code>EvidenceRegistryDID.sol</code> với <code>note_hash = sha256(run_id)</code>.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+async function loadCaseEvidence() {
+  const activeCaseId = "{{ current_case_id or '' }}";
+  const loading = document.getElementById('case-evidence-loading');
+  const empty = document.getElementById('case-evidence-empty');
+  const tableWrap = document.getElementById('case-evidence-table-wrapper');
+  const tbody = document.getElementById('case-evidence-tbody');
+
+  if (!activeCaseId) {
+    if (loading) loading.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/cases/${encodeURIComponent(activeCaseId)}/evidence`);
+    if (!res.ok) throw new Error('Không thể tải chứng cứ vụ việc');
+    const items = await res.json();
+    if (loading) loading.classList.add('hidden');
+
+    if (!items || items.length === 0) {
+      if (empty) empty.classList.remove('hidden');
+      return;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      items.forEach(ev => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="p-3">
+            <div class="font-bold text-slate-200 font-sans">${escapeHtml(ev.original_filename)}</div>
+            <div class="text-[11px] text-cyan-400 font-mono">${escapeHtml(ev.evidence_id)}</div>
+            ${ev.description ? `<div class="text-[11px] text-slate-500 font-sans italic mt-0.5">${escapeHtml(ev.description)}</div>` : ''}
+          </td>
+          <td class="p-3">
+            <span class="text-[11px] text-emerald-400 font-mono select-all bg-slate-950 px-2 py-1 rounded border border-slate-800">${escapeHtml(ev.sha256)}</span>
+          </td>
+          <td class="p-3">
+            <span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300 font-sans border border-slate-700">${escapeHtml(ev.source_type)}</span>
+          </td>
+          <td class="p-3 text-[11px] text-slate-400 font-mono">${escapeHtml(ev.timestamp)}</td>
+          <td class="p-3 text-center font-bold text-cyan-300">${ev.records_count}</td>
+          <td class="p-3 text-center">
+            <span class="px-2 py-0.5 rounded text-[11px] ${ev.anomalies_count > 0 ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-slate-800 text-slate-500'}">
+              ${ev.anomalies_count}
+            </span>
+          </td>
+          <td class="p-3 text-right">
+            ${ev.run_id ? `<a href="/reports/${encodeURIComponent(ev.run_id)}" class="text-xs text-cyan-400 hover:underline font-mono">Phiên ${escapeHtml(ev.run_id)} &rarr;</a>` : '<span class="text-slate-500">-</span>'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    if (tableWrap) tableWrap.classList.remove('hidden');
+  } catch (err) {
+    if (loading) loading.innerHTML = `<span class="text-red-400">Lỗi nạp dữ liệu: ${err.message}</span>`;
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[m]);
+}
+
+document.addEventListener('DOMContentLoaded', loadCaseEvidence);
+</script>
+{% endblock %}

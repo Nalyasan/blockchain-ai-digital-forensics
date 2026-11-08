@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Phân tích bất thường - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Phân tích bất thường & Định lượng Giải thích XAI{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  <!-- Session-specific ML/XAI Analysis (Data Isolation) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-lg">🔬</span>
+        <h3 class="font-bold text-slate-100 text-sm">Kết quả Phân tích Bất thường Theo Phiên Điều tra</h3>
+      </div>
+      {% if selected_job %}
+      <span class="text-xs text-cyan-400 font-mono">Phiên: {{ selected_job.run_id }} (Ca vụ: {{ selected_job.case_id }})</span>
+      {% endif %}
+    </div>
+
+    {% if selected_job and selected_job.phase_metrics and selected_job.phase_metrics.get("P8") %}
+      {% set p8 = selected_job.phase_metrics.get("P8") %}
+      <div class="space-y-4 text-xs">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">Số thực thể phân tích:</span>
+            <span class="font-bold text-slate-200">{{ p8.get("entities_analyzed", 0) }} địa chỉ</span>
+          </div>
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">Số lượng cảnh báo ML:</span>
+            <span class="font-bold font-mono text-cyan-300">{{ p8.get("alerts_count", 0) }} phát hiện</span>
+          </div>
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+            <span class="text-slate-400 block text-[11px]">Định lượng Shapley:</span>
+            <span class="font-bold text-emerald-400">1,024 liên minh tính toán</span>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="p-6 text-center text-slate-500 bg-slate-950/60 rounded-lg border border-slate-800/80">
+        <p class="text-xs text-slate-400 font-semibold">Chưa có dữ liệu điều tra</p>
+        <p class="text-[11px] text-slate-500 mt-1">Phiên điều tra hiện tại chưa có dữ liệu phân tích học máy và giải thích Shapley XAI.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Top Model Architecture Card -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div>
+        <span class="text-xs font-semibold uppercase text-cyan-400">Kiến trúc Học máy Nhúng</span>
+        <h2 class="text-lg font-bold text-slate-100 mt-0.5">CompactAnomalyMLP & Exact Shapley XAI</h2>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-950 text-indigo-400 border border-indigo-800">
+        321 Trọng số Đóng băng Bất biến
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Số lượng Đặc trưng:</span>
+        <p class="text-base font-bold text-slate-200 mt-0.5">10 Đặc trưng Chuỗi khối</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Cấu trúc Mạng Neural:</span>
+        <p class="text-base font-bold text-slate-200 mt-0.5">10 &rarr; 16 &rarr; 8 &rarr; 1</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Không gian Liên minh Shapley:</span>
+        <p class="text-base font-bold text-cyan-400 mt-0.5">2¹⁰ = 1,024 Liên minh</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Sai số Hiệu quả (Efficiency):</span>
+        <p class="text-base font-bold text-emerald-400 mt-0.5">&Delta; &lt; 10⁻¹⁵</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resolution of 979 vs 12 Positive Labels (Transparent Academic Explanation) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center space-x-2 border-b border-slate-800 pb-3">
+      <span class="text-xl">⚖️</span>
+      <h3 class="font-bold text-slate-200 text-sm">Minh bạch Nguồn gốc Nhãn: 979 Nhãn Heuristic vs 12 Nhãn Thực chứng Độc lập</h3>
+    </div>
+    <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+      <p>
+        Trong quá trình kiểm toán và đối chiếu dữ liệu trên 5,265 mẫu cửa sổ 100-block của <code>real_p4.db</code>, nhóm nghiên cứu làm rõ nguồn gốc sự khác biệt về số lượng nhãn dương tính:
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+        <div class="p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+          <strong class="text-cyan-400 block mb-1">979 Nhãn Dương tính Heuristic (anomaly_detector_v1_meta.json)</strong>
+          Sinh tự động từ quy tắc đồng xuất hiện cảnh báo trong giai đoạn huấn luyện thăm dò ban đầu. Phản ánh các biến động khối lượng lớn nói chung.
+        </div>
+        <div class="p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+          <strong class="text-emerald-400 block mb-1">12 Nhãn Thực chứng Độc lập (dataset_manifest.json)</strong>
+          Được gắn nhãn thủ công dựa trên bằng chứng gán thuộc tính tấn công độc lập từ cộng đồng bảo mật Web3 (gồm ví EOA kẻ triển khai Curve, hợp đồng tấn công Euler Finance, và hợp đồng rút cạn Curve alETH).
+        </div>
+      </div>
+      <div class="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 text-amber-200">
+        <strong>Lý do Đóng băng Mô hình:</strong> Việc tự ý tái huấn luyện (retrain) mô hình CompactAnomalyMLP sẽ làm biến đổi toàn bộ 321 trọng số &rarr; thay đổi mã băm SHA-256 &rarr; làm vô hiệu hóa mạch ZKML Halo2 BN254 và phá vỡ mã bytecode xác minh trên hợp đồng <code>InferenceVerifier.sol</code>. Do đó, mô hình được đóng băng nguyên vẹn và kết hợp cùng Động cơ Quy tắc thông qua cơ chế hợp nhất <strong>Noisy-OR</strong>:
+        <code class="block mt-1 font-mono text-cyan-300">s_combined = 1 - (1 - s_ML) * (1 - s_rule)</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature Schema Explanation (Zero Hardcoded Shapley numbers) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="font-bold text-slate-200 text-sm">10 Đặc trưng Chuỗi khối & Phương pháp Định lượng Shapley</h3>
+      <span class="text-xs text-slate-400">Công thức định lượng Shapley chính xác (Exact Attribution)</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300">
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">1. Tốc độ chuyển giao (tx_velocity)</strong>
+        Đo lường tần suất phát sinh giao dịch trên đơn vị khối.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">2. Số đối tác gửi duy nhất (unique_counterparties_in)</strong>
+        Số lượng ví độc lập chuyển tiền vào địa chỉ đích.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">3. Số đối tác nhận duy nhất (unique_counterparties_out)</strong>
+        Số lượng ví độc lập tiếp nhận tiền chuyển đi.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">4. Khối lượng tiền vào chuẩn hóa (volume_in_normalized)</strong>
+        Tổng tài sản nạp vào tính theo log10 quy đổi.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">5. Khối lượng tiền ra chuẩn hóa (volume_out_normalized)</strong>
+        Tổng tài sản rút ra tính theo log10 quy đổi.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">6. Tỉ lệ luân chuyển (pass_through_ratio)</strong>
+        Tỉ lệ giữa lượng tiền chuyển ra so với lượng tiền nạp vào trong cửa sổ giám sát.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">7. Độ đa dạng Token (token_diversity)</strong>
+        Số lượng các loại tài sản mã hóa (ERC-20 và ETH) liên quan.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">8. Độ trễ luân chuyển (turnover_latency_min)</strong>
+        Khoảng thời gian từ khi nhận tiền tới khi phân tán dòng tiền.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">9. Độ đột biến thời gian (burstiness_std)</strong>
+        Độ lệch chuẩn khoảng cách thời gian giữa các giao dịch liên tiếp.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">10. Tỉ lệ chuyển ra tối đa (max_single_out_ratio)</strong>
+        Tỉ trọng của giao dịch chuyển đi lớn nhất trên tổng tài sản xuất quỹ.
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

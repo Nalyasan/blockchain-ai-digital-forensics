@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Bảo quản chứng cứ - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Bảo quản chứng cứ & Lưu ký Chuỗi{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  <!-- Session-specific Chain of Custody (Data Isolation) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-lg">🔗</span>
+        <h3 class="font-bold text-slate-100 text-sm">Hồ sơ Lưu ký Chuỗi Theo Phiên Điều tra</h3>
+      </div>
+      {% if selected_job %}
+      <span class="text-xs text-cyan-400 font-mono">Phiên: {{ selected_job.run_id }} (Ca vụ: {{ selected_job.case_id }})</span>
+      {% endif %}
+    </div>
+
+    {% if selected_job and selected_job.artifacts and selected_job.artifacts.get("custody_receipts") %}
+    <div class="space-y-3 text-xs">
+      <div class="p-3.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+        <div>
+          <span class="text-slate-400 block text-[11px]">Tệp Biên bản Chuỗi Lưu ký:</span>
+          <span class="font-bold text-slate-200 font-mono">custody_receipts.json</span>
+        </div>
+        <a href="/api/investigations/{{ selected_job.run_id }}/artifacts/custody_receipts.json" target="_blank"
+           class="px-3 py-1.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold hover:bg-cyan-900 transition">
+          Xem biên lai điện tử &rarr;
+        </a>
+      </div>
+      <div class="text-[11px] text-slate-400">
+        Trạng thái: Mã băm chứng cứ của phiên đã được kiểm kê và niêm phong theo quy trình lưu ký chuẩn.
+      </div>
+    </div>
+    {% else %}
+    <div class="p-6 text-center text-slate-500 bg-slate-950/60 rounded-lg border border-slate-800/80">
+      <p class="text-xs text-slate-400 font-semibold">Chưa có dữ liệu điều tra</p>
+      <p class="text-[11px] text-slate-500 mt-1">Phiên điều tra được chọn chưa có biên lai lưu ký chuỗi hoặc chưa bật quyền ghi on-chain.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Top Node Connectivity Card -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div>
+        <span class="text-xs font-semibold uppercase text-cyan-400">Hạ tầng Blockchain & Node Cục bộ</span>
+        <h2 class="text-lg font-bold text-slate-100 mt-0.5">Mạng Thử nghiệm Anvil & Hợp đồng EvidenceRegistryDID</h2>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+        Chain ID: 31337 (Anvil Local)
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Điểm cuối RPC (RPC URL):</span>
+        <p class="font-mono text-cyan-400 font-bold mt-1 truncate">http://127.0.0.1:8545</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Tiêu chuẩn Định danh (DID):</span>
+        <p class="font-bold text-slate-200 mt-1">W3C ERC-1056 did:ethr:0x...</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Cơ chế Ký chứng thực:</span>
+        <p class="font-bold text-slate-200 mt-1">EIP-712 Structured Typed Data</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chain of Custody Security Guarantees -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">📜</span>
+        <h3 class="font-bold text-slate-200 text-sm">Cam kết Khớp Mã băm Tuyệt đối (100% Concordance)</h3>
+      </div>
+      <p class="text-slate-300 leading-relaxed">
+        Mỗi phiên điều tra có bật chế độ ghi on-chain sẽ neo mã băm chứng cứ vào hợp đồng thông minh:
+      </p>
+      <div class="space-y-2 font-mono text-[11px] p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+        <div>• <strong>artifact_sha256</strong>: Khớp 100% với SHA-256 tiền kiểm của CSDL chứng cứ.</div>
+        <div>• <strong>note_hash</strong>: Băm SHA-256 duy nhất của <code>run_id</code> phiên điều tra.</div>
+        <div>• <strong>is_synthetic</strong>: False (Xác thực giao dịch thực từ Anvil receipt).</div>
+      </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🛡️</span>
+        <h3 class="font-bold text-slate-200 text-sm">Mặc định An toàn Chỉ đọc (Read-Only Default)</h3>
+      </div>
+      <p class="text-slate-300 leading-relaxed">
+        Nhằm ngăn chặn việc phát tán giao dịch ngoài ý muốn và bảo toàn nguyên vẹn CSDL chuẩn:
+      </p>
+      <ul class="space-y-1.5 text-slate-400">
+        <li>• Mặc định hệ thống chạy ở chế độ <strong>Read-Only</strong>, không tự ý gửi giao dịch lên mạng.</li>
+        <li>• Chỉ khi người dùng bật cờ <code>--enable-onchain-write</code> mới kích hoạt gửi giao dịch lên node Anvil.</li>
+        <li>• Tuyệt đối không broadcast giao dịch ra các mạng blockchain công khai (Mainnet/Testnet).</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Smart Contracts Deployment Info -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3 text-xs">
+    <h3 class="font-bold text-slate-200 text-sm">Hợp đồng Thông minh Trọng yếu trong Hệ thống</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <span class="font-bold text-cyan-400 block mb-0.5">EvidenceRegistryDID.sol</span>
+        <span class="text-slate-400">Lưu ký trọn đời gói chứng cứ, chuyển giao chuỗi bảo quản qua chữ ký EIP-712.</span>
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <span class="font-bold text-cyan-400 block mb-0.5">InferenceVerifier.sol</span>
+        <span class="text-slate-400">Xác minh bằng chứng ZKML, ngăn chặn phát lại bằng chứng (ProofAlreadyVerified).</span>
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <span class="font-bold text-cyan-400 block mb-0.5">Halo2Verifier.sol</span>
+        <span class="text-slate-400">Kiểm tra ghép đôi mật mã đường cong elliptic BN254 với tính thuần view (gas-free staticcall).</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

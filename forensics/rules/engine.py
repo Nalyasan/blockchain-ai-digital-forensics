@@ -19,6 +19,7 @@ from forensics.rules.high_frequency import HighFrequencyRule
 from forensics.rules.large_transfer import LargeTransferRule
 from forensics.rules.rapid_pass_through import RapidPassThroughRule
 from forensics.schemas import init_db
+from forensics.paths import get_forensics_db
 
 log = logging.getLogger("forensics.rules.engine")
 
@@ -61,7 +62,11 @@ class RuleEngine:
             self._owns_conn = False
             self.db_path = None
         else:
-            self.db_path = str(db_path_or_conn or os.environ.get("DB_PATH", "data/forensics.db"))
+            raw_db = db_path_or_conn or os.environ.get("DATABASE_PATH") or os.environ.get("DB_PATH") or get_forensics_db()
+            if str(raw_db) == ":memory:":
+                self.db_path = ":memory:"
+            else:
+                self.db_path = str(Path(raw_db).resolve())
             self.conn = init_db(self.db_path)
             self._owns_conn = True
 

@@ -29,6 +29,7 @@ from forensics.endpoint.schemas import (
     PreservationInfo,
     canonical_json,
 )
+from forensics.paths import get_endpoint_evidence_db
 
 logger = logging.getLogger("forensics.endpoint.manifest")
 
@@ -71,7 +72,7 @@ def generate_acquisition_manifest(
     original_sha256: str,
     copy_sha256: str,
     vault_file_path: str,
-    destination_db: str = "data/endpoint_evidence.db",
+    destination_db: str | None = None,
     destination_table: str = "endpoint_evidence",
     records_ingested: int = 0,
     acquisition_method: str = "BITWISE_STREAM_COPY",
@@ -83,6 +84,7 @@ def generate_acquisition_manifest(
     output_path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Builds and serializes an ISO/IEC 27037:2012 compliant digital evidence manifest."""
+    destination_db = destination_db or str(get_endpoint_evidence_db())
     now_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     start_ts = start_time_utc or now_utc
     comp_ts = completion_time_utc or now_utc

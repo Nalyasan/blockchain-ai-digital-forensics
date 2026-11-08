@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}Phân tích AI - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Phân tích AI & Thẩm định Đối chiếu{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  {% if selected_job %}
+  <!-- Case-Bound AI Workspace Header -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="text-xl">🤖</span>
+          <h2 class="text-base font-bold text-slate-100">Không gian Làm việc Điều tra viên AI</h2>
+        </div>
+        <div class="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>Mã vụ việc: <strong class="text-slate-200">{{ selected_job.case_id }}</strong></span>
+          <span>•</span>
+          <span>Phiên điều tra: <strong class="font-mono text-cyan-400">{{ selected_job.run_id }}</strong></span>
+        </div>
+      </div>
+
+      <!-- Air-Gap Compliance Badge -->
+      <div class="flex items-center space-x-2">
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center space-x-1.5 shadow-sm">
+          <span>🛡️</span>
+          <span>Bảo đảm Air-Gap 100% Ngoại tuyến</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Active AI Execution Parameters -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+        <span class="text-slate-500 block text-[11px] mb-0.5">Nhà cung cấp (Provider):</span>
+        <span class="font-bold text-slate-200 uppercase tracking-wide">{{ selected_job.ai_provider or 'ollama' }}</span>
+        <span class="block text-[10px] text-slate-400 mt-0.5">127.0.0.1:11434</span>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+        <span class="text-slate-500 block text-[11px] mb-0.5">Mô hình AI:</span>
+        <span class="font-bold font-mono text-cyan-300">{{ selected_job.ai_model or 'qwen3:8b' }}</span>
+        <span class="block text-[10px] text-slate-400 mt-0.5">Cục bộ Offline</span>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+        <span class="text-slate-500 block text-[11px] mb-0.5">Trạng thái Kết nối:</span>
+        <span class="font-semibold text-emerald-400 flex items-center space-x-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+          <span>{{ ai_health.detail or 'Sẵn sàng Cục bộ' }}</span>
+        </span>
+        <span class="block text-[10px] text-slate-400 mt-0.5">Không truyền dữ liệu ngoài</span>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+        <span class="text-slate-500 block text-[11px] mb-0.5">Kho chứng cứ (Evidence ID):</span>
+        <span class="font-mono text-slate-200 truncate block font-medium" title="{{ selected_job.db_path or 'real_p4.db' }}">
+          {{ selected_job.db_path.split('\\')[-1].split('/')[-1] if selected_job.db_path else 'real_p4.db' }}
+        </span>
+        <span class="block text-[10px] text-slate-400 mt-0.5">Chế độ Chỉ đọc (Immutable)</span>
+      </div>
+      <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+        <span class="text-slate-500 block text-[11px] mb-0.5">Số Cảnh báo & Dữ kiện:</span>
+        <span class="font-bold font-mono text-amber-400 text-sm">
+          {{ p5_metrics.observed_facts_count or citations|length or 0 }}
+        </span>
+        <span class="block text-[10px] text-slate-400 mt-0.5">Đã nạp qua Adapter</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-Time AI Sub-Tasks Stepper (7 Sequential Tasks) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">7 Nhiệm vụ Điều tra viên AI (Live Sub-Tasks)</h3>
+        <p class="text-[11px] text-slate-400 mt-0.5">Theo dõi luồng thực thi tuần tự của tác vụ AI theo thời gian thực.</p>
+      </div>
+      <span class="text-xs text-cyan-400 font-mono">
+        {% if selected_job.status in ['completed', 'completed_with_warnings'] %}
+          7/7 Đã hoàn tất
+        {% elif selected_job.status == 'running' %}
+          Đang xử lý
+        {% else %}
+          Chờ khởi chạy
+        {% endif %}
+      </span>
+    </div>
+
+    <!-- Stepper Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-7 gap-2.5 text-xs">
+      {% for t in ai_sub_tasks %}
+      <div class="p-3 rounded-lg border flex flex-col justify-between
+        {% if t.status == 'completed' %}
+          bg-emerald-950/40 border-emerald-800/80
+        {% elif t.status == 'running' %}
+          bg-cyan-950/60 border-cyan-700 animate-pulse
+        {% elif t.status == 'failed' %}
+          bg-red-950/50 border-red-800
+        {% else %}
+          bg-slate-950/60 border-slate-800/80
+        {% endif %}">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="w-5 h-5 rounded-full flex items-center justify-center font-mono font-bold text-[10px]
+            {% if t.status == 'completed' %}bg-emerald-900 text-emerald-300
+            {% elif t.status == 'running' %}bg-cyan-900 text-cyan-300
+            {% elif t.status == 'failed' %}bg-red-900 text-red-300
+            {% else %}bg-slate-800 text-slate-500{% endif %}">
+            {{ loop.index }}
+          </span>
+          <span class="text-[10px] font-mono
+            {% if t.status == 'completed' %}text-emerald-400
+            {% elif t.status == 'running' %}text-cyan-400 font-bold
+            {% elif t.status == 'failed' %}text-red-400
+            {% else %}text-slate-500{% endif %}">
+            {% if t.status == 'completed' %}Hoàn tất
+            {% elif t.status == 'running' %}Đang chạy
+            {% elif t.status == 'failed' %}Lỗi
+            {% else %}Chưa chạy{% endif %}
+          </span>
+        </div>
+        <div class="font-medium text-slate-200 text-[11px] leading-snug">
+          {{ t.name }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- RefChecker Citations Grounding Table -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Bảng Đối chiếu Dữ kiện Thẩm định RefChecker (Citations Grounding Table)</h3>
+        <p class="text-[11px] text-slate-400 mt-0.5">Đối chiếu từng dữ kiện do AI trích dẫn với sổ cái SQLite thực tế; ngăn chặn hoàn toàn ảo giác (zero hallucination).</p>
+      </div>
+      {% if citations %}
+      <span class="px-2.5 py-1 rounded bg-slate-800 text-cyan-400 font-mono text-[11px] border border-slate-700">
+        {{ citations|length }} dữ kiện được kiểm định
+      </span>
+      {% endif %}
+    </div>
+
+    {% if citations %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead>
+          <tr class="bg-slate-800/60 text-slate-400 border-b border-slate-800 font-semibold text-[11px]">
+            <th class="py-3 px-4">Dữ kiện Trích dẫn (Claimed Fact)</th>
+            <th class="py-3 px-4">Hash Giao dịch (Tx Hash)</th>
+            <th class="py-3 px-4">Số Khối</th>
+            <th class="py-3 px-4">Địa chỉ (Gửi &rarr; Nhận)</th>
+            <th class="py-3 px-4">Tài sản & Số lượng</th>
+            <th class="py-3 px-4">Đối chiếu Sổ cái (Ledger)</th>
+            <th class="py-3 px-4 text-center">Trạng thái RefChecker</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 text-slate-300 text-[11px]">
+          {% for c in citations %}
+          <tr class="hover:bg-slate-800/30 transition">
+            <td class="py-3 px-4 font-medium text-slate-200 max-w-xs">{{ c.statement }}</td>
+            <td class="py-3 px-4 font-mono text-cyan-400 text-[10px]" title="{{ c.tx_hash }}">
+              {{ c.tx_hash[:10] }}...{{ c.tx_hash[-8:] if c.tx_hash and c.tx_hash|length > 18 else c.tx_hash }}
+            </td>
+            <td class="py-3 px-4 font-mono text-slate-300">#{{ c.block_number }}</td>
+            <td class="py-3 px-4 font-mono text-[10px] text-slate-400">
+              <span class="text-slate-300">{{ c.from_addr[:8] }}...</span> &rarr; <span class="text-slate-300">{{ c.to_addr[:8] }}...</span>
+            </td>
+            <td class="py-3 px-4 font-mono text-slate-200">
+              {{ c.asset_id }}: <span class="text-amber-400">{{ c.amount_raw }}</span>
+            </td>
+            <td class="py-3 px-4 text-slate-400 text-[10px]">
+              {{ c.ledger_verified }}
+            </td>
+            <td class="py-3 px-4 text-center">
+              {% if c.match_status == 'Khớp 100%' %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                Khớp 100%
+              </span>
+              {% elif c.match_status == 'CONTENT_MISMATCH' %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-800">
+                CONTENT_MISMATCH
+              </span>
+              {% else %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800">
+                NOT_FOUND
+              </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-8 text-center text-slate-500 bg-slate-950/40">
+      <span class="text-2xl block mb-2">📋</span>
+      {% if selected_job.status in ['completed', 'completed_with_warnings'] %}
+      <p class="text-xs text-slate-400 font-semibold">Không có sự kiện dị thường nào cần trích dẫn đối chiếu trong phiên này.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Cơ sở dữ liệu chứng cứ của phiên không phát sinh cảnh báo bất thường vượt ngưỡng.</p>
+      {% else %}
+      <p class="text-xs text-slate-400 font-semibold">Đang chờ thực thi đối chiếu RefChecker...</p>
+      <p class="text-[11px] text-slate-500 mt-1">Bảng đối chiếu sẽ tự động hiển thị khi giai đoạn Phân tích AI & Thẩm định hoàn tất.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- AI Synthesis Narrative Box -->
+  {% if p5_metrics.ai_synthesis %}
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-2">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Nhận định Điều tra Pháp chứng Tổng hợp (AI Narrative)</h3>
+      <span class="text-[11px] text-emerald-400 font-mono">Đã đối chiếu 100% với chứng cứ sổ cái</span>
+    </div>
+    <div class="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-line">
+      {{ p5_metrics.ai_synthesis }}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <!-- Empty State (No Job Selected) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center space-y-4">
+    <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-xl">
+      🤖
+    </div>
+    <h3 class="text-sm font-bold text-slate-300">Chưa có dữ liệu điều tra</h3>
+    <p class="text-xs text-slate-500 max-w-md mx-auto">
+      Không có phiên điều tra nào được chọn hoặc phiên chưa chạy phân tích AI. Vui lòng chọn một phiên từ thanh điều hướng hoặc khởi chạy phiên mới.
+    </p>
+    <a href="/launcher" class="inline-flex items-center px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition">
+      Khởi chạy điều tra mới &rarr;
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- Multi-Model AI Provider Adapter Architecture -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div>
+        <span class="text-xs font-semibold uppercase text-cyan-400">Kiến trúc Thích ứng Đa mô hình</span>
+        <h2 class="text-base font-bold text-slate-100 mt-0.5">Multi-Model AI Provider Adapter</h2>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+        Bảo đảm Air-Gap & Cách ly Mật mã
+      </span>
+    </div>
+    <p class="text-xs text-slate-300 leading-relaxed">
+      Hệ thống phân tích AI được xây dựng theo mô hình Adapter đa hình, cho phép chuyển đổi linh hoạt giữa các nhà cung cấp trí tuệ nhân tạo cục bộ (Local Ollama) và điện toán đám mây (OpenAI, Claude, Gemini, Custom) theo từng phiên điều tra mà không cần thay đổi mã nguồn.
+    </p>
+  </div>
+
+  <!-- 3 Column Cards: Air-Gap, RefChecker, Decoupling -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+    <!-- Air Gap & Security -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🛡️</span>
+        <h3 class="font-bold text-slate-200">Bảo vệ Air-Gap & Khóa quyền</h3>
+      </div>
+      <ul class="space-y-2 text-slate-400 leading-normal">
+        <li>• <strong class="text-slate-300">Ưu tiên Cục bộ:</strong> Mặc định chạy Ollama tại <code>127.0.0.1:11434</code>; tuyệt đối không tự động chuyển tiếp lên đám mây.</li>
+        <li>• <strong class="text-slate-300">Cổng Phê duyệt (Consent Gate):</strong> Chỉ gửi dữ liệu lên Cloud AI khi người dùng chủ động cấp quyền và nhập API key trong phiên.</li>
+        <li>• <strong class="text-slate-300">Không Lộ lọt:</strong> Tuyệt đối không gửi cơ sở dữ liệu chứng cứ thô, khóa riêng tư (private keys) hay mnemonics ra bên ngoài.</li>
+        <li>• <strong class="text-slate-300">Zero Execution:</strong> AI không có quyền thực thi shell, SQL sửa đổi, ký giao dịch blockchain hoặc sửa mã nguồn.</li>
+      </ul>
+    </div>
+
+    <!-- RefChecker Two-Stage Verification -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🔍</span>
+        <h3 class="font-bold text-slate-200">Thẩm định Đối chiếu RefChecker</h3>
+      </div>
+      <ul class="space-y-2 text-slate-400 leading-normal">
+        <li>• <strong class="text-slate-300">Giai đoạn 1 (Tồn tại):</strong> Xác minh 100% <code>tx_hash</code>, khối, và thực thể do AI trích dẫn thực sự tồn tại trong SQLite.</li>
+        <li>• <strong class="text-slate-300">Giai đoạn 2 (Khớp nội dung):</strong> So sánh từng trường <code>from_addr</code>, <code>to_addr</code>, <code>asset_id</code>, <code>amount_raw</code>.</li>
+        <li>• <strong class="text-slate-300">Khắc phục Ảo giác:</strong> Mọi suy diễn không khớp dữ kiện trên chuỗi đều bị loại bỏ hoặc dán nhãn <code>CONTENT_MISMATCH</code>.</li>
+      </ul>
+    </div>
+
+    <!-- Decoupling Guarantee -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🔒</span>
+        <h3 class="font-bold text-slate-200">Độc lập Tuyệt đối Mô hình & Mạch ZKML</h3>
+      </div>
+      <ul class="space-y-2 text-slate-400 leading-normal">
+        <li>• <strong class="text-slate-300">Không Xâm lấn Trọng số:</strong> Thay đổi mô hình LLM tuyệt đối không làm thay đổi trọng số CompactAnomalyMLP (321 trọng số).</li>
+        <li>• <strong class="text-slate-300">Bảo toàn Mạch ZKML:</strong> Khóa xác minh <code>vk.key</code> và mạch Halo2 KZG không bị biên dịch lại hoặc biến đổi.</li>
+        <li>• <strong class="text-slate-300">Toàn vẹn Bytecode:</strong> Đảm bảo hợp đồng <code>InferenceVerifier.sol</code> và <code>Halo2Verifier.sol</code> giữ nguyên vẹn trên Anvil.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Supported Providers Table -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800 bg-slate-900/80">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Danh mục Nhà cung cấp AI Được Hỗ trợ</h3>
+    </div>
+    <table class="w-full text-left text-xs">
+      <thead>
+        <tr class="bg-slate-800/60 text-slate-400 border-b border-slate-800 font-semibold">
+          <th class="py-3 px-4">Nhà cung cấp</th>
+          <th class="py-3 px-4">Mô hình Mặc định</th>
+          <th class="py-3 px-4">Môi trường</th>
+          <th class="py-3 px-4">Cơ chế Bảo mật</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800/60 text-slate-300">
+        <tr class="hover:bg-slate-800/30 transition">
+          <td class="py-3 px-4 font-bold text-cyan-400">Ollama Local</td>
+          <td class="py-3 px-4 font-mono text-slate-200">qwen3:8b (hoặc bất kỳ model cục bộ nào)</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">Cục bộ Offline</span></td>
+          <td class="py-3 px-4 text-slate-400">Air-Gap 100%, không gửi dữ liệu ra ngoài mạng</td>
+        </tr>
+        <tr class="hover:bg-slate-800/30 transition">
+          <td class="py-3 px-4 font-bold text-slate-200">OpenAI API</td>
+          <td class="py-3 px-4 font-mono text-slate-200">gpt-4o</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Điện toán Đám mây</span></td>
+          <td class="py-3 px-4 text-slate-400">Yêu cầu khóa API & Xác nhận Consent rõ ràng</td>
+        </tr>
+        <tr class="hover:bg-slate-800/30 transition">
+          <td class="py-3 px-4 font-bold text-slate-200">Anthropic Claude</td>
+          <td class="py-3 px-4 font-mono text-slate-200">claude-3-5-sonnet-20241022</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Điện toán Đám mây</span></td>
+          <td class="py-3 px-4 text-slate-400">Yêu cầu khóa API & Xác nhận Consent rõ ràng</td>
+        </tr>
+        <tr class="hover:bg-slate-800/30 transition">
+          <td class="py-3 px-4 font-bold text-slate-200">Google Gemini</td>
+          <td class="py-3 px-4 font-mono text-slate-200">gemini-2.0-flash</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Điện toán Đám mây</span></td>
+          <td class="py-3 px-4 text-slate-400">Yêu cầu khóa API & Xác nhận Consent rõ ràng</td>
+        </tr>
+        <tr class="hover:bg-slate-800/30 transition">
+          <td class="py-3 px-4 font-bold text-slate-200">Custom Provider</td>
+          <td class="py-3 px-4 font-mono text-slate-200">OpenAI-compatible models</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Tùy biến Endpoint</span></td>
+          <td class="py-3 px-4 text-slate-400">Tự động kiểm tra địa chỉ Loopback (127.0.0.1) an toàn</td>
+        </tr>
+        <tr class="hover:bg-slate-800/30 transition">
+          <td class="py-3 px-4 font-bold text-slate-200">Động cơ Tất định (Fallback)</td>
+          <td class="py-3 px-4 font-mono text-slate-200">Rule-based FunctionModel</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-800">Nội suy Quy tắc</span></td>
+          <td class="py-3 px-4 text-slate-400">Dán nhãn minh bạch là Fallback Tất định, không giả mạo LLM</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

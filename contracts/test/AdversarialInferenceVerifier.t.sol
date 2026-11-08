@@ -653,17 +653,23 @@ contract AdversarialInferenceVerifierTest {
         assertTrue(first);
         assertTrue(verifier.isProofVerified(validProofHash));
 
-        // Reusing same proof A for a second record ID
-        // Note: ProofAlreadyVerified error is defined in interface but not enforced in InferenceVerifier.sol
-        bool second = verifier.verifyInferenceProof(
+        // Reusing same proof A for a second record ID must revert with ProofAlreadyVerified
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IInferenceVerifier.ProofAlreadyVerified.selector,
+                validProofHash
+            )
+        );
+        verifier.verifyInferenceProof(
             validProof,
             CANONICAL_MODEL,
             CANONICAL_INPUT,
             CANONICAL_OUTPUT,
             "REC-REPLAY-2"
         );
-        assertTrue(second);
-        assertTrue(verifier.recordExists("REC-REPLAY-2"));
+
+        // Verify second record was never created
+        assertFalse(verifier.recordExists("REC-REPLAY-2"));
     }
 
     function test_ADV_35_RecordOverwrite_ForensicMutation() public {
@@ -678,13 +684,20 @@ contract AdversarialInferenceVerifierTest {
         );
         IInferenceVerifier.VerificationRecord memory recOriginal = verifier.getVerificationRecord("REC-OVERWRITE");
         assertEq(recOriginal.submitter, deployer);
+        assertEq(recOriginal.inputCommitment, CANONICAL_INPUT);
 
         // Adversary Eve submits with the SAME record ID
-        // Because InferenceVerifier does not check if record already exists, it mutates the existing record
+        // Because InferenceVerifier enforces record immutability, this must revert with RecordAlreadyExists
         bytes32 eveInput = 0x3333333333333333333333333333333333333333333333333333333333333333;
         mockCircuit.setExpectedCommitments(uint256(eveInput), uint256(CANONICAL_OUTPUT));
 
         vm.prank(eve);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IInferenceVerifier.RecordAlreadyExists.selector,
+                "REC-OVERWRITE"
+            )
+        );
         verifier.verifyInferenceProof(
             validProof,
             CANONICAL_MODEL,
@@ -693,9 +706,16 @@ contract AdversarialInferenceVerifierTest {
             "REC-OVERWRITE"
         );
 
-        IInferenceVerifier.VerificationRecord memory recMutated = verifier.getVerificationRecord("REC-OVERWRITE");
-        assertEq(recMutated.submitter, eve);
-        assertEq(recMutated.inputCommitment, eveInput);
+        // Assert Alice's original record remains 100% immutable
+        IInferenceVerifier.VerificationRecord memory recAfter = verifier.getVerificationRecord("REC-OVERWRITE");
+        assertEq(recAfter.submitter, deployer);
+        assertEq(recAfter.inputCommitment, CANONICAL_INPUT);
+        assertEq(recAfter.outputCommitment, CANONICAL_OUTPUT);
+        assertEq(recAfter.proofHash, validProofHash);
+        assertEq(recAfter.timestamp, recOriginal.timestamp);
+        assertEq(recAfter.blockNumber, recOriginal.blockNumber);
+        assertEq(recAfter.gasUsed, recOriginal.gasUsed);
+        assertTrue(recAfter.isValid);
     }
 
     function test_ADV_36_EvidenceBinding_Consistency() public {

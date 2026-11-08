@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Kiểm thử hệ thống trong khu vực quản trị - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Kiểm thử hệ thống trong khu vực quản trị{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+  <!-- Info Banner -->
+  <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl shadow-sm space-y-2">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-semibold uppercase text-cyan-400">Không gian Thực nghiệm Bảo vệ Đồ án</span>
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+        Môi trường Thử nghiệm Cách ly (Khu vực Quản trị)
+      </span>
+    </div>
+    <h2 class="text-lg font-bold text-slate-100">Hệ thống Tái hiện Toàn diện 3 Kịch bản Giám định Thực nghiệm</h2>
+    <p class="text-xs text-slate-300 leading-relaxed">
+      Khu vực quản trị bảo tồn nguyên vẹn 3 kịch bản thực nghiệm độc lập (D1, D2, D3) theo đặc tả AGENT.md v6.1 nhằm phục vụ trực tiếp cho buổi bảo vệ đồ án tốt nghiệp, phân biệt rõ ràng giữa dữ liệu blockchain lịch sử và giao dịch thử nghiệm trên node Anvil cục bộ.
+    </p>
+  </div>
+
+  <!-- 3 Demo Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Demo D1 Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-cyan-800/80 transition">
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-2xl">⚡</span>
+          <span class="px-2.5 py-0.5 rounded text-[11px] font-mono bg-cyan-950 text-cyan-400 border border-cyan-800">8 Giai đoạn</span>
+        </div>
+        <h3 class="font-bold text-slate-100 text-sm">Demo D1: EVM Incident Replay</h3>
+        <p class="text-xs text-slate-400 leading-normal">
+          Tái hiện đầy đủ vụ khai thác Euler Finance DAI (khối 16,817,990–16,818,110): Thu thập chuẩn ISO/IEC 27037, Rule Engine, suy luận ML CompactAnomalyMLP, giải thích Shapley, thẩm định RefChecker, sinh bằng chứng Halo2 5,504 bytes và chuyển giao lưu ký 2 tác nhân trên Anvil.
+        </p>
+      </div>
+      <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-[11px] text-slate-500 font-mono">scripts/demo_d1_evm.py</span>
+        <button onclick="launchDemo('D1')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition shadow">
+          Chạy D1 &rarr;
+        </button>
+      </div>
+    </div>
+
+    <!-- Demo D2 Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-cyan-800/80 transition">
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-2xl">🖥️</span>
+          <span class="px-2.5 py-0.5 rounded text-[11px] font-mono bg-indigo-950 text-indigo-400 border border-indigo-800">ISO/IEC 27037</span>
+        </div>
+        <h3 class="font-bold text-slate-100 text-sm">Demo D2: Host Forensics & Triage</h3>
+        <p class="text-xs text-slate-400 leading-normal">
+          Khám nghiệm trạm cuối và phản ứng ban đầu (First Responder): Đọc log máy chủ qua JSONL Log Adapter, phân tích 32 bản ghi triage audit log, kiểm tra toàn vẹn SQLite, và đối soát chuỗi sự kiện với CSDL chứng cứ endpoint.
+        </p>
+      </div>
+      <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-[11px] text-slate-500 font-mono">scripts/demo_d2_host_fixed.py</span>
+        <button onclick="launchDemo('D2')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow">
+          Chạy D2 &rarr;
+        </button>
+      </div>
+    </div>
+
+    <!-- Demo D3 Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-cyan-800/80 transition">
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-2xl">🛡️</span>
+          <span class="px-2.5 py-0.5 rounded text-[11px] font-mono bg-red-950 text-red-400 border border-red-800">35 Véc-tơ Đối kháng</span>
+        </div>
+        <h3 class="font-bold text-slate-100 text-sm">Demo D3: Adversarial Replay</h3>
+        <p class="text-xs text-slate-400 leading-normal">
+          Kiểm thử đối kháng toàn diện 35 véc-tơ tấn công qua 6 cổng phòng thủ (Giới hạn trạm cuối, Biên ML/XAI, Tình báo đe dọa, Prompt Injection, Mạch ZKML, Chống phát lại hợp đồng). Bảo đảm 100% từ chối an toàn (fail-closed).
+        </p>
+      </div>
+      <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-[11px] text-slate-500 font-mono">scripts/demo_d3_adversarial.py</span>
+        <button onclick="launchDemo('D3')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-700 hover:bg-red-600 text-white transition shadow">
+          Chạy D3 &rarr;
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gateway Rejection Summary Table for D3 -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">6 Cổng Phòng thủ Đối kháng (Multi-Gateway Resilience D3)</h3>
+      <span class="text-xs text-emerald-400 font-semibold">Tỉ lệ Từ chối: 100% (35/35 Fail-Closed)</span>
+    </div>
+    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">Cổng 1: AI First Responder & Endpoint Bounds (8 véc-tơ)</strong>
+        Chặn vượt ngân sách bước công cụ, chặn truy vấn ngoài phạm vi, từ chối lệnh shell độc hại.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">Cổng 2: Machine Learning & XAI Bounds (6 véc-tơ)</strong>
+        Chặn feature vectors bất hợp lệ, NaN/Inf poisoning, sai lệch tổng Shapley hiệu quả.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">Cổng 3: Threat Intel & Grounded MITRE ATT&CK (4 véc-tơ)</strong>
+        Ngăn chặn suy diễn nhãn mối đe dọa không có căn cứ từ CSDL tình báo.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">Cổng 4: Prompt Injection Sanitizer & RefChecker (6 véc-tơ)</strong>
+        Lọc bỏ ký tự điều khiển Unicode ẩn, bẻ khóa jailbreak, loại trừ trích dẫn giả mạo.
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">Cổng 5: ZKML Verifier on Live Anvil (5 véc-tơ)</strong>
+        Từ chối bằng chứng bị cắt ngắn, tín hiệu công khai bị sửa đổi, phát lại bằng chứng (ADV_34).
+      </div>
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <strong class="text-cyan-400 block mb-1">Cổng 6: DID Identity & Custody Handover (6 véc-tơ)</strong>
+        Chặn chữ ký EIP-712 giả mạo, nonce cũ, quá hạn deadline, ghi đè hồ sơ (ADV_35).
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function launchDemo(target) {
+  if (!confirm(`Xác nhận khởi chạy kịch bản thực nghiệm ${target} trong khu vực quản trị?`)) return;
+
+  try {
+    const res = await fetch('/api/investigations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_id: `demo-${target.toLowerCase()}-replay`,
+        continue_case: true,
+        mode: 'MODE_A',
+        demo_target: target,
+        ai_provider: 'ollama',
+        ai_model: 'qwen3:8b',
+        enable_onchain_write: false
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Lỗi khởi chạy thực nghiệm.');
+    }
+    window.location.href = `/progress/${data.run_id}`;
+  } catch (err) {
+    alert("Không thể khởi chạy: " + err.message);
+  }
+}
+</script>
+{% endblock %}

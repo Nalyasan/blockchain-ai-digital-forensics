@@ -53,7 +53,7 @@ TOPIC_CUSTODY_RECORDED = "0xcf6b2d07eec198ac5313cb4e7be0d697c16d152be5eb56184111
 # Danh sách chain_id cho phép (Anvil & Sepolia)
 ALLOWED_CHAIN_IDS = {31337, 11155111}
 
-from forensics.paths import resolve_foundry_binary
+from forensics.paths import resolve_foundry_binary, get_database_path, get_rpc_url
 
 CAST_BIN = resolve_foundry_binary("cast")
 
@@ -570,10 +570,10 @@ def record_custody_action(
     note_b32 = note_hash_bytes32(note)
     art_b32 = "0x" + artifact_sha256.removeprefix("0x")
 
-    url = rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
+    url = rpc_url or get_rpc_url()
     signer, chain_id = prepare_write(contract_address, url, account, password_file, from_addr)
 
-    db_file = db_path or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = str(Path(db_path).resolve()) if db_path else str(get_database_path())
     ops.pre_send_db_check(db_file, migrate=False)
     intent = ops.custody_intent(chain_id, contract_address, evidence_id, action, art_b32, note_b32, signer)
     claim = ops.claim_send(db_file, intent)

@@ -36,6 +36,7 @@ from forensics.zkml.prover import (
     ZKMLProofResult,
     decode_instance_element,
 )
+from forensics.paths import get_circuits_dir, get_models_dir
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +63,11 @@ class ZKMLVerifier:
         # Resolve or locate SRS
         if srs_path and Path(srs_path).is_file():
             self.srs_path = Path(srs_path)
-        else:
             candidates = [
                 self.vk_path.parent / "kzg.srs",
                 self.settings_path.parent / "kzg.srs",
-                Path(__file__).resolve().parents[2] / "circuits" / "anomaly_detector_v1" / "kzg.srs",
-                Path("circuits/anomaly_detector_v1/kzg.srs"),
-                Path("models/zkml/kzg.srs"),
+                get_circuits_dir() / "anomaly_detector_v1" / "kzg.srs",
+                get_models_dir() / "zkml" / "kzg.srs",
             ]
             found_srs = next((c for c in candidates if c.is_file() and c.stat().st_size > 0), None)
             if found_srs:

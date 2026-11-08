@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block title %}Tổng quan - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Tổng quan - Blockchain Ai Aigital Forensics{% endblock %}
+
+{% block content %}
+<div class="space-y-8 max-w-7xl mx-auto">
+
+  <!-- ========================================================================= -->
+  <!-- KHU VỰC A: ĐIỀU TRA MỚI (New Investigation Action Hub)                    -->
+  <!-- ========================================================================= -->
+  <section id="area-new-investigation" class="space-y-3">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+      <div class="flex items-center space-x-2">
+        <span class="text-cyan-400 font-bold text-sm tracking-wider uppercase">Khu vực A</span>
+        <h2 class="text-base font-bold text-slate-100">Điều tra mới</h2>
+      </div>
+      <span class="text-xs text-slate-400">Trung tâm khởi tạo và tiếp nhận giám định nghiệp vụ</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <!-- Action 1: Tạo vụ việc mới -->
+      <a href="/launcher" class="p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/80 hover:bg-slate-800/60 transition group flex flex-col justify-between space-y-3 shadow-sm">
+        <div class="space-y-2">
+          <div class="w-10 h-10 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 text-xl group-hover:scale-105 transition">
+            ➕
+          </div>
+          <h3 class="font-bold text-sm text-slate-100 group-hover:text-cyan-300 transition">Tạo vụ việc</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Khởi tạo ca vụ điều tra độc lập mới. Trường Case ID để trống ban đầu, tự sinh Run ID riêng biệt.
+          </p>
+        </div>
+        <span class="text-xs font-semibold text-cyan-400 flex items-center space-x-1 pt-2 border-t border-slate-800/80">
+          <span>Khởi tạo ngay</span>
+          <span>&rarr;</span>
+        </span>
+      </a>
+
+      <!-- Action 2: Nhập tệp chứng cứ -->
+      <a href="/launcher?action=ingest" class="p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/80 hover:bg-slate-800/60 transition group flex flex-col justify-between space-y-3 shadow-sm">
+        <div class="space-y-2">
+          <div class="w-10 h-10 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400 text-xl group-hover:scale-105 transition">
+            📥
+          </div>
+          <h3 class="font-bold text-sm text-slate-100 group-hover:text-emerald-300 transition">Nhập tệp chứng cứ</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Tiếp nhận tệp giao dịch JSON, CSV, hoặc SQLite tương thích. Tính toán SHA-256 gốc và kích hoạt adapter phân tích.
+          </p>
+        </div>
+        <span class="text-xs font-semibold text-emerald-400 flex items-center space-x-1 pt-2 border-t border-slate-800/80">
+          <span>Tải tệp & phân tích</span>
+          <span>&rarr;</span>
+        </span>
+      </a>
+
+      <!-- Action 3: Điều tra trực tiếp -->
+      <a href="/launcher?action=rpc" class="p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/80 hover:bg-slate-800/60 transition group flex flex-col justify-between space-y-3 shadow-sm">
+        <div class="space-y-2">
+          <div class="w-10 h-10 rounded-lg bg-indigo-950 border border-indigo-800 flex items-center justify-center text-indigo-400 text-xl group-hover:scale-105 transition">
+            🌐
+          </div>
+          <h3 class="font-bold text-sm text-slate-100 group-hover:text-indigo-300 transition">Điều tra trực tiếp</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Thu thập dữ liệu giao dịch trực tiếp từ mạng blockchain qua RPC chỉ đọc. Kiểm soát chống SSRF và giới hạn an toàn.
+          </p>
+        </div>
+        <span class="text-xs font-semibold text-indigo-400 flex items-center space-x-1 pt-2 border-t border-slate-800/80">
+          <span>Kết nối RPC an toàn</span>
+          <span>&rarr;</span>
+        </span>
+      </a>
+
+      <!-- Action 4: Hồ sơ đã lưu -->
+      <a href="#area-recent-cases" class="p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/80 hover:bg-slate-800/60 transition group flex flex-col justify-between space-y-3 shadow-sm">
+        <div class="space-y-2">
+          <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xl group-hover:scale-105 transition">
+            📂
+          </div>
+          <h3 class="font-bold text-sm text-slate-100 group-hover:text-slate-200 transition">Hồ sơ đã lưu</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Truy xuất danh mục {{ total_jobs }} phiên điều tra đã lưu trữ. Xem báo cáo HTML độc lập và tiếp tục điều tra ca vụ cũ.
+          </p>
+        </div>
+        <span class="text-xs font-semibold text-slate-300 flex items-center space-x-1 pt-2 border-t border-slate-800/80">
+          <span>Xem danh sách hồ sơ</span>
+          <span>&darr;</span>
+        </span>
+      </a>
+    </div>
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- KHU VỰC B: PHIÊN ĐANG XỬ LÝ (Active Session Monitor & Safe Control)        -->
+  <!-- ========================================================================= -->
+  <section id="area-active-session" class="space-y-3">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+      <div class="flex items-center space-x-2">
+        <span class="text-amber-400 font-bold text-sm tracking-wider uppercase">Khu vực B</span>
+        <h2 class="text-base font-bold text-slate-100">Phiên đang xử lý</h2>
+      </div>
+      <span class="text-xs text-slate-400">Giám sát tiến trình thời gian thực & điều khiển dừng an toàn</span>
+    </div>
+
+    {% if active_job %}
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-md space-y-6">
+      <!-- Session Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold uppercase text-cyan-400">Mã phiên (Run ID):</span>
+            <span class="text-sm font-mono font-bold text-slate-100">{{ active_job.run_id }}</span>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-950 text-cyan-400 border border-cyan-800 animate-pulse">
+              {{ active_job.vietnamese_status }}
+            </span>
+          </div>
+          <div class="text-xs text-slate-400 mt-1 flex items-center space-x-3">
+            <span>Ca vụ: <strong class="text-slate-200">{{ active_job.case_id }}</strong></span>
+            <span>|</span>
+            <span>Khởi tạo: <span class="font-mono text-slate-300">{{ active_job.start_time[:19] if active_job.start_time else '--' }}</span></span>
+            {% if active_job.current_phase_name %}
+            <span>|</span>
+            <span class="text-cyan-300 font-medium">Giai đoạn: {{ active_job.current_phase_name }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-3 shrink-0">
+          <a href="/progress/{{ active_job.run_id }}" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition">
+            Chi tiết tiến độ &rarr;
+          </a>
+          <button onclick="cancelJob('{{ active_job.run_id }}')"
+                  class="px-4 py-2 bg-red-950 hover:bg-red-900 text-red-300 text-xs font-bold rounded-lg border border-red-800 transition flex items-center space-x-1.5 shadow">
+            <span>🛑</span>
+            <span>Dừng an toàn</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time 8-Stage Progress Tracker -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-300 font-semibold uppercase tracking-wider">Tiến trình 8 Giai đoạn Nghiệp vụ Chuẩn hóa</span>
+          <span class="font-mono text-cyan-400 font-bold">{{ active_job.progress_percent }}%</span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+          <div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-500"
+               style="width: {{ active_job.progress_percent }}%;"></div>
+        </div>
+
+        <!-- 8 Stage Pills -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 pt-2">
+          {% for stg in active_stages %}
+          <div class="p-2.5 rounded-lg border text-center transition
+            {% if stg.status == 'completed' %}
+              bg-emerald-950/40 border-emerald-800/80 text-emerald-300
+            {% elif stg.status == 'running' %}
+              bg-cyan-950/50 border-cyan-700 text-cyan-300 animate-pulse
+            {% elif stg.status == 'failed' %}
+              bg-red-950/40 border-red-800 text-red-300
+            {% elif stg.status == 'not_applicable' %}
+              bg-slate-900/40 border-slate-800 text-slate-500
+            {% else %}
+              bg-slate-950/60 border-slate-800/80 text-slate-400
+            {% endif %}">
+            <div class="text-[10px] font-mono font-bold">{{ stg.number }}</div>
+            <div class="text-[11px] font-semibold truncate mt-0.5" title="{{ stg.name }}">{{ stg.name }}</div>
+            <div class="text-[9px] mt-1 uppercase font-medium">{{ stg.vietnamese_status }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-8 text-center space-y-3">
+      <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-xl">
+        💤
+      </div>
+      <h3 class="text-sm font-bold text-slate-300">Chưa có dữ liệu điều tra</h3>
+      <p class="text-xs text-slate-400">Hệ thống sẵn sàng. Không có phiên điều tra nào đang hoạt động.</p>
+      <p class="text-xs text-slate-500 max-w-md mx-auto">
+        Điều tra viên có thể bấm "Tạo vụ việc" ở Khu vực A để khởi chạy một phiên điều tra số mới, hoặc chọn ca vụ cũ để tiếp tục điều tra.
+      </p>
+      <div class="pt-2">
+        <a href="/launcher" class="inline-flex items-center px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition shadow">
+          <span>Khởi chạy Phiên Mới</span>
+          <span class="ml-1.5">&rarr;</span>
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- KHU VỰC C: HỒ SƠ GẦN ĐÂY (Recent Records & Direct Report Access)           -->
+  <!-- ========================================================================= -->
+  <section id="area-recent-cases" class="space-y-3">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+      <div class="flex items-center space-x-2">
+        <span class="text-emerald-400 font-bold text-sm tracking-wider uppercase">Khu vực C</span>
+        <h2 class="text-base font-bold text-slate-100">Hồ sơ gần đây</h2>
+      </div>
+      <a href="/reports" class="text-xs text-cyan-400 hover:underline">Xem tất cả báo cáo &rarr;</a>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="bg-slate-800/60 text-slate-400 border-b border-slate-800 font-semibold">
+              <th class="py-3 px-4">Mã vụ việc (Case ID)</th>
+              <th class="py-3 px-4">Mã phiên (Run ID)</th>
+              <th class="py-3 px-4">Trạng thái</th>
+              <th class="py-3 px-4">Thời gian</th>
+              <th class="py-3 px-4 text-center">Báo cáo điều tra</th>
+              <th class="py-3 px-4 text-right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 text-slate-300">
+            {% if recent_jobs %}
+              {% for job in recent_jobs %}
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="py-3 px-4 font-semibold text-slate-200">
+                  {{ job.case_id }}
+                </td>
+                <td class="py-3 px-4 font-mono font-bold text-cyan-400 truncate max-w-[170px]" title="{{ job.run_id }}">
+                  {{ job.run_id }}
+                </td>
+                <td class="py-3 px-4">
+                  {% set st = job.status %}
+                  {% if st == 'completed' %}
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      {{ job.vietnamese_status }}
+                    </span>
+                  {% elif st == 'completed_with_warnings' %}
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-950 text-amber-400 border border-amber-800">
+                      {{ job.vietnamese_status }}
+                    </span>
+                  {% elif st == 'running' %}
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-950 text-cyan-400 border border-cyan-800 animate-pulse">
+                      {{ job.vietnamese_status }}
+                    </span>
+                  {% elif st == 'failed' %}
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-red-950 text-red-400 border border-red-800">
+                      {{ job.vietnamese_status }}
+                    </span>
+                  {% else %}
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                      {{ job.vietnamese_status }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                  {{ job.start_time[:19] if job.start_time else '--' }}
+                </td>
+                <td class="py-3 px-4 text-center">
+                  <a href="/api/investigations/{{ job.run_id }}/artifacts/report.html" target="_blank"
+                     class="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-[11px] font-semibold transition"
+                     title="Xem và tải Báo cáo HTML độc lập">
+                    <span>📄</span>
+                    <span>Báo cáo HTML</span>
+                  </a>
+                </td>
+                <td class="py-3 px-4 text-right space-x-2">
+                  <a href="/progress/{{ job.run_id }}" class="text-slate-400 hover:text-slate-200 font-medium">Chi tiết</a>
+                  <a href="/launcher?continue_case={{ job.case_id }}" class="text-cyan-400 hover:text-cyan-300 font-semibold" title="Thêm phiên điều tra mới cho ca vụ này">
+                    Tiếp tục điều tra
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="py-8 text-center text-slate-500 space-y-1">
+                  <div class="text-sm font-bold text-slate-300">Chưa có dữ liệu điều tra</div>
+                  <div class="text-xs text-slate-500">Chưa có hồ sơ điều tra nào trong hệ thống. Vui lòng bấm "Tạo vụ việc" ở Khu vực A để bắt đầu.</div>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- KHU VỰC D: TÌNH TRẠNG HỆ THỐNG THỰC TẾ (Live System Health Probes)         -->
+  <!-- ========================================================================= -->
+  <section id="area-system-health" class="space-y-3">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+      <div class="flex items-center space-x-2">
+        <span class="text-indigo-400 font-bold text-sm tracking-wider uppercase">Khu vực D</span>
+        <h2 class="text-base font-bold text-slate-100">Tình trạng hệ thống thực tế</h2>
+      </div>
+      <span class="text-xs text-slate-400">Kết quả thăm dò kết nối & tính toàn vẹn phụ thuộc thời gian thực</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+      <!-- 1. CSDL SQLite -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-200 flex items-center">
+            <span class="mr-2">🗄️</span> Cơ sở dữ liệu SQLite
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold 
+            {% if health_probes.database.status == 'ready' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+            {% else %}bg-amber-950 text-amber-400 border border-amber-800{% endif %}">
+            {{ "Khả dụng" if health_probes.database.status == 'ready' else "Cảnh báo" }}
+          </span>
+        </div>
+        <p class="text-slate-400 leading-normal">{{ health_probes.database.detail }}</p>
+      </div>
+
+      <!-- 2. AI Provider (Ollama) -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-200 flex items-center">
+            <span class="mr-2">🧠</span> AI Provider (Ollama)
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold 
+            {% if health_probes.ai_provider.status == 'ready' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+            {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+            {{ "Trực tuyến" if health_probes.ai_provider.status == 'ready' else "Dự phòng Tất định" }}
+          </span>
+        </div>
+        <p class="text-slate-400 leading-normal">{{ health_probes.ai_provider.provider }}: {{ health_probes.ai_provider.detail }}</p>
+      </div>
+
+      <!-- 3. RPC Node -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-200 flex items-center">
+            <span class="mr-2">🌐</span> RPC Node (Chỉ đọc)
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold 
+            {% if health_probes.rpc.status == 'ready' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+            {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+            {{ "Đã kết nối" if health_probes.rpc.status == 'ready' else "Chưa kết nối" }}
+          </span>
+        </div>
+        <p class="text-slate-400 leading-normal">{{ health_probes.rpc.detail }}</p>
+      </div>
+
+      <!-- 4. Anvil Cục bộ -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-200 flex items-center">
+            <span class="mr-2">⚡</span> Mạng Thử nghiệm Anvil
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold 
+            {% if health_probes.anvil.status == 'ready' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+            {% else %}bg-amber-950 text-amber-400 border border-amber-800{% endif %}">
+            {{ "Sẵn sàng" if health_probes.anvil.status == 'ready' else "Thiếu binary" }}
+          </span>
+        </div>
+        <p class="text-slate-400 leading-normal">{{ health_probes.anvil.detail }}</p>
+      </div>
+
+      <!-- 5. Mô hình ML -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-200 flex items-center">
+            <span class="mr-2">🔬</span> Mô hình Học máy
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold 
+            {% if health_probes.ml_model.status == 'ready' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+            {% else %}bg-red-950 text-red-400 border border-red-800{% endif %}">
+            {{ "Khả dụng" if health_probes.ml_model.status == 'ready' else "Thiếu model" }}
+          </span>
+        </div>
+        <p class="text-slate-400 leading-normal">{{ health_probes.ml_model.detail }}</p>
+      </div>
+
+      <!-- 6. Dịch vụ Báo cáo -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-200 flex items-center">
+            <span class="mr-2">📑</span> Dịch vụ Báo cáo Số
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold 
+            {% if health_probes.report_service.status == 'ready' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+            {% else %}bg-red-950 text-red-400 border border-red-800{% endif %}">
+            {{ "Sẵn sàng" if health_probes.report_service.status == 'ready' else "Lỗi ghi" }}
+          </span>
+        </div>
+        <p class="text-slate-400 leading-normal">{{ health_probes.report_service.detail }}</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+async function cancelJob(runId) {
+  if (!confirm(`Xác nhận gửi tín hiệu dừng an toàn tới phiên điều tra ${runId}?`)) return;
+  try {
+    const res = await fetch(`/api/investigations/${runId}/cancel`, { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    window.location.reload();
+  } catch (e) {
+    alert("Lỗi dừng phiên: " + e.message);
+  }
+}
+</script>
+{% endblock %}

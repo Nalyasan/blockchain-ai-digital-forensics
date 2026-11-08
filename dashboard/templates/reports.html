@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Báo cáo điều tra - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Báo cáo điều tra & Hồ sơ Báo cáo{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Info Banner -->
+  <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div>
+      <h2 class="text-sm font-bold text-slate-100 uppercase tracking-wider text-cyan-400">Hồ sơ Báo cáo & Kho Lưu trữ Hiện vật</h2>
+      <p class="text-xs text-slate-400 mt-1">
+        Mỗi phiên điều tra hoàn tất hoặc dừng đều tự động xuất đủ 5 hiện vật kiểm toán: <code>report.html</code> (tiếng Việt), <code>report.json</code>, <code>evidence_manifest.json</code>, <code>custody_receipts.json</code>, và <code>execution_log.txt</code>.
+      </p>
+    </div>
+    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-cyan-950 text-cyan-400 border border-cyan-800 shrink-0">
+      Tổng cộng: {{ jobs|length }} phiên
+    </span>
+  </div>
+
+  <!-- Reports Table -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <table class="w-full text-left text-xs">
+      <thead>
+        <tr class="bg-slate-800/60 text-slate-400 border-b border-slate-800 font-semibold">
+          <th class="py-3 px-4">Mã phiên (Run ID)</th>
+          <th class="py-3 px-4">Mã vụ việc (Case ID)</th>
+          <th class="py-3 px-4">Loại hình</th>
+          <th class="py-3 px-4">Trạng thái</th>
+          <th class="py-3 px-4">Thời gian khởi tạo</th>
+          <th class="py-3 px-4">Thời lượng</th>
+          <th class="py-3 px-4 text-center">5 Hiện vật Điều tra</th>
+          <th class="py-3 px-4 text-right">Thao tác</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800/60 text-slate-300">
+        {% if jobs %}
+          {% for job in jobs %}
+          <tr class="hover:bg-slate-800/30 transition">
+            <td class="py-3 px-4 font-mono font-bold text-cyan-400 truncate max-w-[160px]" title="{{ job.run_id }}">
+              {{ job.run_id }}
+            </td>
+            <td class="py-3 px-4 text-slate-200 font-semibold">{{ job.case_id }}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-[10px] border border-slate-700">
+                {{ "Thực nghiệm" if job.mode == 'MODE_A' else "Thực tế" }}
+              </span>
+            </td>
+            <td class="py-3 px-4">
+              {% set st = job.status %}
+              {% if st == 'completed' %}
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  {{ job.vietnamese_status }}
+                </span>
+              {% elif st == 'completed_with_warnings' %}
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-950 text-amber-400 border border-amber-800">
+                  {{ job.vietnamese_status }}
+                </span>
+              {% elif st == 'running' %}
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-cyan-950 text-cyan-400 border border-cyan-800 animate-pulse">
+                  {{ job.vietnamese_status }}
+                </span>
+              {% elif st == 'failed' %}
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-red-950 text-red-400 border border-red-800">
+                  {{ job.vietnamese_status }}
+                </span>
+              {% else %}
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                  {{ job.vietnamese_status }}
+                </span>
+              {% endif %}
+            </td>
+            <td class="py-3 px-4 font-mono text-[11px] text-slate-400">
+              {{ job.start_time[:19] if job.start_time else '--' }}
+            </td>
+            <td class="py-3 px-4 font-mono text-slate-400">
+              {{ job.duration_seconds }}s
+            </td>
+            <td class="py-3 px-4">
+              <div class="flex items-center justify-center space-x-2 text-sm">
+                <a href="/api/investigations/{{ job.run_id }}/artifacts/report.html" target="_blank" title="Xem report.html (tiếng Việt)" class="hover:scale-110 transition">📄</a>
+                <a href="/api/investigations/{{ job.run_id }}/artifacts/report.json" target="_blank" title="Tải report.json" class="hover:scale-110 transition">📊</a>
+                <a href="/api/investigations/{{ job.run_id }}/artifacts/evidence_manifest.json" target="_blank" title="Tải evidence_manifest.json" class="hover:scale-110 transition">📜</a>
+                <a href="/api/investigations/{{ job.run_id }}/artifacts/custody_receipts.json" target="_blank" title="Tải custody_receipts.json" class="hover:scale-110 transition">🔗</a>
+                <a href="/api/investigations/{{ job.run_id }}/artifacts/execution_log.txt" target="_blank" title="Xem execution_log.txt" class="hover:scale-110 transition">📝</a>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <a href="/reports/{{ job.run_id }}" class="text-cyan-400 hover:text-cyan-300 font-bold">
+                Chi tiết &rarr;
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="8" class="py-8 text-center text-slate-500">
+              Chưa có dữ liệu điều tra. Bắt đầu bằng cách bấm "Khởi chạy điều tra" ở menu bên trái.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

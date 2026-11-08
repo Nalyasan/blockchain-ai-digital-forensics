@@ -70,12 +70,16 @@ def test_B05_event_rejects_invalid_shape(mutation):
     with pytest.raises((ValueError,RuntimeError)):
         oc.extract_evidence_id_from_receipt(receipt)
 
+import contextlib
+
 @pytest.fixture
 def flow(tmp_path,sample,monkeypatch,request):
-    if getattr(request,'param',31337)!=31337:
-        with sqlite3.connect(sample) as conn:
+    param = getattr(request, 'param', None)
+    if isinstance(param, int) and not isinstance(param, bool) and param != 31337:
+        with contextlib.closing(sqlite3.connect(sample)) as conn:
             for table in ('blocks','transactions','receipts','logs','asset_transfers','collector_runs'):
-                conn.execute('UPDATE '+table+' SET chain_id=?',(request.param,))
+                conn.execute('UPDATE '+table+' SET chain_id=?',(param,))
+            conn.commit()
     pkg=exported(tmp_path,sample);digest=oc.compute_file_sha256(pkg/'manifest.json')
     tx='0x'+'7'*64
     receipt=complete_receipt(CONTRACT,SIGNER,tx,'test-2a',digest)

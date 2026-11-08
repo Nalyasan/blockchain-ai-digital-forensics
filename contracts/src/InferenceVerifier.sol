@@ -7,7 +7,7 @@ import "./interfaces/IInferenceVerifier.sol";
  * @dev Interface for underlying low-level SNARK/KZG circuit verifiers (e.g. EZKL Halo2Verifier).
  */
 interface ICircuitVerifier {
-    function verifyProof(bytes calldata proof, uint256[] calldata instances) external returns (bool);
+    function verifyProof(bytes calldata proof, uint256[] calldata instances) external view returns (bool);
 }
 
 /**
@@ -276,6 +276,15 @@ contract InferenceVerifier is IInferenceVerifier {
             revert InvalidProofLength();
         }
 
+        // 1b. Forensic Immutability & Anti-Replay Guardrails
+        if (recordExists[inferenceRecordId]) {
+            revert RecordAlreadyExists(inferenceRecordId);
+        }
+        bytes32 proofHash = keccak256(proof);
+        if (_verifiedProofHashes[proofHash]) {
+            revert ProofAlreadyVerified(proofHash);
+        }
+
         // 2. Model Commitment Invariance Check
         if (expectedModelCommitment != bytes32(0) && modelCommitment != expectedModelCommitment) {
             if (revertOnFailure) {
@@ -343,7 +352,6 @@ contract InferenceVerifier is IInferenceVerifier {
         }
 
         // 4. Record Storage and Replay Indexing
-        bytes32 proofHash = keccak256(proof);
         uint256 gasUsedFinal = startGas - gasleft();
 
         _records[inferenceRecordId] = VerificationRecord({

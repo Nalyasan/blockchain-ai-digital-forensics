@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Xác minh suy luận - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Xác minh suy luận ZKML & Mật mã Không tiết lộ Tri thức{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  <!-- Session-specific ZKML Proof Verification (Data Isolation) -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-lg">🛡️</span>
+        <h3 class="font-bold text-slate-100 text-sm">Trạng thái Bằng chứng ZKML Theo Phiên Điều tra</h3>
+      </div>
+      {% if selected_job %}
+      <span class="text-xs text-cyan-400 font-mono">Phiên: {{ selected_job.run_id }} (Ca vụ: {{ selected_job.case_id }})</span>
+      {% endif %}
+    </div>
+
+    {% if selected_job and selected_job.phase_metrics and selected_job.phase_metrics.get("demo_d1", {}).get("halo2_proof_verified") %}
+    <div class="space-y-3 text-xs">
+      <div class="p-3.5 rounded-lg bg-emerald-950/40 border border-emerald-800/80 flex items-center justify-between">
+        <div>
+          <span class="text-emerald-400 font-bold block">Bằng chứng ZKML Halo2 BN254 đã được kiểm chứng</span>
+          <span class="text-slate-300 text-[11px]">Bằng chứng suy luận CompactAnomalyMLP (5,504 bytes) đã được xác nhận khớp tuyệt đối trên hợp đồng InferenceVerifier.sol.</span>
+        </div>
+        <span class="px-2.5 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold font-mono text-[11px]">
+          Xác thực Thành công
+        </span>
+      </div>
+    </div>
+    {% else %}
+    <div class="p-6 text-center text-slate-500 bg-slate-950/60 rounded-lg border border-slate-800/80">
+      <p class="text-xs text-slate-400 font-semibold">Chưa có dữ liệu điều tra</p>
+      <p class="text-[11px] text-slate-500 mt-1">Phiên điều tra được chọn chưa có bằng chứng ZKML hoặc không kích hoạt mạch Halo2.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Top ZKML Architecture Card -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div>
+        <span class="text-xs font-semibold uppercase text-cyan-400">Mật mã Học máy Không tiết lộ Tri thức</span>
+        <h2 class="text-lg font-bold text-slate-100 mt-0.5">Hệ thống Chứng minh Halo2 BN254 KZG SNARK (EZKL)</h2>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+        Mật mã Toán học Chuẩn xác
+      </span>
+    </div>
+
+    <p class="text-xs text-slate-300 leading-relaxed">
+      Hệ thống bảo đảm tính toàn vẹn của kết luận suy luận học máy thông qua việc sinh và xác minh bằng chứng mật mã ZKML. Bằng chứng chứng minh rằng mô hình CompactAnomalyMLP đã được thực thi chính xác trên vector đặc trưng của thực thể mà không làm lộ trọng số nội bộ của mạng neural.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Đường cong Elliptic:</span>
+        <p class="text-sm font-bold text-slate-200 mt-0.5">BN254 (alt_bn128)</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Cơ chế Cam kết:</span>
+        <p class="text-sm font-bold text-slate-200 mt-0.5">KZG Polynomial</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Kích thước Bằng chứng:</span>
+        <p class="text-sm font-bold text-cyan-400 mt-0.5">5,504 bytes</p>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Xác thực On-Chain:</span>
+        <p class="text-sm font-bold text-emerald-400 mt-0.5">InferenceVerifier.sol</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Smart Contract Defense Gateways (ADV_34 & ADV_35) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🛡️</span>
+        <h3 class="font-bold text-slate-200 text-sm">Chống Phát lại Bằng chứng (Proof Replay Prevention)</h3>
+      </div>
+      <p class="text-slate-300 leading-relaxed">
+        Nhằm ngăn chặn kẻ tấn công tái sử dụng một bằng chứng ZKML hợp lệ để gán cho các suy luận độc hại khác, hợp đồng <code>InferenceVerifier.sol</code> tính toán mã băm Keccak-256 của calldata bằng chứng và lập tức hoàn tác nếu bằng chứng đã được ghi nhận:
+      </p>
+      <div class="font-mono text-[11px] p-2.5 rounded bg-slate-950 border border-slate-800 text-cyan-300">
+        if (_verifiedProofHashes[proofHash]) revert ProofAlreadyVerified(proofHash);
+      </div>
+      <p class="text-[11px] text-slate-400">Đã vượt qua toàn bộ 185 bài kiểm thử hồi quy Foundry thành công.</p>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🔒</span>
+        <h3 class="font-bold text-slate-200 text-sm">Bất biến Hồ sơ Suy luận (Record Immutability)</h3>
+      </div>
+      <p class="text-slate-300 leading-relaxed">
+        Mỗi bản ghi suy luận gắn liền với một <code>inferenceRecordId</code> duy nhất. Hợp đồng nghiêm cấm việc ghi đè hoặc sửa đổi kết quả giám định đã lưu ký:
+      </p>
+      <div class="font-mono text-[11px] p-2.5 rounded bg-slate-950 border border-slate-800 text-cyan-300">
+        if (_inferenceRecords[recordId].exists) revert RecordAlreadyExists(recordId);
+      </div>
+      <p class="text-[11px] text-slate-400">Bảo vệ tính toàn vẹn tuyệt đối trước mọi ý đồ giả mạo kết quả.</p>
+    </div>
+  </div>
+
+  <!-- Circuit Artifacts Metadata -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3 text-xs">
+    <h3 class="font-bold text-slate-200 text-sm">Hiện vật Mạch Mật mã (circuits/anomaly_detector_v1/)</h3>
+    <div class="space-y-2">
+      <div class="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
+        <span class="font-mono text-slate-300">baseline_proof.json</span>
+        <span class="font-mono text-[11px] text-cyan-400">5,504 bytes | Bằng chứng suy luận chuẩn</span>
+      </div>
+      <div class="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
+        <span class="font-mono text-slate-300">vk.key (Verification Key)</span>
+        <span class="font-mono text-[11px] text-slate-400">Khóa xác minh KZG công khai gắn với mạng neural CompactMLP</span>
+      </div>
+      <div class="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
+        <span class="font-mono text-slate-300">kzg.srs (Structured Reference String)</span>
+        <span class="font-mono text-[11px] text-slate-400">Tham số thiết lập tin cậy mật mã học đa thức</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

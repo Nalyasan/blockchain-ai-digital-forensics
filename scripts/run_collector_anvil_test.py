@@ -13,14 +13,15 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
+from forensics.paths import PROJECT_ROOT, resolve_foundry_binary
+
 ANVIL_PORT = 8547
 ANVIL_URL = f"http://127.0.0.1:{ANVIL_PORT}"
-DB_PATH = "results/p1/anvil_forensics.db"
-LOG_FILE = "results/p1/step_f_anvil_verification.log"
-FOUNDRY_DIR = os.path.abspath("tools/foundry")
-ANVIL_EXE = os.path.join(FOUNDRY_DIR, "anvil.exe")
-CAST_EXE = os.path.join(FOUNDRY_DIR, "cast.exe")
-FORGE_EXE = os.path.join(FOUNDRY_DIR, "forge.exe")
+DB_PATH = str(PROJECT_ROOT / "results" / "p1" / "anvil_forensics.db")
+LOG_FILE = str(PROJECT_ROOT / "results" / "p1" / "step_f_anvil_verification.log")
+ANVIL_EXE = resolve_foundry_binary("anvil")
+CAST_EXE = resolve_foundry_binary("cast")
+FORGE_EXE = resolve_foundry_binary("forge")
 
 # Tài khoản mặc định 0, 1, 2 trên Anvil
 ACCOUNT_0 = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"

@@ -34,3 +34,20 @@ contracts/cache/
 # Distribution & Temporary Run Dirs
 dist/
 tmp_pytest_run/
+reports/demo/
+reports/demorun/
+reports/full_run/
+reports/investigations/
+reports/video_capture/
+reports/screenshots/
+reports/ACCEPTANCE_REPORT_VI.html
+TEST_READY.md
+docs/ACADEMIC_EDITION_PRESERVATION_PLAN.md
+docs/PRODUCT_TRANSITION_ARCHITECTURE.md
+*.docx
+tests/m1_scan_*.json
+scripts/demo_d2_host_fixed.py
+scripts/diag.py
+scripts/eval_ml_full.py
+scripts/evaluate_ml_5265.py
+scripts/capture_screenshots.py

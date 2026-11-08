@@ -18,15 +18,24 @@ import os
 import json
 import argparse
 import logging
+from pathlib import Path
+
 from forensics.evidence import export_evidence, verify_manifest, validate_case_id
 import forensics.onchain as onchain
 from forensics.evidence_identity import sanitize_log_text
+from forensics.paths import get_database_path, get_rpc_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("forensics.cli")
 
 def _safe_sanitize(text: str, forbidden: list[str] | None = None) -> str:
     return sanitize_log_text(str(text), forbidden or [])
+
+def _resolve_cli_db(args) -> str:
+    """Resolve database path from CLI args or environment, dynamically anchored to repo root."""
+    if getattr(args, "db", None):
+        return str(Path(args.db).resolve())
+    return str(get_database_path())
 
 def cli_export_evidence(args):
     """Lệnh xuất gói chứng cứ tái lập."""
@@ -77,7 +86,7 @@ def cli_verify_manifest(args):
 def cli_verify_local(args):
     """Kiểm tra toàn vẹn SQLite cục bộ (SHA-256 raw + parentHash + gaps)."""
     import collector
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = _resolve_cli_db(args)
     if not os.path.exists(db_file):
         print(_safe_sanitize(f"LỖI: Database không tồn tại: {db_file}"), file=sys.stderr)
         return 1
@@ -91,14 +100,14 @@ def cli_verify_local(args):
 def cli_verify_rpc(args):
     """Bọc lại lệnh verify-rpc từ collector."""
     import collector
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = _resolve_cli_db(args)
     collector.DB_PATH = db_file
     return collector.cmd_verify_rpc(args)
 
 def cli_verify_derived(args):
     """Bọc lại lệnh verify-derived từ collector."""
     import collector
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = _resolve_cli_db(args)
     collector.DB_PATH = db_file
     return collector.cmd_verify_derived(args)
 
@@ -176,8 +185,8 @@ def cli_verify_onchain(args):
 def cli_reconcile(args):
     """Đối soát trạng thái operation on-chain ở chế độ read-only."""
     from forensics import onchain_store as ops
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
-    rpc_url = args.rpc_url or os.environ.get("ANCHOR_RPC_URL", "http://127.0.0.1:8545")
+    db_file = _resolve_cli_db(args)
+    rpc_url = args.rpc_url or get_rpc_url()
     try:
         res = ops.reconcile_operation(
             db_path=db_file,
@@ -193,7 +202,7 @@ def cli_reconcile(args):
 
 def cli_migrate_db(args):
     """Lệnh migration chủ động cho SQLite lên Group 3 schema."""
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = _resolve_cli_db(args)
     if not os.path.exists(db_file):
         print(f"LỖI: Database không tồn tại: {db_file}", file=sys.stderr)
         return 1
@@ -215,7 +224,7 @@ def cli_analyze(args):
         from forensics.rules.anchored import cli_analyze_p3
         return cli_analyze_p3(args)
     from forensics.rules.engine import RuleEngine
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = _resolve_cli_db(args)
     if not os.path.exists(db_file):
         print(_safe_sanitize(f"LỖI analyze: Database không tồn tại: {db_file}"), file=sys.stderr)
         return 1
@@ -276,7 +285,7 @@ def cli_investigate(args):
     from forensics.ai.investigator import ForensicInvestigator
     from forensics.ai.provider import get_ai_config
 
-    db_file = args.db or os.environ.get("DB_PATH", "data/forensics.db")
+    db_file = _resolve_cli_db(args)
     if not os.path.exists(db_file):
         print(_safe_sanitize(f"LỖI investigate: Database không tồn tại: {db_file}"), file=sys.stderr)
         return 1

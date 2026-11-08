@@ -41,6 +41,31 @@ from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.providers.google import GoogleProvider
 
+try:
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+    from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
+except ImportError:
+    OpenAIChatModel = None  # type: ignore[assignment, misc]
+    OpenAIProvider = None  # type: ignore[assignment, misc]
+    OpenAICompatibleProvider = None  # type: ignore[assignment, misc]
+
+try:
+    from pydantic_ai.models.anthropic import AnthropicModel
+    from pydantic_ai.providers.anthropic import AnthropicProvider
+except ImportError:
+    AnthropicModel = None  # type: ignore[assignment, misc]
+    AnthropicProvider = None  # type: ignore[assignment, misc]
+
+try:
+    from pydantic_ai.models.ollama import OllamaModel
+    from pydantic_ai.providers.ollama import OllamaProvider
+except ImportError:
+    OllamaModel = None  # type: ignore[assignment, misc]
+    OllamaProvider = None  # type: ignore[assignment, misc]
+
+OpenAIModel = OpenAIChatModel
+
 logger = logging.getLogger("forensics.ai.provider")
 
 __all__ = [
@@ -57,12 +82,19 @@ __all__ = [
     "create_function_model",
     "create_gemini_model",
     "create_gemini_provider",
+    "create_anthropic_model",
+    "create_anthropic_provider",
     "create_model",
+    "create_ollama_model",
+    "create_ollama_provider",
+    "create_openai_model",
+    "create_openai_provider",
     "create_test_model",
     "get_ai_config",
     "get_usage_limits",
     "mask_api_key",
     "resolve_api_key",
+    "resolve_ollama_base_url",
 ]
 
 DEFAULT_PROVIDER: str = "gemini"
@@ -133,6 +165,31 @@ def mask_api_key(key: Optional[str]) -> str:
     return f"{cleaned[:4]}...{cleaned[-4:]}"
 
 
+def resolve_ollama_base_url(override_url: Optional[str] = None) -> str:
+    """Resolves the Ollama API base URL with standard fallback order.
+
+    Precedence order:
+    1. override_url parameter (if non-empty)
+    2. OLLAMA_BASE_URL environment variable
+    3. OLLAMA_HOST environment variable (auto-formatted with http:// and /v1)
+    4. Default: http://127.0.0.1:11434/v1
+    """
+    if override_url and override_url.strip():
+        raw = override_url.strip()
+    elif os.getenv("OLLAMA_BASE_URL") and os.getenv("OLLAMA_BASE_URL", "").strip():
+        raw = os.getenv("OLLAMA_BASE_URL", "").strip()
+    elif os.getenv("OLLAMA_HOST") and os.getenv("OLLAMA_HOST", "").strip():
+        raw = os.getenv("OLLAMA_HOST", "").strip()
+    else:
+        raw = "127.0.0.1:11434"
+
+    if not raw.startswith(("http://", "https://")):
+        raw = f"http://{raw}"
+    if not raw.endswith("/v1"):
+        raw = f"{raw.rstrip('/')}/v1"
+    return raw
+
+
 # Configuration Schema
 
 
@@ -196,7 +253,7 @@ class AIConfig(BaseModel):
     def safe_summary(self) -> Dict[str, Any]:
         """Returns non-sensitive configuration dictionary for logs and reports."""
         api_key, key_src = resolve_api_key()
-        return {
+        summary: Dict[str, Any] = {
             "provider": self.provider,
             "model_name": self.model_name,
             "max_tool_steps": self.max_tool_steps,
@@ -206,6 +263,9 @@ class AIConfig(BaseModel):
             "api_key_source": key_src,
             "api_key_masked": mask_api_key(api_key),
         }
+        if self.provider.strip().lower() in ("ollama", "local", "local_ollama"):
+            summary["ollama_base_url"] = resolve_ollama_base_url()
+        return summary
 
 
 def get_ai_config(**overrides: Any) -> AIConfig:
@@ -318,6 +378,100 @@ def create_function_model(
     return FunctionModel(function=function, model_name=model_name, **kwargs)
 
 
+def create_ollama_provider(
+    base_url: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Creates an authenticated/configured OllamaProvider for local or remote Ollama.
+
+    Args:
+        base_url: Optional explicit base URL (e.g. http://192.168.99.1:11434/v1).
+        **kwargs: Extra parameters passed to OllamaProvider.
+    """
+    if OllamaProvider is None:
+        raise InvalidProviderError("pydantic_ai.providers.ollama.OllamaProvider is not available.")
+    effective_url = resolve_ollama_base_url(base_url)
+    logger.debug("Instantiating OllamaProvider with base_url: %s", effective_url)
+    return OllamaProvider(base_url=effective_url, **kwargs)
+
+
+def create_ollama_model(
+    model_name: Optional[str] = None,
+    base_url: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Creates an OllamaModel targeting a local or remote Ollama instance (default: qwen3:8b).
+
+    Args:
+        model_name: Model identifier (defaults to qwen3:8b).
+        base_url: Optional explicit base URL.
+        **kwargs: Extra parameters passed to OllamaModel.
+    """
+    if OllamaModel is None:
+        raise InvalidProviderError("pydantic_ai.models.ollama.OllamaModel is not available.")
+    name = model_name or "qwen3:8b"
+    provider = create_ollama_provider(base_url=base_url)
+    effective_url = resolve_ollama_base_url(base_url)
+    logger.info("Initializing Ollama model '%s' via %s", name, effective_url)
+    return OllamaModel(name, provider=provider, **kwargs)
+
+
+def create_openai_provider(
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Creates an authenticated OpenAIProvider."""
+    if OpenAIProvider is None:
+        raise InvalidProviderError("pydantic_ai.providers.openai.OpenAIProvider is not available.")
+    key = api_key or os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise MissingAPIKeyError("OpenAI API key is required. Set OPENAI_API_KEY in environment or pass explicitly.")
+    if base_url:
+        return OpenAIProvider(api_key=key, base_url=base_url, **kwargs)
+    return OpenAIProvider(api_key=key, **kwargs)
+
+
+def create_openai_model(
+    model_name: Optional[str] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Creates an OpenAIChatModel targeting OpenAI API."""
+    if OpenAIChatModel is None:
+        raise InvalidProviderError("pydantic_ai.models.openai.OpenAIChatModel is not available.")
+    name = model_name or "gpt-4o"
+    provider = create_openai_provider(api_key=api_key, base_url=base_url)
+    return OpenAIChatModel(name, provider=provider, **kwargs)
+
+
+def create_anthropic_provider(
+    api_key: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Creates an authenticated AnthropicProvider."""
+    if AnthropicProvider is None:
+        raise InvalidProviderError("pydantic_ai.providers.anthropic.AnthropicProvider is not available.")
+    key = api_key or os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        raise MissingAPIKeyError("Anthropic API key is required. Set ANTHROPIC_API_KEY in environment or pass explicitly.")
+    return AnthropicProvider(api_key=key, **kwargs)
+
+
+def create_anthropic_model(
+    model_name: Optional[str] = None,
+    api_key: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Creates an AnthropicModel targeting Anthropic Claude API."""
+    if AnthropicModel is None:
+        raise InvalidProviderError("pydantic_ai.models.anthropic.AnthropicModel is not available.")
+    name = model_name or "claude-3-5-sonnet-20241022"
+    provider = create_anthropic_provider(api_key=api_key)
+    return AnthropicModel(name, provider=provider, **kwargs)
+
+
 def create_model(
     config: Optional[AIConfig] = None,
     override_api_key: Optional[str] = None,
@@ -413,7 +567,34 @@ def create_model(
         fn = kwargs.pop("function", None)
         return create_function_model(function=fn, **kwargs)
 
+    if provider_name in ("ollama", "local", "local_ollama"):
+        base_url = kwargs.pop("base_url", None)
+        return create_ollama_model(model_name=cfg.model_name, base_url=base_url, **kwargs)
+
+    if provider_name in ("openai", "chatgpt", "gpt"):
+        return create_openai_model(
+            model_name=cfg.model_name if cfg.model_name != DEFAULT_MODEL else "gpt-4o",
+            api_key=override_api_key,
+            **kwargs,
+        )
+
+    if provider_name in ("anthropic", "claude"):
+        return create_anthropic_model(
+            model_name=cfg.model_name if cfg.model_name != DEFAULT_MODEL else "claude-3-5-sonnet-20241022",
+            api_key=override_api_key,
+            **kwargs,
+        )
+
+    if provider_name in ("custom", "openai_compatible", "openai-compatible"):
+        base_url = kwargs.pop("base_url", "http://127.0.0.1:8080/v1")
+        return create_openai_model(
+            model_name=cfg.model_name if cfg.model_name != DEFAULT_MODEL else "custom-model",
+            api_key=override_api_key or "custom-key",
+            base_url=base_url,
+            **kwargs,
+        )
+
     raise InvalidProviderError(
         f"Unsupported AI provider: '{cfg.provider}'. "
-        f"Supported providers: 'gemini', 'google', 'test', 'offline', 'none', 'function'."
+        f"Supported providers: 'gemini', 'google', 'ollama', 'openai', 'anthropic', 'custom', 'test', 'offline', 'none', 'function'."
     )

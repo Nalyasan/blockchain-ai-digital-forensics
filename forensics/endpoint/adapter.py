@@ -23,6 +23,7 @@ from forensics.endpoint.manifest import generate_acquisition_manifest
 from forensics.endpoint.schemas import AcquisitionResult
 from forensics.endpoint.static_logs import parse_evtx_log, parse_jsonl_log
 from forensics.endpoint.store import EndpointEvidenceStore
+from forensics.paths import get_data_dir
 
 logger = logging.getLogger("forensics.endpoint.adapter")
 
@@ -71,7 +72,7 @@ class EvidenceSourceAdapter(ABC):
     ):
         self.case_id = case_id
         self.operator_did = operator_did
-        self.vault_dir = Path(vault_dir or "data/evidence_vault").resolve()
+        self.vault_dir = Path(vault_dir).resolve() if vault_dir else (get_data_dir() / "evidence_vault")
         self.vault_dir.mkdir(parents=True, exist_ok=True)
         self.evidence_store = evidence_store or EndpointEvidenceStore()
 

@@ -60,6 +60,7 @@ interface IInferenceVerifier {
     error ModelCommitmentMismatch(bytes32 expected, bytes32 actual);
     error CircuitVerificationFailed(string reason);
     error ProofAlreadyVerified(bytes32 proofHash);
+    error RecordAlreadyExists(string inferenceRecordId);
     error Unauthorized();
 
     // --- Primary Verification Entrypoint (DISPATCH Mandate) ---

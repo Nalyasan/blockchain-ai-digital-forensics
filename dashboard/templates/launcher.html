@@ -1,0 +1,867 @@
+{% extends "base.html" %}
+
+{% block title %}Khởi chạy điều tra - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Khởi chạy điều tra - Blockchain Ai Aigital Forensics{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Continue Case Banner (if continuing existing case) -->
+  {% if continue_case %}
+  <div class="p-4 rounded-xl bg-cyan-950/70 border border-cyan-800 text-cyan-200 text-xs flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <span class="text-base">ℹ️</span>
+      <span>Đang tiếp tục điều tra ca vụ: <strong class="text-white font-mono">{{ continue_case }}</strong>. Phiên điều tra mới sẽ được liên kết vào vụ việc này với Run ID độc lập.</span>
+    </div>
+    <a href="/launcher" class="text-xs text-cyan-400 underline hover:text-cyan-300">Tạo ca vụ mới &rarr;</a>
+  </div>
+  {% endif %}
+
+  <!-- Tab lựa chọn phương thức điều tra -->
+  <div class="flex items-center space-x-2 p-1 bg-slate-900 border border-slate-800 rounded-xl">
+    <button type="button" id="tab-mode-b" onclick="switchMode('MODE_B')" class="flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition {% if action_mode != 'ingest' and action_mode != 'import' and action_mode != 'rpc' and action_mode != 'live_rpc' and initial_mode != 'MODE_A' %}bg-cyan-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+      Điều tra thực tế
+    </button>
+    <button type="button" id="tab-mode-ingest" onclick="switchMode('MODE_INGEST')" class="flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition {% if action_mode == 'ingest' or action_mode == 'import' %}bg-emerald-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+      📥 Nhập tệp chứng cứ
+    </button>
+    <button type="button" id="tab-mode-rpc" onclick="switchMode('MODE_RPC')" class="flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition {% if action_mode == 'rpc' or action_mode == 'live_rpc' %}bg-indigo-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+      🌐 Điều tra trực tiếp (Live RPC)
+    </button>
+    <button type="button" id="tab-mode-a" onclick="switchMode('MODE_A')" class="flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition {% if initial_mode == 'MODE_A' and action_mode != 'ingest' and action_mode != 'import' and action_mode != 'rpc' and action_mode != 'live_rpc' %}bg-cyan-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+      Kiểm thử hệ thống trong khu vực quản trị
+    </button>
+  </div>
+
+  <!-- Launch Form -->
+  <form id="launcher-form" onsubmit="handleLaunch(event)" class="{% if action_mode == 'ingest' or action_mode == 'import' or action_mode == 'rpc' or action_mode == 'live_rpc' %}hidden{% endif %} bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-6">
+    <input type="hidden" id="selected-mode" name="mode" value="{{ initial_mode }}">
+    <input type="hidden" id="continue-case-flag" name="continue_case" value="{{ 'true' if continue_case else 'false' }}">
+
+    <!-- Admin & Test Scenario Selection (Hidden for Real Investigation) -->
+    <div id="section-mode-a" class="{% if initial_mode != 'MODE_A' %}hidden{% endif %} space-y-4 p-4 rounded-lg bg-slate-950/60 border border-slate-800">
+      <h3 class="text-sm font-bold text-cyan-400 flex items-center">
+        <span class="mr-2">🧪</span> Lựa chọn Kịch bản Tái hiện Thực nghiệm
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label class="p-3 rounded-lg border border-slate-700 bg-slate-900 cursor-pointer hover:border-cyan-500 transition block">
+          <input type="radio" name="demo_target" value="D1" checked class="text-cyan-600 focus:ring-cyan-500">
+          <div class="mt-2 font-bold text-sm text-slate-100">Kịch bản EVM Replay</div>
+          <div class="text-xs text-slate-400 mt-1">Tái hiện 8 giai đoạn vụ Euler Finance DAI, xác minh Halo2 ZKML & Anvil CoC.</div>
+        </label>
+        <label class="p-3 rounded-lg border border-slate-700 bg-slate-900 cursor-pointer hover:border-cyan-500 transition block">
+          <input type="radio" name="demo_target" value="D2" class="text-cyan-600 focus:ring-cyan-500">
+          <div class="mt-2 font-bold text-sm text-slate-100">Kịch bản Khám nghiệm trạm cuối</div>
+          <div class="text-xs text-slate-400 mt-1">Khám nghiệm nhật ký trạm cuối ISO/IEC 27037 & triage logs.</div>
+        </label>
+        <label class="p-3 rounded-lg border border-slate-700 bg-slate-900 cursor-pointer hover:border-cyan-500 transition block">
+          <input type="radio" name="demo_target" value="D3" class="text-cyan-600 focus:ring-cyan-500">
+          <div class="mt-2 font-bold text-sm text-slate-100">Kịch bản Tấn công đối kháng</div>
+          <div class="text-xs text-slate-400 mt-1">Tái hiện 35 véc-tơ tấn công đối kháng qua 6 cổng phòng thủ an toàn.</div>
+        </label>
+      </div>
+    </div>
+
+    <!-- General Case Parameters (Initially Blank Case ID) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+          Mã vụ việc (Case ID) <span class="text-red-400">*</span>
+        </label>
+        <input type="text" id="case_id" name="case_id" value="{{ continue_case or '' }}"
+               placeholder="Nhập mã vụ việc (ví dụ: case-2026-001)" required
+               pattern="^[A-Za-z0-9_-]{1,64}$"
+               title="Mã vụ việc chỉ gồm chữ cái, chữ số, gạch nối (-) và gạch dưới (_), tối đa 64 ký tự. Không chứa dấu chấm hoặc đường dẫn."
+               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-cyan-500">
+        <span class="text-[11px] text-slate-500">Bắt buộc để trống ban đầu khi tạo mới. Mỗi vụ việc có thể có nhiều phiên điều tra độc lập.</span>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Nguồn Cơ sở dữ liệu Chứng cứ</label>
+        <select id="db_path" name="db_path" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-cyan-500">
+          <option value="data/real_p4.db" selected>data/real_p4.db (Vụ Euler Finance & Curve alETH - Read-Only)</option>
+          <option value="data/forensics.db">data/forensics.db (Mẫu chuẩn kiểm thử tích hợp)</option>
+          <option value="data/benchmark_p6.db">data/benchmark_p6.db (Tình báo 100k+ bản ghi)</option>
+          <option value="data/endpoint_evidence.db">data/endpoint_evidence.db (Khám nghiệm trạm cuối ISO/IEC 27037)</option>
+        </select>
+        <span class="text-[11px] text-slate-500">Mở ở chế độ chỉ đọc (read-only) để bảo toàn tuyệt đối 100% SHA-256.</span>
+      </div>
+    </div>
+
+    <!-- Cấu hình Phân tích AI -->
+    <div class="p-4 rounded-lg bg-slate-950/60 border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-400">Cấu hình Phân tích AI</h3>
+        <span class="text-[11px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+          Bảo đảm Air-Gap cục bộ
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Nhà cung cấp AI (Provider)</label>
+          <select id="ai_provider" name="ai_provider" onchange="handleProviderChange(this.value)"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+            <option value="ollama" selected>Ollama Cục bộ (Local Air-Gapped - Khuyên dùng)</option>
+            <option value="openai">OpenAI API (Cloud)</option>
+            <option value="anthropic">Anthropic Claude API (Cloud)</option>
+            <option value="google">Google Gemini API (Cloud)</option>
+            <option value="custom">Custom Provider (OpenAI Compatible Endpoint)</option>
+            <option value="deterministic_fallback">Động cơ Quy tắc Tất định (Rule-Based Fallback)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Tên Mô hình (Model Identifier)</label>
+          <input type="text" id="ai_model" name="ai_model" value="qwen3:8b"
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-cyan-500">
+        </div>
+      </div>
+
+      <!-- Cloud Credentials & Consent -->
+      <div id="cloud-credentials-box" class="space-y-3 pt-2">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Khóa API (Chỉ lưu trong phiên, không ghi đĩa)</label>
+          <input type="password" id="ai_api_key" name="ai_api_key" placeholder="sk-... (để trống nếu sử dụng Ollama hoặc biến môi trường)"
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div class="flex items-start space-x-2">
+          <input type="checkbox" id="ai_consent" name="ai_consent" class="mt-0.5 rounded text-cyan-600 focus:ring-cyan-500">
+          <label for="ai_consent" class="text-xs text-slate-400">
+            <strong class="text-slate-200">Xác nhận Phê duyệt Truyền tải Cloud (Session Consent):</strong> Tôi đồng ý gửi dữ liệu tóm lược ca vụ tới nhà cung cấp Cloud AI được chọn. (Dữ liệu chứng cứ thô và mã khóa riêng tư luôn được lọc bỏ qua Air-Gap Guardrail).
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- On-chain Chain of Custody Option -->
+    <div class="p-4 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between">
+      <div>
+        <div class="text-sm font-semibold text-slate-200">Bảo quản chứng cứ trên chuỗi (On-Chain Chain of Custody)</div>
+        <div class="text-xs text-slate-500 mt-0.5">Mặc định ở chế độ chỉ đọc an toàn. Bật tùy chọn này để gửi giao dịch neo mã băm chứng cứ lên Anvil cục bộ (Chain ID 31337).</div>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+        <input type="checkbox" id="enable_onchain_write" name="enable_onchain_write" class="sr-only peer">
+        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+      </label>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="launcher-error" class="hidden p-3 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-200"></div>
+
+    <!-- Submit Button -->
+    <div class="flex justify-end pt-2">
+      <button type="submit" id="btn-submit" class="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-lg shadow-lg shadow-cyan-950 flex items-center space-x-2 transition">
+        <span>Bắt đầu Điều tra</span>
+        <span>&rarr;</span>
+      </button>
+    </div>
+  </form>
+
+  <!-- Evidence Ingestion Card -->
+  <div id="section-mode-ingest" class="{% if action_mode != 'ingest' and action_mode != 'import' %}hidden{% endif %} bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-6">
+    <div class="border-b border-slate-800 pb-4">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">📥</span>
+        <h2 class="text-base font-bold text-slate-100">Quy trình Nhập Tệp Chứng cứ & Phân tích 8 Giai đoạn</h2>
+      </div>
+      <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+        Tiếp nhận, kiểm tra tính toàn vẹn (SHA-256), chuẩn hóa và phân tích chuyên sâu các tệp chứng cứ chuỗi khối hoặc nhật ký trạm cuối. Dữ liệu được lưu trữ cách ly hoàn toàn theo vụ việc trong kho chứng cứ (Case Vault).
+      </p>
+    </div>
+
+    <!-- Case ID & Source Type -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+          Mã vụ việc (Case ID) <span class="text-red-400">*</span>
+        </label>
+        <input type="text" id="ingest-case-id" name="case_id" value="{{ continue_case or '' }}"
+               placeholder="Nhập mã vụ việc (ví dụ: case-2026-001)" required
+               pattern="^[A-Za-z0-9_-]{1,64}$"
+               title="Mã vụ việc chỉ gồm chữ cái, chữ số, gạch nối (-) và gạch dưới (_), tối đa 64 ký tự. Không chứa dấu chấm hoặc đường dẫn."
+               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-emerald-500">
+        <span class="text-[11px] text-slate-500">Mã vụ việc cách ly dữ liệu. Có thể nhập nhiều tệp vào cùng một vụ việc.</span>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Loại nguồn chứng cứ (Adapter)</label>
+        <select id="ingest-source-type" name="source_type" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+          <option value="auto" selected>Tự động nhận diện định dạng (Khuyên dùng)</option>
+          <option value="blockchain_tx_json">Blockchain Transactions (JSON / JSONL)</option>
+          <option value="blockchain_tx_csv">CSV Giao dịch Chuỗi khối</option>
+          <option value="sqlite_db">Cơ sở dữ liệu SQLite (Read-Only)</option>
+          <option value="authorized_host_logs">Nhật ký Trạm cuối / Sysmon</option>
+        </select>
+        <span class="text-[11px] text-slate-500">Bộ chuyển đổi sẽ tự kiểm tra cấu trúc tương thích.</span>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <div>
+      <label class="block text-xs font-semibold text-slate-300 mb-1.5">Mô tả tệp chứng cứ (Tùy chọn)</label>
+      <input type="text" id="ingest-description" name="description"
+             placeholder="Ví dụ: Xuất dữ liệu giao dịch ví nghi vấn từ ngày 01 đến 15"
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+    </div>
+
+    <!-- File Dropzone -->
+    <div>
+      <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+        Chọn tệp chứng cứ <span class="text-red-400">*</span>
+      </label>
+      <div id="dropzone" onclick="document.getElementById('ingest-file').click()"
+           class="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-8 text-center cursor-pointer bg-slate-950/60 hover:bg-slate-950 transition flex flex-col items-center justify-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400 text-2xl">
+          📁
+        </div>
+        <div>
+          <span class="text-sm font-bold text-slate-200">Nhấp để duyệt tệp hoặc kéo thả tệp vào đây</span>
+          <p class="text-xs text-slate-400 mt-1">Hỗ trợ: .json, .jsonl, .csv, .db, .sqlite, .sqlite3, .log, .txt (tối đa 128 MB)</p>
+        </div>
+        <div id="selected-file-name" class="hidden text-xs font-mono text-emerald-400 bg-emerald-950/80 px-3 py-1.5 rounded-lg border border-emerald-800"></div>
+      </div>
+      <input type="file" id="ingest-file" name="file" onchange="handleFileSelected(this)" class="hidden" accept=".json,.jsonl,.csv,.db,.sqlite,.sqlite3,.log,.txt">
+    </div>
+
+    <!-- Security & Canonical Invariance Notice -->
+    <div class="p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-slate-400 flex items-start space-x-2.5">
+      <span class="text-emerald-400 text-sm mt-0.5">🛡️</span>
+      <div class="space-y-0.5">
+        <span class="font-bold text-slate-200">Chính sách Bảo toàn Toàn vẹn & An toàn Hệ thống:</span>
+        <p class="text-[11px] leading-relaxed">
+          Tệp tải lên được mở ở chế độ chỉ đọc, không thực thi mã lệnh, kiểm tra nghiêm ngặt chống path traversal và symlink escape. Bảo toàn nguyên vẹn 100% SHA-256 các cơ sở dữ liệu gốc.
+        </p>
+      </div>
+    </div>
+
+    <!-- Ingestion Error Box -->
+    <div id="ingest-error" class="hidden p-4 rounded-lg bg-red-950/80 border border-red-800 text-red-200 text-xs font-mono"></div>
+
+    <!-- Ingestion Success Box -->
+    <div id="ingest-success" class="hidden p-5 rounded-lg bg-emerald-950/80 border border-emerald-800 space-y-3">
+      <div class="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
+        <span>✅</span>
+        <span>Nhập chứng cứ thành công & đã hoàn tất phân tích 8 giai đoạn!</span>
+      </div>
+      <div id="ingest-result-details" class="text-xs text-slate-300 space-y-1 font-mono"></div>
+      <div class="flex items-center space-x-3 pt-2">
+        <a id="link-view-report" href="#" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow transition">
+          Mở Báo cáo Phiên &rarr;
+        </a>
+        <a id="link-view-evidence" href="#" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700 transition">
+          Xem Kho Chứng cứ &rarr;
+        </a>
+      </div>
+    </div>
+
+    <!-- Submit Button -->
+    <div class="flex justify-end pt-2">
+      <button type="button" id="btn-ingest-submit" onclick="handleIngestSubmit(event)" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg shadow-lg shadow-emerald-950 flex items-center space-x-2 transition">
+        <span>Tải lên & Khởi chạy Phân tích 8 Giai đoạn</span>
+        <span>&rarr;</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Live RPC Investigation Card -->
+  <div id="section-mode-rpc" class="{% if action_mode != 'rpc' and action_mode != 'live_rpc' %}hidden{% endif %} bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-6">
+    <div class="border-b border-slate-800 pb-4">
+      <div class="flex items-center space-x-2">
+        <span class="text-xl">🌐</span>
+        <h2 class="text-base font-bold text-slate-100">Điều tra Chuỗi khối Trực tiếp (Live RPC) & Chống SSRF</h2>
+      </div>
+      <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+        Thu thập dữ liệu giao dịch trực tiếp từ mạng chuỗi khối qua RPC chỉ đọc. Hệ thống kích hoạt chốt chặn Anti-SSRF nghiêm ngặt, rà soát giới hạn giao thức và bảo đảm tính pháp lý của chứng cứ số.
+      </p>
+    </div>
+
+    <!-- Case ID & Network Selection -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+          Mã vụ việc (Case ID) <span class="text-red-400">*</span>
+        </label>
+        <input type="text" id="rpc-case-id" name="case_id" value="{{ continue_case or '' }}"
+               placeholder="Nhập mã vụ việc (ví dụ: case-2026-rpc-01)" required
+               pattern="^[A-Za-z0-9_-]{1,64}$"
+               title="Mã vụ việc chỉ gồm chữ cái, chữ số, gạch nối (-) và gạch dưới (_), tối đa 64 ký tự."
+               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+        <span class="text-[11px] text-slate-500">Bắt buộc để trống ban đầu khi tạo mới. Dữ liệu lưu cách ly theo Case ID.</span>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Mạng Chuỗi khối Mục tiêu</label>
+        <select id="rpc-network-select" onchange="handleRpcNetworkChange(this.value)"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+          <option value="sepolia" selected>Ethereum Sepolia Testnet (Chain ID 11155111)</option>
+          <option value="mainnet">Ethereum Mainnet (Chain ID 1)</option>
+          <option value="anvil">Anvil Local Testnet (Mô phỏng 127.0.0.1:8545)</option>
+          <option value="custom">Tùy chỉnh (Trong danh sách cấp quyền Allowlist)</option>
+        </select>
+        <span class="text-[11px] text-slate-500">Chỉ cho phép kết nối các mạng trong danh mục cấp quyền.</span>
+      </div>
+    </div>
+
+    <!-- RPC URL Input -->
+    <div>
+      <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+        URL Endpoint RPC (Chỉ đọc) <span class="text-red-400">*</span>
+      </label>
+      <input type="url" id="rpc-url" name="rpc_url" value="https://rpc.sepolia.org" required
+             placeholder="https://rpc.sepolia.org"
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+      <span class="text-[11px] text-slate-500">Bắt buộc dùng HTTPS mã hóa đối với node ngoài máy cục bộ. Chặn tuyệt đối IP nội bộ, link-local, cloud metadata và HTTP redirect.</span>
+    </div>
+
+    <!-- Investigation Bounds: Block Range & Targets -->
+    <div class="p-4 rounded-lg bg-slate-950/60 border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400">Phạm vi Thu thập & Giới hạn An toàn</h3>
+        <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+          Giới hạn tối đa 50 khối / phiên
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Khoảng Khối (Tùy chọn: Từ khối - Đến khối)</label>
+          <div class="flex items-center space-x-2">
+            <input type="number" id="rpc-start-block" placeholder="Khối đầu"
+                   class="w-1/2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+            <span class="text-slate-500">&rarr;</span>
+            <input type="number" id="rpc-end-block" placeholder="Khối cuối"
+                   class="w-1/2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+          </div>
+          <span class="text-[11px] text-slate-500">Để trống để tự động lấy 5 khối mới nhất trên mạng.</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Mã băm Giao dịch Cần Giám định (Tùy chọn)</label>
+          <input type="text" id="rpc-tx-hashes" placeholder="0x... (phân tách bởi dấu phẩy nếu nhiều hash)"
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+          <span class="text-[11px] text-slate-500">Truy xuất chi tiết giao dịch và biên lai (receipt) từ node.</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Địa chỉ Ví hoặc Hợp đồng Thông minh Cần Rà soát (Tùy chọn)</label>
+        <input type="text" id="rpc-addresses" placeholder="0x... (ví dụ: 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D)"
+               class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+        <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+          <strong class="text-slate-300">Lưu ý nghiệp vụ JSON-RPC:</strong> Full node tiêu chuẩn không hỗ trợ chỉ mục địa chỉ toàn chuỗi. Hệ thống áp dụng rà soát chính xác trong phạm vi khối và truy vấn eth_getLogs theo topic chuẩn vị; tuyệt đối không tạo giao dịch giả lập.
+        </p>
+      </div>
+
+      <!-- Local Anvil Authorization Checkbox -->
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-800/80">
+        <input type="checkbox" id="rpc-allow-local" class="rounded text-indigo-600 focus:ring-indigo-500">
+        <label for="rpc-allow-local" class="text-xs text-slate-300">
+          Cho phép kết nối Loopback cục bộ (Anvil / Hardhat trên 127.0.0.1 - Chế độ thử nghiệm).
+        </label>
+      </div>
+    </div>
+
+    <!-- Preflight Check Button & Preview Area -->
+    <div class="space-y-3">
+      <div class="flex items-center space-x-3">
+        <button type="button" id="btn-rpc-preflight" onclick="handleRpcPreflight()"
+                class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold text-xs rounded-lg border border-indigo-700/60 shadow flex items-center space-x-2 transition">
+          <span>🔍</span>
+          <span>Kiểm tra Kết nối & Chống SSRF (Pre-flight Check)</span>
+        </button>
+        <span class="text-xs text-slate-400">Kiểm tra tính an toàn trước khi gửi lệnh điều tra.</span>
+      </div>
+
+      <!-- Preflight Result Card -->
+      <div id="rpc-preflight-result" class="hidden p-4 rounded-lg bg-slate-950 border border-indigo-900/60 text-xs space-y-2"></div>
+    </div>
+
+    <!-- User Confirmation Checkbox -->
+    <div class="p-3 rounded-lg bg-slate-950/80 border border-slate-800 flex items-start space-x-2.5">
+      <input type="checkbox" id="rpc-user-confirm" class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+      <label for="rpc-user-confirm" class="text-xs text-slate-300 leading-relaxed">
+        <strong class="text-white">Xác nhận Phê duyệt Phiên Điều tra Trực tiếp:</strong> Tôi xác nhận đã kiểm tra phạm vi khối và chỉ định kết nối RPC chỉ đọc. Tôi hiểu hệ thống sẽ thu thập dữ liệu chuỗi khối thực tế, ghi vào kho lưu trữ vụ việc cách ly và bảo toàn nguyên vẹn cơ sở dữ liệu gốc.
+      </label>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="rpc-error" class="hidden p-3 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-200 font-mono"></div>
+
+    <!-- Success Banner -->
+    <div id="rpc-success" class="hidden p-5 rounded-lg bg-indigo-950/80 border border-indigo-800 space-y-3">
+      <div class="flex items-center space-x-2 text-indigo-300 font-bold text-sm">
+        <span>✅</span>
+        <span>Điều tra Chuỗi khối Trực tiếp hoàn tất thành công!</span>
+      </div>
+      <div id="rpc-result-details" class="text-xs text-slate-300 space-y-1 font-mono"></div>
+      <div class="flex items-center space-x-3 pt-2">
+        <a id="link-rpc-view-report" href="#" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg shadow transition">
+          Mở Báo cáo Phiên &rarr;
+        </a>
+        <a id="link-rpc-view-progress" href="#" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700 transition">
+          Xem Tiến độ &rarr;
+        </a>
+      </div>
+    </div>
+
+    <!-- Submit Button -->
+    <div class="flex justify-end pt-2">
+      <button type="button" id="btn-rpc-submit" onclick="handleRpcInvestigateSubmit(event)"
+              class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-lg shadow-lg shadow-indigo-950 flex items-center space-x-2 transition">
+        <span>Khởi chạy Điều tra Chuỗi khối Trực tiếp</span>
+        <span>&rarr;</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+function switchMode(mode) {
+  document.getElementById('selected-mode').value = mode;
+  const tabA = document.getElementById('tab-mode-a');
+  const tabB = document.getElementById('tab-mode-b');
+  const tabIngest = document.getElementById('tab-mode-ingest');
+  const tabRpc = document.getElementById('tab-mode-rpc');
+  const secA = document.getElementById('section-mode-a');
+  const formLauncher = document.getElementById('launcher-form');
+  const secIngest = document.getElementById('section-mode-ingest');
+  const secRpc = document.getElementById('section-mode-rpc');
+
+  const inactiveTab = 'flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition text-slate-400 hover:text-white';
+
+  if (mode === 'MODE_RPC') {
+    if (tabRpc) tabRpc.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition bg-indigo-600 text-white shadow';
+    if (tabB) tabB.className = inactiveTab;
+    if (tabIngest) tabIngest.className = inactiveTab;
+    if (tabA) tabA.className = inactiveTab;
+    if (formLauncher) formLauncher.classList.add('hidden');
+    if (secIngest) secIngest.classList.add('hidden');
+    if (secRpc) secRpc.classList.remove('hidden');
+  } else if (mode === 'MODE_INGEST') {
+    if (tabIngest) tabIngest.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition bg-emerald-600 text-white shadow';
+    if (tabB) tabB.className = inactiveTab;
+    if (tabRpc) tabRpc.className = inactiveTab;
+    if (tabA) tabA.className = inactiveTab;
+    if (formLauncher) formLauncher.classList.add('hidden');
+    if (secIngest) secIngest.classList.remove('hidden');
+    if (secRpc) secRpc.classList.add('hidden');
+  } else if (mode === 'MODE_A') {
+    if (tabA) tabA.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition bg-cyan-600 text-white shadow';
+    if (tabB) tabB.className = inactiveTab;
+    if (tabIngest) tabIngest.className = inactiveTab;
+    if (tabRpc) tabRpc.className = inactiveTab;
+    if (secA) secA.classList.remove('hidden');
+    if (formLauncher) formLauncher.classList.remove('hidden');
+    if (secIngest) secIngest.classList.add('hidden');
+    if (secRpc) secRpc.classList.add('hidden');
+  } else {
+    if (tabB) tabB.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition bg-cyan-600 text-white shadow';
+    if (tabA) tabA.className = inactiveTab;
+    if (tabIngest) tabIngest.className = inactiveTab;
+    if (tabRpc) tabRpc.className = inactiveTab;
+    if (secA) secA.classList.add('hidden');
+    if (formLauncher) formLauncher.classList.remove('hidden');
+    if (secIngest) secIngest.classList.add('hidden');
+    if (secRpc) secRpc.classList.add('hidden');
+  }
+}
+
+function handleProviderChange(provider) {
+  const modelInput = document.getElementById('ai_model');
+  if (provider === 'ollama') {
+    modelInput.value = 'qwen3:8b';
+  } else if (provider === 'openai') {
+    modelInput.value = 'gpt-4o';
+  } else if (provider === 'anthropic') {
+    modelInput.value = 'claude-3-5-sonnet-20241022';
+  } else if (provider === 'google') {
+    modelInput.value = 'gemini-2.0-flash';
+  } else if (provider === 'deterministic_fallback') {
+    modelInput.value = 'rule-engine-fallback';
+  }
+}
+
+async function handleLaunch(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  const errBox = document.getElementById('launcher-error');
+  errBox.classList.add('hidden');
+
+  const rawCaseId = document.getElementById('case_id').value.trim();
+  if (!rawCaseId) {
+    errBox.textContent = 'Mã vụ việc (Case ID) không được để trống.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  // Regex validation
+  const caseRegex = /^[A-Za-z0-9_-]{1,64}$/;
+  if (!caseRegex.test(rawCaseId)) {
+    errBox.textContent = 'Mã vụ việc không hợp lệ. Chỉ chấp nhận chữ cái, số, gạch nối (-) và gạch dưới (_), từ 1 đến 64 ký tự. Không chứa dấu chấm hoặc đường dẫn.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  // Path traversal check
+  if (rawCaseId.includes('..') || rawCaseId.includes('/') || rawCaseId.includes('\\')) {
+    errBox.textContent = 'Phát hiện ký tự đường dẫn nguy hiểm trong Case ID. Thao tác bị từ chối.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = 'Đang khởi chạy...';
+
+  const continueCaseFlag = document.getElementById('continue-case-flag').value === 'true';
+
+  const payload = {
+    case_id: rawCaseId,
+    continue_case: continueCaseFlag,
+    mode: document.getElementById('selected-mode').value,
+    demo_target: document.querySelector('input[name="demo_target"]:checked')?.value || 'D1',
+    db_path: document.getElementById('db_path').value,
+    ai_provider: document.getElementById('ai_provider').value,
+    ai_model: document.getElementById('ai_model').value.trim(),
+    ai_api_key: document.getElementById('ai_api_key').value.trim() || null,
+    ai_consent: document.getElementById('ai_consent').checked,
+    enable_onchain_write: document.getElementById('enable_onchain_write').checked,
+    is_mock: false
+  };
+
+  try {
+    const res = await fetch('/api/investigations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 409) {
+        // Offer Continue Case button if duplicate
+        errBox.innerHTML = `<span>${data.detail}</span> <button type="button" onclick="continueExistingCase('${rawCaseId}')" class="ml-2 underline font-bold text-cyan-400 hover:text-cyan-300">Tiếp tục điều tra ca vụ này &rarr;</button>`;
+        errBox.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = 'Bắt đầu Điều tra &rarr;';
+        return;
+      }
+      throw new Error(data.detail || 'Lỗi không xác định từ máy chủ.');
+    }
+
+    // Redirect to progress page for new run
+    window.location.href = `/progress/${data.run_id}`;
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Bắt đầu Điều tra &rarr;';
+  }
+}
+
+function continueExistingCase(caseId) {
+  document.getElementById('continue-case-flag').value = 'true';
+  document.getElementById('case_id').value = caseId;
+  const errBox = document.getElementById('launcher-error');
+  errBox.classList.add('hidden');
+  document.getElementById('btn-submit').click();
+}
+
+function handleFileSelected(input) {
+  const nameLabel = document.getElementById('selected-file-name');
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    nameLabel.textContent = `Tệp đã chọn: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    nameLabel.classList.remove('hidden');
+  } else {
+    nameLabel.classList.add('hidden');
+  }
+}
+
+async function handleIngestSubmit(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-ingest-submit');
+  const errBox = document.getElementById('ingest-error');
+  const succBox = document.getElementById('ingest-success');
+  errBox.classList.add('hidden');
+  succBox.classList.add('hidden');
+
+  const rawCaseId = document.getElementById('ingest-case-id').value.trim();
+  if (!rawCaseId) {
+    errBox.textContent = 'Mã vụ việc (Case ID) không được để trống.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const caseRegex = /^[A-Za-z0-9_-]{1,64}$/;
+  if (!caseRegex.test(rawCaseId)) {
+    errBox.textContent = 'Mã vụ việc không hợp lệ. Chỉ chấp nhận chữ cái, số, gạch nối (-) và gạch dưới (_), từ 1 đến 64 ký tự.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  if (rawCaseId.includes('..') || rawCaseId.includes('/') || rawCaseId.includes('\\')) {
+    errBox.textContent = 'Phát hiện ký tự đường dẫn nguy hiểm trong Case ID.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const fileInput = document.getElementById('ingest-file');
+  if (!fileInput.files || !fileInput.files[0]) {
+    errBox.textContent = 'Vui lòng chọn một tệp chứng cứ để tải lên.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const sourceType = document.getElementById('ingest-source-type').value;
+  const description = document.getElementById('ingest-description').value.trim();
+
+  btn.disabled = true;
+  btn.innerHTML = 'Đang tải lên & phân tích 8 giai đoạn...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  if (sourceType && sourceType !== 'auto') {
+    formData.append('source_type', sourceType);
+  }
+  if (description) {
+    formData.append('description', description);
+  }
+
+  try {
+    const res = await fetch(`/api/cases/${encodeURIComponent(rawCaseId)}/ingest`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Lỗi khi nhập tệp chứng cứ.');
+    }
+
+    // Display success
+    const detailsDiv = document.getElementById('ingest-result-details');
+    detailsDiv.innerHTML = `
+      <div>&bull; Định danh chứng cứ: <strong class="text-white">${data.evidence_id}</strong></div>
+      <div>&bull; Mã băm SHA-256: <strong class="text-cyan-400">${data.sha256}</strong></div>
+      <div>&bull; Số bản ghi chuẩn hóa: <strong class="text-emerald-400">${data.records_count}</strong></div>
+      <div>&bull; Dấu hiệu bất thường phát hiện: <strong class="text-amber-400">${data.anomalies_count}</strong></div>
+      <div>&bull; Mã phiên điều tra: <strong class="text-slate-200">${data.run_id}</strong></div>
+    `;
+
+    document.getElementById('link-view-report').href = `/reports/${data.run_id}`;
+    document.getElementById('link-view-evidence').href = `/evidence?case_id=${encodeURIComponent(rawCaseId)}`;
+
+    succBox.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Tải lên & Khởi chạy Phân tích 8 Giai đoạn &rarr;';
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Tải lên & Khởi chạy Phân tích 8 Giai đoạn &rarr;';
+  }
+}
+
+function handleRpcNetworkChange(network) {
+  const urlInput = document.getElementById('rpc-url');
+  const allowLocal = document.getElementById('rpc-allow-local');
+  if (network === 'sepolia') {
+    urlInput.value = 'https://rpc.sepolia.org';
+    allowLocal.checked = false;
+  } else if (network === 'mainnet') {
+    urlInput.value = 'https://eth.llamarpc.com';
+    allowLocal.checked = false;
+  } else if (network === 'anvil') {
+    urlInput.value = 'http://127.0.0.1:8545';
+    allowLocal.checked = true;
+  } else {
+    urlInput.value = '';
+    urlInput.focus();
+  }
+}
+
+async function handleRpcPreflight() {
+  const rpcUrl = document.getElementById('rpc-url').value.trim();
+  const allowLocal = document.getElementById('rpc-allow-local').checked;
+  const resultDiv = document.getElementById('rpc-preflight-result');
+  const errBox = document.getElementById('rpc-error');
+
+  errBox.classList.add('hidden');
+  resultDiv.classList.add('hidden');
+
+  if (!rpcUrl) {
+    errBox.textContent = 'Vui lòng nhập URL của node RPC trước khi kiểm tra.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('btn-rpc-preflight');
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span><span>Đang kiểm tra Anti-SSRF...</span>';
+
+  try {
+    const res = await fetch('/api/rpc/preflight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rpc_url: rpcUrl, allow_local: allowLocal }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Kiểm tra Preflight thất bại.');
+    }
+
+    const envBadge = data.is_synthetic === 1
+      ? '<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">ANVIL CỤC BỘ (Mô phỏng)</span>'
+      : '<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">MẠNG CHUỖI KHỐI THỰC</span>';
+
+    resultDiv.innerHTML = `
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div class="flex items-center space-x-2 text-emerald-400 font-bold">
+          <span>🛡️</span>
+          <span>${data.safety_status}: ${data.message}</span>
+        </div>
+        <div>${envBadge}</div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px] text-slate-300">
+        <div>&bull; Mạng: <strong class="text-white">${data.network_name}</strong> (Chain ID: ${data.chain_id})</div>
+        <div>&bull; Khối mới nhất: <strong class="text-cyan-400">#${data.latest_block}</strong></div>
+        <div>&bull; Giới hạn tối đa: <strong class="text-amber-400">${data.max_blocks_allowed} khối</strong></div>
+        <div>&bull; Hỗ trợ rà soát ví: <strong class="text-slate-300">Bounded Scan & getLogs</strong></div>
+      </div>
+    `;
+    resultDiv.classList.remove('hidden');
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>🔍</span><span>Kiểm tra Kết nối & Chống SSRF (Pre-flight Check)</span>';
+  }
+}
+
+async function handleRpcInvestigateSubmit(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-rpc-submit');
+  const errBox = document.getElementById('rpc-error');
+  const succBox = document.getElementById('rpc-success');
+  errBox.classList.add('hidden');
+  succBox.classList.add('hidden');
+
+  const rawCaseId = document.getElementById('rpc-case-id').value.trim();
+  if (!rawCaseId) {
+    errBox.textContent = 'Mã vụ việc (Case ID) không được để trống.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const caseRegex = /^[A-Za-z0-9_-]{1,64}$/;
+  if (!caseRegex.test(rawCaseId)) {
+    errBox.textContent = 'Mã vụ việc không hợp lệ. Chỉ chấp nhận chữ cái, số, gạch nối (-) và gạch dưới (_), từ 1 đến 64 ký tự.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  if (rawCaseId.includes('..') || rawCaseId.includes('/') || rawCaseId.includes('\\')) {
+    errBox.textContent = 'Phát hiện ký tự đường dẫn nguy hiểm trong Case ID.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const rpcUrl = document.getElementById('rpc-url').value.trim();
+  if (!rpcUrl) {
+    errBox.textContent = 'URL Endpoint RPC không được để trống.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const userConfirmed = document.getElementById('rpc-user-confirm').checked;
+  if (!userConfirmed) {
+    errBox.textContent = 'Vui lòng đánh dấu vào ô "Xác nhận Phê duyệt Phiên Điều tra Trực tiếp" trước khi khởi chạy.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const startBlockVal = document.getElementById('rpc-start-block').value.trim();
+  const endBlockVal = document.getElementById('rpc-end-block').value.trim();
+  let blockRange = null;
+  if (startBlockVal && endBlockVal) {
+    blockRange = [parseInt(startBlockVal, 10), parseInt(endBlockVal, 10)];
+  }
+
+  const txHashesRaw = document.getElementById('rpc-tx-hashes').value.trim();
+  const txHashes = txHashesRaw ? txHashesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const addressesRaw = document.getElementById('rpc-addresses').value.trim();
+  const addresses = addressesRaw ? addressesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const allowLocal = document.getElementById('rpc-allow-local').checked;
+  const networkName = document.getElementById('rpc-network-select').selectedOptions[0]?.text || null;
+
+  btn.disabled = true;
+  btn.innerHTML = 'Đang thu thập & điều tra chuỗi khối...';
+
+  const payload = {
+    case_id: rawCaseId,
+    rpc_url: rpcUrl,
+    network_name: networkName,
+    block_range: blockRange,
+    tx_hashes: txHashes,
+    addresses: addresses,
+    allow_local: allowLocal,
+    continue_case: true,
+  };
+
+  try {
+    const res = await fetch('/api/rpc/investigate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Lỗi điều tra chuỗi khối trực tiếp.');
+    }
+
+    // Display success
+    const detailsDiv = document.getElementById('rpc-result-details');
+    detailsDiv.innerHTML = `
+      <div>&bull; Mã phiên điều tra: <strong class="text-white">${data.run_id}</strong></div>
+      <div>&bull; Mạng: <strong class="text-indigo-300">${data.network_name}</strong> (Chain ID: ${data.chain_id})</div>
+      <div>&bull; Số khối thu thập: <strong class="text-cyan-400">${data.blocks_collected}</strong> (Khối #${data.start_block} - #${data.end_block})</div>
+      <div>&bull; Số giao dịch: <strong class="text-emerald-400">${data.transactions_collected}</strong></div>
+      <div>&bull; Dấu hiệu bất thường: <strong class="text-amber-400">${data.anomalies_count}</strong></div>
+      <div>&bull; Mã băm SHA-256: <strong class="text-slate-300">${data.sha256}</strong></div>
+    `;
+
+    document.getElementById('link-rpc-view-report').href = `/reports/${data.run_id}`;
+    document.getElementById('link-rpc-view-progress').href = `/progress/${data.run_id}`;
+
+    succBox.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Khởi chạy Điều tra Chuỗi khối Trực tiếp &rarr;';
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Khởi chạy Điều tra Chuỗi khối Trực tiếp &rarr;';
+  }
+}
+
+// Auto-switch mode based on URL query param if present
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const act = params.get('action');
+  if (act === 'ingest' || act === 'import') {
+    switchMode('MODE_INGEST');
+  } else if (act === 'rpc' || act === 'live_rpc') {
+    switchMode('MODE_RPC');
+  }
+});
+</script>
+
+{% endblock %}

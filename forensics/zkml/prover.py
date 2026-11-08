@@ -29,9 +29,10 @@ from forensics.zkml.circuit import (
     setup_circuit_srs,
     setup_keys,
 )
+from forensics.paths import get_circuits_dir, get_model_path, get_models_dir
 
 BN254_SCALAR_MODULUS = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
-DEFAULT_CIRCUIT_DIR = Path(__file__).resolve().parents[2] / "circuits" / "anomaly_detector_v1"
+DEFAULT_CIRCUIT_DIR = get_circuits_dir() / "anomaly_detector_v1"
 
 
 def decode_instance_element(inst_hex: str) -> int:
@@ -208,7 +209,7 @@ class ZKMLProver:
 
     def __init__(
         self,
-        model_path: Path | str = "models/anomaly_detector_v1.onnx",
+        model_path: Path | str | None = None,
         settings_path: Path | str | None = None,
         compiled_path: Path | str | None = None,
         pk_path: Path | str | None = None,
@@ -217,7 +218,16 @@ class ZKMLProver:
         artifacts_dir: Path | str | None = None,
         auto_setup: bool = True,
     ):
-        self.model_path = Path(model_path)
+        if model_path is None:
+            self.model_path = get_model_path()
+        else:
+            p = Path(model_path)
+            if not p.is_file() and not p.is_absolute():
+                candidate = get_models_dir() / p.name
+                if candidate.is_file():
+                    p = candidate
+            self.model_path = p.resolve()
+
         if not self.model_path.is_file():
             raise ProverError(f"ONNX model file not found: {self.model_path}")
 

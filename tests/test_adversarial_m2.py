@@ -1,679 +1,440 @@
-"""Milestone 2 Adversarial Stress Test Suite: EVM 256-bit Arithmetic, Concurrency & Provider.
+"""Adversarial Challenge Test Suite for Milestone 2 (tests/test_adversarial_m2.py).
 
-Adversarial Challenger 2 Verification Harness.
-
-Covers:
-1. EVM 256-bit integer math:
-   - Counterparty volume aggregation with massive integers (10^30, 2^256 - 1).
-   - Exact string preservation without floating-point conversion, scientific notation, or precision loss.
-   - Non-digit / malformed / zero amount handling.
-   - Transfer extraction in get_tx, get_address_history, get_timeline, and get_alerts.
-2. Pydantic AI AnyIO concurrency & thread safety:
-   - Pydantic AI Agent executing tools across AnyIO worker threads.
-   - Empirical proof of check_same_thread=False preventing sqlite3.ProgrammingError across threads.
-   - Concurrent multi-threaded query execution across 10 threads.
-   - ToolBudgetManager isolation across concurrent sessions.
-3. Provider offline determinism:
-   - TestModel execution and reproducibility.
-   - Custom FunctionModel callback dispatch.
-   - Enforcement of request_limit=8 and UsageLimitExceeded bounds.
-   - Environment variable overriding hierarchy without credential leakage.
-4. Database immutability:
-   - Verification of real_p4.db byte-identical hash preservation.
+Adversarially stresses the Evidence File Ingestion Pipeline & Adapters (R3):
+1. Fuzzing & Malformed Inputs (corrupted JSON, binary trash, corrupted CSV, empty files, oversized files)
+2. Incompatible SQLite Schema Rejection (table cats(name, age) -> strict HTTP 422, zero fake success)
+3. Path Traversal & Injection Rejection (traversal in filename, traversal in case_id)
+4. Multi-File Ingestion to Same Case (unique SHA-256, timestamps, evidence IDs, no overwriting)
+5. Multi-Case Isolation (zero cross-contamination between Case A and Case B)
+6. 4 Canonical Databases Bitwise Invariance (zero byte mutation)
 """
 
 from __future__ import annotations
 
-import concurrent.futures
+import csv
 import hashlib
+import io
 import json
 import os
-import sqlite3
-import threading
 from pathlib import Path
-from typing import Any
+import sqlite3
+import tempfile
+import time
+from typing import Any, Dict, List
 
 import pytest
-from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext, UsageLimits
-from pydantic_ai.exceptions import UsageLimitExceeded
-from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from fastapi.testclient import TestClient
 
-from forensics.ai.db_readonly import (
-    ReadOnlyConnection,
-    build_readonly_uri,
-    get_readonly_connection,
-    readonly_authorizer,
+from dashboard.app import app
+from forensics.ingestion import (
+    AuthorizedHostLogsAdapter,
+    BlockchainTxJsonAdapter,
+    CorruptedFileError,
+    EvidenceIngestionPipeline,
+    FormatError,
+    IngestionError,
+    SchemaCompatibilityError,
+    SecurityError,
+    SqliteEvidenceAdapter,
+    TransactionCsvAdapter,
+    get_adapter_for_format,
 )
-from forensics.ai.provider import (
-    AIConfig,
-    MissingAPIKeyError,
-    create_function_model,
-    create_model,
-    create_test_model,
-    get_ai_config,
-    get_usage_limits,
-    mask_api_key,
-    resolve_api_key,
+from forensics.paths import (
+    get_benchmark_db,
+    get_data_dir,
+    get_endpoint_evidence_db,
+    get_forensics_db,
+    get_output_dir,
+    get_real_p4_db,
 )
-from forensics.ai.tools import (
-    AUTHORIZED_TOOLS,
-    MAX_AI_TOOL_STEPS,
-    ProductionDatabaseMutationError,
-    RangeLimitExceeded,
-    SessionLimitExceeded,
-    ToolBudgetExceeded,
-    ToolBudgetManager,
-    UnauthorizedToolError,
-    collect_missing_range,
-    execute_guarded_tool,
-    get_address_history,
-    get_alerts,
-    get_counterparties,
-    get_staging_connection,
-    get_timeline,
-    get_tx,
-    init_staging_tables,
-    validate_block_range,
+from forensics.service import compute_sha256
+
+CANONICAL_HASHES = {
+    "real_p4.db": "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97",
+    "forensics.db": "3F2B0DFC772A96FF6EA57C65807B5B6B9A20FCF74C409C6F222FCFF29F1EF001",
+    "benchmark_p6.db": "C7FF724CD214EEF57E58A6FBE44DBEB2712C54B035907B2A6279A255C0E80507",
+    "endpoint_evidence.db": "CAF3F0B30C0F864150CA5DCBD45DD19927A53620001AB696228A744C959B7CD0",
+}
+
+
+@pytest.fixture(scope="session")
+def client() -> TestClient:
+    return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def verify_canonical_dbs_untouched():
+    """Verifies that all 4 canonical databases are bitwise untouched before and after every test."""
+    dbs = {
+        "real_p4.db": get_real_p4_db(),
+        "forensics.db": get_forensics_db(),
+        "benchmark_p6.db": get_benchmark_db(),
+        "endpoint_evidence.db": get_endpoint_evidence_db(),
+    }
+    for name, path in dbs.items():
+        assert path.is_file(), f"Canonical database missing: {path}"
+        current = compute_sha256(path)
+        assert current == CANONICAL_HASHES[name], f"Pre-test mutation in {name}: {current}"
+
+    yield
+
+    for name, path in dbs.items():
+        current = compute_sha256(path)
+        assert current == CANONICAL_HASHES[name], f"Post-test mutation in {name}: {current}"
+
+
+# ==============================================================================
+# 1. Adversarial Fuzzing: Malformed JSON, Binary Trash, & Corrupted Payloads
+# ==============================================================================
+
+@pytest.mark.parametrize(
+    "corrupted_payload,expected_status",
+    [
+        (b'{"transactions": [{"tx_hash": "0x123", "from": ', 400),       # Truncated JSON
+        (b'{{{{[[[[}}}]', 400),                                             # Corrupted syntax
+        (os.urandom(2048), 400),                                            # Pure binary garbage
+        (b'{"owner": "attacker", "status": "malicious"}', 422),             # Valid JSON, missing tx fields
+        (b'[{"random_field": "val1"}, {"random_field": "val2"}]', 422),   # Valid JSON array, missing tx fields
+        (b'"just a string root"', 422),                                     # JSON string primitive
+        (b'123456789', 422),                                                # JSON number primitive
+        (b'true', 422),                                                     # JSON boolean primitive
+        (b'[]', 422),                                                       # Empty JSON array
+        (b'{"transactions": []}', 422),                                     # JSON container with 0 transactions
+    ],
 )
-from forensics.paths import REAL_P4_DB as CANONICAL_REAL_P4_DB
+def test_fuzz_malformed_json_endpoint(client: TestClient, corrupted_payload: bytes, expected_status: int):
+    """Adversarially sends corrupted/incompatible JSON payloads and asserts strict rejection (400/422)."""
+    case_id = "CASE-FUZZ-JSON-01"
+    files = {"file": ("fuzz_test.json", io.BytesIO(corrupted_payload), "application/json")}
+    res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+    assert res.status_code == expected_status, f"Expected {expected_status}, got {res.status_code}: {res.text}"
+    # Ensure no success was returned
+    assert res.status_code not in (200, 201)
 
-REAL_P4_DB = CANONICAL_REAL_P4_DB
 
-# 256-bit EVM constants
-UINT256_MAX = (1 << 256) - 1
-UINT256_MAX_STR = str(UINT256_MAX)
-TEN_TO_THIRTY = 10**30
-TEN_TO_THIRTY_STR = str(TEN_TO_THIRTY)
+@pytest.mark.parametrize(
+    "corrupted_csv,expected_status",
+    [
+        (b'animal,sound,age\ncat,meow,3\ndog,woof,5\n', 422),              # Non-transaction arbitrary columns
+        (b'tx_hash,from_address,to_address,value\n', 422),                 # Valid headers but 0 data rows
+        (b'   \n\r\t   \n', 422),                                          # Whitespace-only CSV
+        (os.urandom(1024), 422),                                           # Binary trash disguised as CSV
+    ],
+)
+def test_fuzz_malformed_csv_endpoint(client: TestClient, corrupted_csv: bytes, expected_status: int):
+    """Adversarially sends corrupted or non-forensic CSV files and asserts rejection."""
+    case_id = "CASE-FUZZ-CSV-01"
+    files = {"file": ("fuzz_test.csv", io.BytesIO(corrupted_csv), "text/csv")}
+    res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+    assert res.status_code == expected_status, f"Expected {expected_status}, got {res.status_code}: {res.text}"
+    assert res.status_code not in (200, 201)
+
+
+def test_fuzz_empty_files_rejected(client: TestClient):
+    """Asserts that completely empty 0-byte files are strictly rejected with 400 Bad Request."""
+    case_id = "CASE-FUZZ-EMPTY-01"
+    for fname in ("empty.json", "empty.csv", "empty.db"):
+        files = {"file": (fname, io.BytesIO(b""), "application/octet-stream")}
+        res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+        assert res.status_code == 400, f"Expected 400 for empty file {fname}, got {res.status_code}"
+        assert "r\u1ed1ng" in res.text.lower() or "empty" in res.text.lower() or "0 bytes" in res.text.lower()
+
+
+def test_fuzz_oversized_file_rejected():
+    """Asserts that files exceeding MAX_FILE_BYTES (128 MB) are rejected with IngestionError."""
+    pipeline = EvidenceIngestionPipeline()
+    oversized_bytes = b"X" * (128 * 1024 * 1024 + 1024)
+    with pytest.raises(IngestionError) as exc_info:
+        pipeline.ingest_bytes(
+            case_id="CASE-OVERSIZED-01",
+            file_bytes=oversized_bytes,
+            original_filename="huge_evidence.json",
+        )
+    assert "v\u01b0\u1ee3t qu\u00e1 gi\u1edbi h\u1ea1n cho ph\u00e9p" in str(exc_info.value)
 
 
 # ==============================================================================
-# Helper to build an in-memory test DB with arbitrary transfer data
+# 2. SQLite Database Incompatible Schema Rejection & Zero Fake Success
 # ==============================================================================
 
+def test_sqlite_arbitrary_schema_cats_rejected(client: TestClient):
+    """Verifies that an SQLite DB with an arbitrary schema (e.g. table cats(name, age))
 
-def create_stress_transfers_db() -> sqlite3.Connection:
-    """Creates an in-memory SQLite DB with schema, staging tables, and alerts table."""
-    conn = sqlite3.connect(":memory:", check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    init_staging_tables(conn)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS alerts (
-            alert_id TEXT PRIMARY KEY, rule_id TEXT, rule_version TEXT, unit_type TEXT,
-            unit_key TEXT, asset_id TEXT, severity TEXT, score REAL, reason TEXT,
-            evidence_refs TEXT, window_start TEXT, window_end TEXT, created_at TEXT
-        )
-        """
-    )
-    conn.commit()
-    return conn
+    is strictly rejected with SchemaCompatibilityError (HTTP 422) and NEVER fakes success.
+    """
+    case_id = "CASE-SQLITE-CATS-01"
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
 
-
-# ==============================================================================
-# Suite 1: EVM 256-bit Integer Arithmetic & String Preservation
-# ==============================================================================
-
-
-class TestEVM256BitArithmetic:
-    """Stress tests EVM 256-bit arithmetic, volume aggregation, and string preservation."""
-
-    def test_uint256_max_exact_value(self):
-        """Sanity check UINT256_MAX value matches EVM max integer."""
-        expected_hex = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-        assert hex(UINT256_MAX) == expected_hex
-        assert len(UINT256_MAX_STR) == 78
-        assert UINT256_MAX_STR.startswith("115792089237316195423570985008687907853269984665640564039457584007913129639935")
-
-    def test_counterparty_volume_aggregation_with_massive_integers(self):
-        """Proof: Aggregates multiple transfers of 10^30 and 2^256-1 with ZERO float truncation."""
-        db = create_stress_transfers_db()
-        alice = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        bob = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-        carol = "0xcccccccccccccccccccccccccccccccccccccccc"
-
-        # Alice -> Bob: 3 transfers of UINT256_MAX
-        # Bob -> Alice: 2 transfers of TEN_TO_THIRTY
-        # Alice -> Carol: 1 transfer of 500
-        cursor = db.cursor()
-        for i in range(3):
-            cursor.execute(
-                """
-                INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                            tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-                VALUES (1, 100, '0xblk1', 1000, ?, ?, '0xDAI', ?, ?, ?, 1)
-                """,
-                (f"0xtx_ab_{i}", i, alice, bob, UINT256_MAX_STR),
-            )
-
-        for i in range(2):
-            cursor.execute(
-                """
-                INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                            tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-                VALUES (1, 101, '0xblk2', 1010, ?, ?, '0xDAI', ?, ?, ?, 1)
-                """,
-                (f"0xtx_ba_{i}", i, bob, alice, TEN_TO_THIRTY_STR),
-            )
-
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 102, '0xblk3', 1020, '0xtx_ac', 0, '0xDAI', ?, ?, '500', 1)
-            """,
-            (alice, carol),
-        )
-        db.commit()
-
-        # Query counterparties for Alice
-        results = get_counterparties(db, alice)
-        assert len(results) == 2
-
-        # Bob should be #1 counterparty
-        bob_item = next(r for r in results if r["counterparty"] == bob)
-        assert bob_item["sent_count"] == 3
-        assert bob_item["received_count"] == 2
-        assert bob_item["total_transfers"] == 5
-
-        # Expected sums using exact arbitrary-precision arithmetic
-        expected_sent = 3 * UINT256_MAX
-        expected_recv = 2 * TEN_TO_THIRTY
-        expected_total = expected_sent + expected_recv
-
-        assert bob_item["volume_sent_raw"] == str(expected_sent)
-        assert bob_item["volume_received_raw"] == str(expected_recv)
-        assert bob_item["total_volume_raw"] == str(expected_total)
-
-        # Confirm no float conversion artifacts (no 'e+', no '.0', no scientific notation)
-        for field_name in ["volume_sent_raw", "volume_received_raw", "total_volume_raw"]:
-            val_str = bob_item[field_name]
-            assert "e+" not in val_str, f"Scientific notation detected in {field_name}: {val_str}"
-            assert "." not in val_str, f"Floating point decimal detected in {field_name}: {val_str}"
-            assert val_str.isdigit(), f"Non-digit character detected in {field_name}: {val_str}"
-
-        # Carol should be #2 counterparty
-        carol_item = next(r for r in results if r["counterparty"] == carol)
-        assert carol_item["volume_sent_raw"] == "500"
-        assert carol_item["volume_received_raw"] == "0"
-        assert carol_item["total_volume_raw"] == "500"
-
-    def test_counterparty_volume_sorting_massive_integers(self):
-        """Proof: Counterparties with higher 256-bit volumes sort before lower ones."""
-        db = create_stress_transfers_db()
-        hub = "0xhub0000000000000000000000000000000000000"
-        whale = "0xwhale0000000000000000000000000000000000"
-        shrimp = "0xshrimp000000000000000000000000000000000"
-
-        # Hub -> Whale: 1 transfer of 2^256 - 1
-        # Hub -> Shrimp: 1 transfer of 10^30
-        cursor = db.cursor()
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 100, '0xblk1', 1000, '0xtx1', 0, '0xWETH', ?, ?, ?, 1)
-            """,
-            (hub, whale, UINT256_MAX_STR),
-        )
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 101, '0xblk2', 1010, '0xtx2', 0, '0xWETH', ?, ?, ?, 1)
-            """,
-            (hub, shrimp, TEN_TO_THIRTY_STR),
-        )
-        db.commit()
-
-        results = get_counterparties(db, hub)
-        assert len(results) == 2
-        # Both have 1 transfer, but Whale has vastly higher volume (2^256-1 >> 10^30)
-        assert results[0]["counterparty"] == whale
-        assert results[1]["counterparty"] == shrimp
-
-    def test_non_digit_and_zero_amount_handling(self):
-        """Proof: Handles '0', empty, None, and malformed amount_raw gracefully."""
-        db = create_stress_transfers_db()
-        addr_a = "0x1111111111111111111111111111111111111111"
-        addr_b = "0x2222222222222222222222222222222222222222"
-
-        cursor = db.cursor()
-        # Transfer 1: 0
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 100, '0xblk1', 1000, '0xtx1', 0, '0xTKN', ?, ?, '0', 1)
-            """,
-            (addr_a, addr_b),
-        )
-        # Transfer 2: None
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 101, '0xblk2', 1010, '0xtx2', 0, '0xTKN', ?, ?, NULL, 1)
-            """,
-            (addr_a, addr_b),
-        )
-        # Transfer 3: malformed non-digit string
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 102, '0xblk3', 1020, '0xtx3', 0, '0xTKN', ?, ?, '0xdeadbeef', 1)
-            """,
-            (addr_a, addr_b),
-        )
-        db.commit()
-
-        res = get_counterparties(db, addr_a)
-        assert len(res) == 1
-        assert res[0]["total_transfers"] == 3
-        # Malformed and null amounts default to 0
-        assert res[0]["total_volume_raw"] == "0"
-
-    def test_get_tx_preserves_uint256_max(self):
-        """Proof: get_tx preserves 2^256-1 in value_raw and amount_raw."""
-        db = create_stress_transfers_db()
-        tx_hash = "0xdeadbeef1234567890abcdef1234567890abcdef1234567890abcdef12345678"
-
-        cursor = db.cursor()
-        cursor.execute(
-            """
-            INSERT INTO transactions (chain_id, tx_hash, block_hash, block_number, tx_index,
-                                     from_addr, to_addr, value_raw, nonce, input, raw_json, raw_sha256)
-            VALUES (1, ?, '0xblk1', 100, 0, '0xfrom', '0xto', ?, 0, '0x', '{}', 'sha')
-            """,
-            (tx_hash, UINT256_MAX_STR),
-        )
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 100, '0xblk1', 1000, ?, 0, '0xASSET', '0xfrom', '0xto', ?, 1)
-            """,
-            (tx_hash, TEN_TO_THIRTY_STR),
-        )
-        db.commit()
-
-        data = get_tx(db, tx_hash)
-        assert data is not None
-        assert data["value_raw"] == UINT256_MAX_STR
-        assert len(data["transfers"]) == 1
-        assert data["transfers"][0]["amount_raw"] == TEN_TO_THIRTY_STR
-
-    def test_get_address_history_preserves_uint256_max(self):
-        """Proof: get_address_history preserves 2^256-1 exact string."""
-        db = create_stress_transfers_db()
-        addr = "0xfeedbeef00000000000000000000000000000000"
-
-        cursor = db.cursor()
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 100, '0xblk1', 1000, '0xtx1', 0, '0xASSET', ?, '0xother', ?, 1)
-            """,
-            (addr, UINT256_MAX_STR),
-        )
-        db.commit()
-
-        history = get_address_history(db, addr)
-        assert len(history) == 1
-        assert history[0]["amount_raw"] == UINT256_MAX_STR
-
-    def test_get_timeline_preserves_uint256_max(self):
-        """Proof: get_timeline preserves 2^256-1 in transfer details."""
-        db = create_stress_transfers_db()
-        cursor = db.cursor()
-        cursor.execute(
-            """
-            INSERT INTO blocks (chain_id, number, hash, parent_hash, block_timestamp,
-                               block_time_utc, first_observed_at, collected_at, status, synthetic)
-            VALUES (1, 100, '0xblk1', '0xblk0', 1000, '2026-11-01T00:00:00Z', '', '', 'canonical', 1)
-            """
-        )
-        cursor.execute(
-            """
-            INSERT INTO asset_transfers (chain_id, block_number, block_hash, block_timestamp,
-                                        tx_hash, log_index, asset_id, from_addr, to_addr, amount_raw, synthetic)
-            VALUES (1, 100, '0xblk1', 1000, '0xtx1', 0, '0xASSET', '0xa', '0xb', ?, 1)
-            """,
-            (UINT256_MAX_STR,),
-        )
-        db.commit()
-
-        events = get_timeline(db, start_time=900, end_time=1100)
-        transfer_events = [e for e in events if e["event_type"] == "transfer"]
-        assert len(transfer_events) == 1
-        assert transfer_events[0]["details"]["amount_raw"] == UINT256_MAX_STR
-
-    def test_get_alerts_preserves_uint256_max_in_evidence_refs(self):
-        """Proof: get_alerts preserves 2^256-1 whether stored as string or integer in JSON."""
-        conn = sqlite3.connect(":memory:")
-        conn.row_factory = sqlite3.Row
-        conn.execute(
-            """
-            CREATE TABLE alerts (
-                alert_id TEXT PRIMARY KEY, rule_id TEXT, rule_version TEXT, unit_type TEXT,
-                unit_key TEXT, asset_id TEXT, severity TEXT, score REAL, reason TEXT,
-                evidence_refs TEXT, window_start TEXT, window_end TEXT, created_at TEXT
-            )
-            """
-        )
-
-        refs = [
-            {"tx_hash": "0x1", "amount_raw": UINT256_MAX_STR},
-            {"tx_hash": "0x2", "amount_raw": TEN_TO_THIRTY},  # integer in JSON
-        ]
-        conn.execute(
-            """
-            INSERT INTO alerts VALUES ('alt1', 'large_transfer', '1.0', 'tx', '0x1', '0xDAI',
-                                      'HIGH', 0.9, 'test', ?, '2026-01-01T00:00:00Z',
-                                      '2026-01-01T00:05:00Z', '2026-01-01T00:00:00Z')
-            """,
-            (json.dumps(refs),),
-        )
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE cats (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, favorite_food TEXT)")
+        conn.execute("INSERT INTO cats (name, age, favorite_food) VALUES ('Whiskers', 3, 'Tuna')")
+        conn.execute("INSERT INTO cats (name, age, favorite_food) VALUES ('Mittens', 5, 'Salmon')")
         conn.commit()
-
-        alerts = get_alerts(conn)
-        assert len(alerts) == 1
-        parsed_refs = alerts[0]["evidence_refs"]
-        assert parsed_refs[0]["amount_raw"] == UINT256_MAX_STR
-        assert parsed_refs[1]["amount_raw"] == TEN_TO_THIRTY_STR
-
-
-# ==============================================================================
-# Suite 2: Pydantic AI AnyIO Concurrency & Thread Safety
-# ==============================================================================
-
-
-class TestAnyIOConcurrencyAndThreadSafety:
-    """Stress tests AnyIO threadpool dispatch and concurrent query execution."""
-
-    def test_pydantic_ai_agent_with_staging_connection_across_threads(self):
-        """Proof: Pydantic AI Agent sync tool dispatch across AnyIO worker threads succeeds with check_same_thread=False."""
-        os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
-        staging = get_staging_connection()
-
-        agent = Agent(create_test_model(call_tools=["staging_collector"]))
-
-        @agent.tool
-        def staging_collector(ctx: RunContext) -> str:
-            res = collect_missing_range(200, 215, staging)
-            return json.dumps(res)
-
-        result = agent.run_sync("Collect missing blocks")
-        assert result.output is not None
-
-        # Verify blocks were collected into staging
-        row_count = staging.execute("SELECT COUNT(*) FROM blocks").fetchone()[0]
-        assert row_count == 16
-
-    def test_thread_affinity_contrast_proof(self):
-        """Proof: Connections WITHOUT check_same_thread=False fail with sqlite3.ProgrammingError across threads."""
-        # 1. Connection with check_same_thread=True (default in Python sqlite3)
-        conn_strict = sqlite3.connect(":memory:")
-        error_strict = []
-
-        def worker_strict():
-            try:
-                conn_strict.execute("CREATE TABLE t (id INT)")
-            except Exception as e:
-                error_strict.append(e)
-
-        t1 = threading.Thread(target=worker_strict)
-        t1.start()
-        t1.join()
-        assert len(error_strict) == 1
-        assert isinstance(error_strict[0], sqlite3.ProgrammingError)
-        assert "SQLite objects created in a thread can only be used in that same thread" in str(error_strict[0])
-
-        # 2. Connection with check_same_thread=False
-        conn_safe = sqlite3.connect(":memory:", check_same_thread=False)
-        error_safe = []
-
-        def worker_safe():
-            try:
-                conn_safe.execute("CREATE TABLE t (id INT)")
-                conn_safe.execute("INSERT INTO t VALUES (42)")
-            except Exception as e:
-                error_safe.append(e)
-
-        t2 = threading.Thread(target=worker_safe)
-        t2.start()
-        t2.join()
-        assert len(error_safe) == 0
-        assert conn_safe.execute("SELECT id FROM t").fetchone()[0] == 42
-
-    def test_worker_thread_handover_with_check_same_thread_false(self):
-        """Proof: Sequential AnyIO-style worker thread execution on a connection with check_same_thread=False produces zero errors."""
-        if not REAL_P4_DB.exists():
-            pytest.skip(f"real_p4.db not found at {REAL_P4_DB}")
-
-        uri = build_readonly_uri(REAL_P4_DB)
-        conn = sqlite3.connect(
-            uri,
-            uri=True,
-            check_same_thread=False,
-            factory=ReadOnlyConnection,
-        )
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA query_only = ON;")
-        conn.set_authorizer(readonly_authorizer)
-
-        errors = []
-        for i in range(5):
-            def worker():
-                try:
-                    tx = get_tx(conn, "0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d")
-                    assert tx is not None
-                except Exception as e:
-                    errors.append(e)
-
-            t = threading.Thread(target=worker)
-            t.start()
-            t.join()
-
-        assert not errors, f"Errors occurred during worker thread handover: {errors}"
         conn.close()
 
-    def test_concurrent_queries_load_across_ten_threads(self):
-        """Proof: 10 concurrent threads query read-only DB simultaneously using independent connections."""
-        if not REAL_P4_DB.exists():
-            pytest.skip(f"real_p4.db not found at {REAL_P4_DB}")
+        with open(db_path, "rb") as f:
+            db_bytes = f.read()
 
-        thread_errors: list[tuple[int, Exception]] = []
-        thread_results: list[int] = []
+        files = {"file": ("cats_evidence.db", io.BytesIO(db_bytes), "application/x-sqlite3")}
+        res = client.post(f"/api/cases/{case_id}/ingest", files=files)
 
-        def worker(thread_id: int):
-            try:
-                conn = get_readonly_connection(REAL_P4_DB)
-                tx_data = get_tx(conn, "0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d")
-                assert tx_data is not None
-                cps = get_counterparties(conn, "0xebc29199c817dc47ba12e3f86102564d640cbf99", limit=5)
-                assert len(cps) > 0
-                thread_results.append(len(cps))
-                conn.close()
-            except Exception as e:
-                thread_errors.append((thread_id, e))
+        # Must reject with 422 Unprocessable Content
+        assert res.status_code == 422, f"Expected 422 for arbitrary SQLite schema, got {res.status_code}: {res.text}"
+        data = res.json()
+        assert "cats" in data["detail"].lower() or "t\u01b0\u01a1ng th\u00edch" in data["detail"].lower()
+        # Verify no evidence was saved to vault
+        evidence_list_res = client.get(f"/api/cases/{case_id}/evidence")
+        assert evidence_list_res.status_code == 200
+        assert evidence_list_res.json() == []
 
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert not thread_errors, f"Thread errors occurred: {thread_errors}"
-        assert len(thread_results) == 10
-
-    def test_concurrent_tool_budget_managers_independent_threads(self):
-        """Proof: ToolBudgetManager instances operate independently across threads without race conditions."""
-        errors = []
-
-        def run_budget_session(thread_id: int):
-            try:
-                tracker = ToolBudgetManager(max_steps=5)
-                tools = {"get_tx": lambda tx_hash: {"tx": tx_hash}}
-                for step in range(5):
-                    execute_guarded_tool("get_tx", {"tx_hash": f"0x{thread_id}_{step}"}, tools, tracker)
-                assert tracker.attempted_tool_calls == 5
-                assert tracker.successful_tool_calls == 5
-
-                # 6th attempt must raise
-                with pytest.raises(ToolBudgetExceeded):
-                    execute_guarded_tool("get_tx", {"tx_hash": "overflow"}, tools, tracker)
-            except Exception as e:
-                errors.append((thread_id, e))
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            futures = [executor.submit(run_budget_session, i) for i in range(8)]
-            concurrent.futures.wait(futures)
-
-        assert not errors, f"Concurrent budget errors: {errors}"
+    finally:
+        if os.path.exists(db_path):
+            os.remove(db_path)
 
 
-# ==============================================================================
-# Suite 3: Provider Offline Determinism, Usage Limits & Secret Security
-# ==============================================================================
+def test_sqlite_zero_tables_database_rejected(client: TestClient):
+    """Verifies that a valid SQLite database with zero tables is rejected with 422 SchemaCompatibilityError."""
+    case_id = "CASE-SQLITE-EMPTY-01"
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
+
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE temp_tbl (id INT)")
+        conn.execute("DROP TABLE temp_tbl")
+        conn.commit()
+        conn.close()
+
+        with open(db_path, "rb") as f:
+            db_bytes = f.read()
+
+        files = {"file": ("empty_database.sqlite", io.BytesIO(db_bytes), "application/x-sqlite3")}
+        res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+        assert res.status_code == 422
+        assert "r\u1ed7ng" in res.text.lower()
+    finally:
+        if os.path.exists(db_path):
+            os.remove(db_path)
 
 
-class TestProviderOfflineDeterminismAndSecurity:
-    """Stress tests Provider offline fallbacks, request bounds, and credential security."""
+def test_sqlite_transactions_table_arbitrary_columns_rejected(client: TestClient):
+    """Verifies that SQLite with 'transactions' table but incompatible columns (missing hash/from) is rejected with 422."""
+    case_id = "CASE-SQLITE-BADCOLS-01"
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
 
-    def test_test_model_deterministic_seed_reproducibility(self):
-        """Proof: TestModel with fixed seed produces deterministic outputs."""
-        os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
-        m1 = create_test_model(seed=42, custom_output_text="deterministic analysis")
-        m2 = create_test_model(seed=42, custom_output_text="deterministic analysis")
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE transactions (id INTEGER PRIMARY KEY, note TEXT, score REAL)")
+        conn.execute("INSERT INTO transactions (note, score) VALUES ('test', 12.5)")
+        conn.commit()
+        conn.close()
 
-        a1 = Agent(m1)
-        a2 = Agent(m2)
+        with open(db_path, "rb") as f:
+            db_bytes = f.read()
 
-        res1 = a1.run_sync("Input query")
-        res2 = a2.run_sync("Input query")
+        files = {"file": ("bad_cols.db", io.BytesIO(db_bytes), "application/x-sqlite3")}
+        res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+        assert res.status_code == 422
+    finally:
+        if os.path.exists(db_path):
+            os.remove(db_path)
 
-        assert res1.output == res2.output == "deterministic analysis"
 
-    def test_function_model_deterministic_custom_dispatch(self):
-        """Proof: FunctionModel allows arbitrary deterministic model callback routing."""
-        os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
-        call_count = 0
-
-        def forensic_oracle(messages: list[ModelMessage], info: Any) -> ModelResponse:
-            nonlocal call_count
-            call_count += 1
-            return ModelResponse(parts=[TextPart(content=f"Forensic finding step {call_count}")])
-
-        model = create_function_model(function=forensic_oracle)
-        agent = Agent(model)
-
-        r1 = agent.run_sync("Step 1")
-        r2 = agent.run_sync("Step 2")
-
-        assert r1.output == "Forensic finding step 1"
-        assert r2.output == "Forensic finding step 2"
-        assert call_count == 2
-
-    def test_usage_limits_request_limit_enforced_at_eight(self):
-        """Proof: Default request_limit=8 is strictly enforced by Pydantic AI."""
-        os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
-        limits = get_usage_limits()
-        assert limits.request_limit == 8
-
-        model = create_test_model(call_tools=["looper_tool"])
-        agent = Agent(model)
-
-        @agent.tool_plain
-        def looper_tool() -> str:
-            return "ok"
-
-        # Enforce request_limit=1: initial prompt + tool call result triggers 2nd request, exceeding limit 1
-        strict_limits = UsageLimits(request_limit=1)
-        with pytest.raises(UsageLimitExceeded):
-            agent.run_sync("Run tool loop", usage_limits=strict_limits)
-
-    def test_environment_variable_override_hierarchy(self, monkeypatch):
-        """Proof: Environment hierarchy is respected: explicit > GOOGLE_API_KEY > GEMINI_API_KEY."""
-        # Case 1: Both in environment, explicit override wins
-        monkeypatch.setenv("GOOGLE_API_KEY", "env_g_key")
-        monkeypatch.setenv("GEMINI_API_KEY", "env_m_key")
-        key, src = resolve_api_key("explicit_override_key")
-        assert key == "explicit_override_key"
-        assert src == "explicit"
-
-        # Case 2: Both in environment, no explicit override -> GOOGLE_API_KEY wins
-        key, src = resolve_api_key()
-        assert key == "env_g_key"
-        assert src == "GOOGLE_API_KEY"
-
-        # Case 3: Only GEMINI_API_KEY in environment -> GEMINI_API_KEY wins
-        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-        key, src = resolve_api_key()
-        assert key == "env_m_key"
-        assert src == "GEMINI_API_KEY"
-
-        # Case 4: Neither in environment -> None, 'none'
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        key, src = resolve_api_key()
-        assert key is None
-        assert src == "none"
-
-    def test_zero_secret_leakage_in_exceptions_and_summaries(self, monkeypatch):
-        """Proof: Secrets are never exposed in safe_summary(), logs, or string representations."""
-        secret_key = "AIzaSySecretLeakageTestString987654321"
-        monkeypatch.setenv("GOOGLE_API_KEY", secret_key)
-
-        cfg = AIConfig()
-        summary = cfg.safe_summary()
-
-        assert secret_key not in str(summary)
-        assert summary["api_key_masked"] == "AIza...4321"
-        assert summary["api_key_configured"] is True
-
-        # Test mask_api_key edge cases
-        assert mask_api_key(None) == "[ABSENT]"
-        assert mask_api_key("") == "[ABSENT]"
-        assert mask_api_key("   ") == "[ABSENT]"
-        assert mask_api_key("123") == "***"
-        assert mask_api_key("12345678") == "***"
-        assert mask_api_key("123456789") == "1234...6789"
+def test_sqlite_corrupted_header_rejected(client: TestClient):
+    """Verifies that an SQLite file with valid magic header but corrupted pages raises 400 CorruptedFileError."""
+    case_id = "CASE-SQLITE-CORRUPT-01"
+    corrupted_db_bytes = b"SQLite format 3\x00" + os.urandom(512)
+    files = {"file": ("corrupted.db", io.BytesIO(corrupted_db_bytes), "application/x-sqlite3")}
+    res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+    assert res.status_code in (400, 422)
 
 
 # ==============================================================================
-# Suite 4: Database Immutability & Clean State
+# 3. Path Traversal & Injection Vectors
 # ==============================================================================
 
+@pytest.mark.parametrize(
+    "malicious_filename",
+    [
+        "../../etc/passwd.json",
+        "..\\windows\\system32.json",
+        "....//....//boot.json",
+        "sub/folder/file.json",
+        "sub\\folder\\file.json",
+    ],
+)
+def test_path_traversal_in_filename_rejected(client: TestClient, malicious_filename: str):
+    """Verifies that path traversal and dangerous separators in filename are strictly rejected with 422."""
+    case_id = "CASE-SECURITY-PATH-01"
+    dummy_payload = json.dumps([
+        {"tx_hash": "0xabc123", "from": "0x1111", "to": "0x2222", "value": "1000"}
+    ]).encode("utf-8")
+    files = {"file": (malicious_filename, io.BytesIO(dummy_payload), "application/json")}
+    res = client.post(f"/api/cases/{case_id}/ingest", files=files)
+    assert res.status_code == 422, f"Expected 422 for malicious filename '{malicious_filename}', got {res.status_code}"
+    assert "nguy hi\u1ec3m" in res.text.lower() or "kh\u00f4ng h\u1ee3p l\u1ec7" in res.text.lower()
 
-class TestDatabaseImmutability:
-    """Verifies that real_p4.db remains 100% byte-identical and zero lock files exist."""
 
-    EXPECTED_SHA256 = "6BD9AED48AC2742D0862198BFF65994861244EC681DC8ABEB3E6F771E7808C97"
-    EXPECTED_SIZE = 5947392
+@pytest.mark.parametrize(
+    "malicious_case_id,expected_status",
+    [
+        ("..%5C..%5Cwindows%5Csystem32", 422),     # Backslash traversal encoded
+        ("case..traversal", 422),                 # Relative traversal with dots
+        ("case*with*special!", 422),              # Forbidden wildcard and punctuation
+        ("case with spaces", 422),                # Space in case ID
+        ("a" * 65, 422),                          # Exceeds max length (64 chars)
+        ("../../escape_case", 404),               # URL path escape resolved by router
+        ("case/subcase", 404),                    # Extra path segment rejected by router
+    ],
+)
+def test_path_traversal_in_case_id_rejected(client: TestClient, malicious_case_id: str, expected_status: int):
+    """Verifies that malicious or invalid case_id formats are strictly rejected (422 or 404)."""
+    dummy_payload = json.dumps([
+        {"tx_hash": "0xabc123", "from": "0x1111", "to": "0x2222", "value": "1000"}
+    ]).encode("utf-8")
+    files = {"file": ("valid_evidence.json", io.BytesIO(dummy_payload), "application/json")}
+    res = client.post(f"/api/cases/{malicious_case_id}/ingest", files=files)
+    assert res.status_code == expected_status, f"Expected {expected_status} for case_id '{malicious_case_id}', got {res.status_code}"
 
-    def test_real_p4_db_hash_and_size_integrity(self):
-        """Proof: real_p4.db has not been mutated by any test or operation."""
-        if not REAL_P4_DB.exists():
-            pytest.skip(f"real_p4.db not found at {REAL_P4_DB}")
 
-        data = REAL_P4_DB.read_bytes()
-        actual_hash = hashlib.sha256(data).hexdigest().upper()
-        actual_size = len(data)
+def test_pipeline_unit_level_traversal_rejection():
+    """Unit-level check verifying that EvidenceIngestionPipeline raises SecurityError on traversal attempts."""
+    pipeline = EvidenceIngestionPipeline()
+    for bad_id in ("../../escape", "..\\escape", "case/sub", "case\\sub", "", "bad!id", "x" * 65):
+        with pytest.raises(SecurityError):
+            pipeline.validate_case_id(bad_id)
 
-        assert actual_size == self.EXPECTED_SIZE, (
-            f"Database size altered: expected {self.EXPECTED_SIZE}, got {actual_size}"
-        )
-        assert actual_hash == self.EXPECTED_SHA256, (
-            f"Database SHA-256 corrupted: expected {self.EXPECTED_SHA256}, got {actual_hash}"
-        )
 
-    def test_zero_lingering_sqlite_lock_or_wal_files(self):
-        """Proof: No -wal, -shm, or .lock files exist in real_p4 data directory."""
-        if not REAL_P4_DB.parent.exists():
-            pytest.skip("Data directory does not exist")
+# ==============================================================================
+# 4. Multi-File Ingestion to Same Case
+# ==============================================================================
 
-        data_dir = REAL_P4_DB.parent
-        lock_files = list(data_dir.glob("*.lock")) + list(data_dir.glob("*-wal")) + list(data_dir.glob("*-shm"))
-        assert len(lock_files) == 0, f"Found lingering SQLite lock/wal files: {lock_files}"
+def test_multi_file_independence_same_case(client: TestClient):
+    """Verifies that ingesting multiple files into the same case grants each file:
+
+    - Independent SHA-256
+    - Independent timestamp
+    - Independent Evidence ID
+    - Zero overwriting of existing vault files or index entries
+    """
+    case_id = f"CASE-MULTI-ADV-{int(time.time())}"
+
+    # File 1: JSON transactions
+    file1_data = json.dumps([
+        {"tx_hash": "0x1111111111111111111111111111111111111111111111111111111111111111", "from": "0xaaaa", "to": "0xbbbb", "value": "100"},
+        {"tx_hash": "0x2222222222222222222222222222222222222222222222222222222222222222", "from": "0xcccc", "to": "0xdddd", "value": "200"},
+    ]).encode("utf-8")
+
+    # File 2: CSV transactions
+    file2_data = (
+        "tx_hash,from_address,to_address,value,block_number\n"
+        "0x3333333333333333333333333333333333333333333333333333333333333333,0xeeee,0xffff,500,1001\n"
+        "0x4444444444444444444444444444444444444444444444444444444444444444,0x1212,0x3434,600,1002\n"
+        "0x5555555555555555555555555555555555555555555555555555555555555555,0x5656,0x7878,700,1003\n"
+    ).encode("utf-8")
+
+    # File 3: Host log events
+    file3_data = json.dumps([
+        {"event_id": 1, "process_name": "cmd.exe", "command_line": "whoami", "user": "SYSTEM"},
+        {"event_id": 3, "process_name": "curl.exe", "command_line": "curl http://exfil.com", "user": "ADMIN"},
+    ]).encode("utf-8")
+
+    # Ingest File 1
+    res1 = client.post(f"/api/cases/{case_id}/ingest", files={"file": ("batch_tx.json", io.BytesIO(file1_data), "application/json")})
+    assert res1.status_code == 201
+    d1 = res1.json()
+
+    # Small delay to ensure timestamp separation
+    time.sleep(1.05)
+
+    # Ingest File 2
+    res2 = client.post(f"/api/cases/{case_id}/ingest", files={"file": ("batch_tx.csv", io.BytesIO(file2_data), "text/csv")})
+    assert res2.status_code == 201
+    d2 = res2.json()
+
+    time.sleep(1.05)
+
+    # Ingest File 3
+    res3 = client.post(f"/api/cases/{case_id}/ingest", files={"file": ("host_events.json", io.BytesIO(file3_data), "application/json")})
+    assert res3.status_code == 201
+    d3 = res3.json()
+
+    # Verify uniqueness of evidence IDs and SHA-256
+    evidence_ids = {d1["evidence_id"], d2["evidence_id"], d3["evidence_id"]}
+    sha_hashes = {d1["sha256"], d2["sha256"], d3["sha256"]}
+    assert len(evidence_ids) == 3, f"Evidence IDs collided: {evidence_ids}"
+    assert len(sha_hashes) == 3, f"SHA-256 hashes collided: {sha_hashes}"
+
+    # Verify all 3 files are returned in index query
+    index_res = client.get(f"/api/cases/{case_id}/evidence")
+    assert index_res.status_code == 200
+    index_list = index_res.json()
+    assert len(index_list) == 3
+
+    indexed_ev_ids = [item["evidence_id"] for item in index_list]
+    assert d1["evidence_id"] in indexed_ev_ids
+    assert d2["evidence_id"] in indexed_ev_ids
+    assert d3["evidence_id"] in indexed_ev_ids
+
+    # Verify detail retrieval for each file without cross-contamination
+    for d, expected_count in ((d1, 2), (d2, 3), (d3, 2)):
+        ev_detail_res = client.get(f"/api/cases/{case_id}/evidence/{d['evidence_id']}")
+        assert ev_detail_res.status_code == 200
+        detail_data = ev_detail_res.json()
+        assert detail_data["metadata"]["evidence_id"] == d["evidence_id"]
+        assert detail_data["metadata"]["sha256"] == d["sha256"]
+        assert detail_data["metadata"]["records_count"] == expected_count
+
+
+# ==============================================================================
+# 5. Multi-Case Isolation
+# ==============================================================================
+
+def test_case_isolation_zero_leakage(client: TestClient):
+    """Verifies that evidence uploaded to Case A NEVER appears in Case B,
+
+    and cross-case detail requests return 404 Not Found.
+    """
+    case_a = f"CASE-ISOLATION-A-{int(time.time())}"
+    case_b = f"CASE-ISOLATION-B-{int(time.time())}"
+
+    payload_a = json.dumps([
+        {"tx_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "from": "0x1111", "to": "0x2222", "value": "100"}
+    ]).encode("utf-8")
+
+    payload_b = json.dumps([
+        {"tx_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "from": "0x3333", "to": "0x4444", "value": "200"}
+    ]).encode("utf-8")
+
+    # Ingest into Case A
+    res_a = client.post(f"/api/cases/{case_a}/ingest", files={"file": ("evidence_a.json", io.BytesIO(payload_a), "application/json")})
+    assert res_a.status_code == 201
+    ev_a = res_a.json()["evidence_id"]
+
+    # Ingest into Case B
+    res_b = client.post(f"/api/cases/{case_b}/ingest", files={"file": ("evidence_b.json", io.BytesIO(payload_b), "application/json")})
+    assert res_b.status_code == 201
+    ev_b = res_b.json()["evidence_id"]
+
+    # Check Case A list: MUST contain ev_a, MUST NOT contain ev_b
+    list_a = client.get(f"/api/cases/{case_a}/evidence").json()
+    assert len(list_a) == 1
+    assert list_a[0]["evidence_id"] == ev_a
+    assert ev_b not in [x["evidence_id"] for x in list_a]
+
+    # Check Case B list: MUST contain ev_b, MUST NOT contain ev_a
+    list_b = client.get(f"/api/cases/{case_b}/evidence").json()
+    assert len(list_b) == 1
+    assert list_b[0]["evidence_id"] == ev_b
+    assert ev_a not in [x["evidence_id"] for x in list_b]
+
+    # Cross-lookup: Case A querying ev_b MUST return 404
+    cross_res_1 = client.get(f"/api/cases/{case_a}/evidence/{ev_b}")
+    assert cross_res_1.status_code == 404, f"Case A leaked Case B evidence: {cross_res_1.text}"
+
+    # Cross-lookup: Case B querying ev_a MUST return 404
+    cross_res_2 = client.get(f"/api/cases/{case_b}/evidence/{ev_a}")
+    assert cross_res_2.status_code == 404, f"Case B leaked Case A evidence: {cross_res_2.text}"

@@ -175,17 +175,20 @@ def anvil_env():
         "--from", DEFAULT_ANVIL_ACCOUNT,
     ])
 
-    res_iv = run_cmd([
-        FORGE_BIN, "create", "src/InferenceVerifier.sol:InferenceVerifier",
-        "--root", "contracts",
-        "--rpc-url", rpc_url,
-        "--unlocked",
-        "--from", DEFAULT_ANVIL_ACCOUNT,
-        "--broadcast",
-        "--constructor-args", circuit_addr, proof_res.model_hash, "true",
-    ])
-    addr_match_iv = re.search(r"Deployed to:\s*(0x[0-9a-fA-F]{40})", res_iv.stdout)
-    iv_addr = addr_match_iv.group(1)
+    def deploy_verifier() -> str:
+        res_iv = run_cmd([
+            FORGE_BIN, "create", "src/InferenceVerifier.sol:InferenceVerifier",
+            "--root", "contracts",
+            "--rpc-url", rpc_url,
+            "--unlocked",
+            "--from", DEFAULT_ANVIL_ACCOUNT,
+            "--broadcast",
+            "--constructor-args", circuit_addr, proof_res.model_hash, "true",
+        ])
+        addr_match_iv = re.search(r"Deployed to:\s*(0x[0-9a-fA-F]{40})", res_iv.stdout)
+        return addr_match_iv.group(1)
+
+    iv_addr = deploy_verifier()
 
     q_score = int(round(proof_res.output_score * 128))
     output_comm = "0x" + q_score.to_bytes(32, byteorder="big").hex()
@@ -206,6 +209,7 @@ def anvil_env():
         "rpc_url": rpc_url,
         "circuit_addr": circuit_addr,
         "iv_addr": iv_addr,
+        "deploy_verifier": deploy_verifier,
         "proof_res": proof_res,
         "proof_keccak": proof_keccak,
         "output_comm": output_comm,
@@ -346,7 +350,7 @@ class TestOnChainVerifierAdversarialProbes:
 
     def test_cross_contract_integration_with_evidence_registry_did(self, anvil_env):
         """Verify seamless cross-contract anchoring into EvidenceRegistryDID."""
-        iv_addr = anvil_env["iv_addr"]
+        iv_addr = anvil_env["deploy_verifier"]()
         rpc_url = anvil_env["rpc_url"]
         p = anvil_env["proof_res"]
         out_c = anvil_env["output_comm"]

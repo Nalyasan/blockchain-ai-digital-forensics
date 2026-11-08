@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Chi tiết Báo cáo {{ job.run_id }} - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Chi tiết Báo cáo Điều tra: {{ job.run_id }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+  <!-- Back button & Top bar -->
+  <div class="flex items-center justify-between">
+    <a href="/reports" class="text-xs text-cyan-400 hover:underline flex items-center space-x-1">
+      <span>&larr;</span> <span>Quay lại Danh sách Báo cáo</span>
+    </a>
+    <div class="flex items-center space-x-2">
+      <span class="text-xs text-slate-400">Trạng thái:</span>
+      <span class="px-2.5 py-1 rounded text-xs font-bold 
+        {% if job.status == 'completed' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+        {% elif job.status == 'completed_with_warnings' %}bg-amber-950 text-amber-400 border border-amber-800
+        {% elif job.status == 'failed' %}bg-red-950 text-red-400 border border-red-800
+        {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+        {{ job.vietnamese_status }}
+      </span>
+    </div>
+  </div>
+
+  <!-- 5 Artifacts Download Hub -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">5 Hiện vật Kiểm toán Phiên Điều tra</h3>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <a href="/api/investigations/{{ job.run_id }}/artifacts/report.html" target="_blank"
+         class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-lg text-center transition">
+        <div class="text-xl">📄</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">report.html</div>
+        <div class="text-[10px] text-slate-400">Xem Báo cáo Tiếng Việt</div>
+      </a>
+      <a href="/api/investigations/{{ job.run_id }}/artifacts/report.json" target="_blank"
+         class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-lg text-center transition">
+        <div class="text-xl">📊</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">report.json</div>
+        <div class="text-[10px] text-slate-400">Tải Dữ liệu Cấu trúc</div>
+      </a>
+      <a href="/api/investigations/{{ job.run_id }}/artifacts/evidence_manifest.json" target="_blank"
+         class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-lg text-center transition">
+        <div class="text-xl">📜</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">manifest.json</div>
+        <div class="text-[10px] text-slate-400">Tải Bảng kê Chứng cứ</div>
+      </a>
+      <a href="/api/investigations/{{ job.run_id }}/artifacts/custody_receipts.json" target="_blank"
+         class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-lg text-center transition">
+        <div class="text-xl">🔗</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">custody.json</div>
+        <div class="text-[10px] text-slate-400">Biên lai Chuỗi Lưu ký</div>
+      </a>
+      <a href="/api/investigations/{{ job.run_id }}/artifacts/execution_log.txt" target="_blank"
+         class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-lg text-center transition">
+        <div class="text-xl">📝</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">execution_log.txt</div>
+        <div class="text-[10px] text-slate-400">Xem Nhật ký Toàn văn</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Embedded Report Preview Frame -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col h-[700px]">
+    <div class="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Bản xem trước Báo cáo (HTML Preview)</h3>
+      <a href="/api/investigations/{{ job.run_id }}/artifacts/report.html" target="_blank" class="text-xs text-cyan-400 hover:underline">
+        Mở trong tab mới &rarr;
+      </a>
+    </div>
+    <iframe src="/api/investigations/{{ job.run_id }}/artifacts/report.html" class="w-full flex-1 border-0 bg-slate-950"></iframe>
+  </div>
+</div>
+{% endblock %}

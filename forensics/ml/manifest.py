@@ -14,6 +14,7 @@ import sqlite3
 from typing import Any
 
 from forensics.ml.features import FEATURE_NAMES
+from forensics.paths import get_models_dir
 
 
 DATASET_MANIFEST_SCHEMA = {
@@ -81,13 +82,18 @@ def compute_file_sha256(path: Path | str) -> str:
 def generate_dataset_manifest(
     db_path: Path | str,
     prepared_dataset: Any,
-    output_path: Path | str = "models/dataset_manifest.json",
+    output_path: Path | str | None = None,
 ) -> tuple[Path, str]:
     """Compiles and writes models/dataset_manifest.json, returning (path, sha256_hash)."""
     db_p = Path(db_path)
     db_sha256 = compute_file_sha256(db_p)
 
-    out_p = Path(output_path)
+    if output_path is None:
+        out_p = (get_models_dir() / "dataset_manifest.json").resolve()
+    else:
+        out_p = Path(output_path)
+        if not out_p.is_absolute():
+            out_p = (get_models_dir() / out_p.name).resolve()
     out_p.parent.mkdir(parents=True, exist_ok=True)
 
     manifest_data = {

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Cài đặt - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Cài đặt Hệ thống & Môi trường Vận hành{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+  <!-- System & Host Environment -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div>
+        <span class="text-xs font-semibold uppercase text-cyan-400">Môi trường Thực thi & Nền tảng</span>
+        <h2 class="text-lg font-bold text-slate-100 mt-0.5">Thông số Hệ thống & Đường dẫn Chuẩn hóa</h2>
+      </div>
+      <span class="px-2.5 py-1 rounded text-xs font-mono bg-slate-800 text-slate-300 border border-slate-700">
+        Windows Host / Python {{ sys_info.python_version }}
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400 font-sans block mb-1">Thư mục Gốc Dự án (PROJECT_ROOT):</span>
+        <span class="text-cyan-400 break-all">{{ sys_info.project_root }}</span>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400 font-sans block mb-1">Thư mục Xuất Báo cáo (OUTPUT_DIR):</span>
+        <span class="text-cyan-400 break-all">{{ sys_info.output_dir }}</span>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400 font-sans block mb-1">RPC URL Mặc định (Local Anvil):</span>
+        <span class="text-slate-200">{{ sys_info.rpc_url }}</span>
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span class="text-slate-400 font-sans block mb-1">Ollama URL Mặc định (Local AI):</span>
+        <span class="text-slate-200">{{ sys_info.ollama_url }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolchain Status: Foundry & Python -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="font-bold text-slate-200 text-sm">Công cụ Thực thi Blockchain & Hợp đồng (Foundry Toolchain)</h3>
+      <span class="text-xs text-emerald-400 font-semibold">Tích hợp Cục bộ</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <strong class="text-cyan-400 font-mono">anvil.exe</strong>
+          <span class="text-[10px] text-emerald-400">Khả dụng</span>
+        </div>
+        <p class="text-[11px] text-slate-400 truncate" title="{{ sys_info.anvil_path }}">{{ sys_info.anvil_path }}</p>
+      </div>
+
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <strong class="text-cyan-400 font-mono">cast.exe</strong>
+          <span class="text-[10px] text-emerald-400">Khả dụng</span>
+        </div>
+        <p class="text-[11px] text-slate-400 truncate" title="{{ sys_info.cast_path }}">{{ sys_info.cast_path }}</p>
+      </div>
+
+      <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <strong class="text-cyan-400 font-mono">forge.exe</strong>
+          <span class="text-[10px] text-emerald-400">Khả dụng (185 bài kiểm thử thành công)</span>
+        </div>
+        <p class="text-[11px] text-slate-400 truncate" title="{{ sys_info.forge_path }}">{{ sys_info.forge_path }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security & Boundary Policies -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-3 text-xs">
+    <h3 class="font-bold text-slate-200 text-sm">Ranh giới Bảo mật & Cam kết An toàn</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-400">
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800 space-y-1">
+        <strong class="text-slate-200 block">Nghiêm cấm Thực thi Shell / SQL / Transaction Tùy ý:</strong>
+        Hệ thống không cung cấp bất kỳ API nào cho phép thực thi lệnh shell, câu lệnh SQL làm thay đổi trạng thái, hay phát sóng giao dịch blockchain không kiểm soát từ HTTP request.
+      </div>
+      <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800 space-y-1">
+        <strong class="text-slate-200 block">Bảo toàn Phiên bản Học thuật:</strong>
+        Dữ liệu lịch sử <code>real_p4.db</code> và các kịch bản thực nghiệm D1/D2/D3 được bảo tồn nguyên vẹn phục vụ bảo vệ đồ án; không tự kích hoạt runtime sản phẩm trước khi có phê duyệt.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

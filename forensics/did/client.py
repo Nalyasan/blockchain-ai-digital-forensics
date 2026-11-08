@@ -592,10 +592,10 @@ class DIDClient:
         status_num = int(st_raw, 16) if isinstance(st_raw, str) and st_raw.startswith("0x") else int(st_raw or 1)
 
         return {
-            "transaction_hash": f"{tx_hash} (synthetic)",
+            "transaction_hash": tx_hash,
             "block_number": block_num,
             "gas_used": gas_used,
             "status": status_num,
-            "is_synthetic": True,
+            "is_synthetic": False,
         }
 

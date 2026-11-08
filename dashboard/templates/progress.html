@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}Tiến độ - Blockchain Ai Aigital Forensics{% endblock %}
+{% block header_title %}Tiến độ Điều tra Thời gian thực{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  {% if current_job %}
+  <!-- Top Session Header Banner -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <div class="flex items-center space-x-2">
+        <span class="text-xs font-semibold uppercase text-cyan-400">Phiên điều tra:</span>
+        <span id="label-run-id" class="text-sm font-mono font-bold text-slate-100">{{ current_job.run_id }}</span>
+      </div>
+      <div class="text-xs text-slate-400 mt-1">
+        Mã vụ việc: <span class="text-slate-200 font-semibold">{{ current_job.case_id }}</span> |
+        Khởi tạo: <span class="font-mono text-slate-300">{{ current_job.start_time[:19] if current_job.start_time else '--' }}</span>
+      </div>
+    </div>
+
+    <!-- Status & Action Buttons -->
+    <div class="flex items-center space-x-3 shrink-0">
+      <div id="status-pill" class="px-3.5 py-1.5 rounded-lg text-xs font-bold border 
+        {% if current_job.status == 'completed' %}
+          bg-emerald-950 text-emerald-400 border-emerald-800
+        {% elif current_job.status == 'completed_with_warnings' %}
+          bg-amber-950 text-amber-400 border-amber-800
+        {% elif current_job.status == 'running' %}
+          bg-cyan-950 text-cyan-400 border-cyan-800 animate-pulse
+        {% elif current_job.status == 'failed' %}
+          bg-red-950 text-red-400 border-red-800
+        {% elif current_job.status == 'stopped' %}
+          bg-slate-800 text-slate-400 border-slate-700
+        {% else %}
+          bg-slate-800 text-slate-400 border-slate-700
+        {% endif %}">
+        {{ current_job.vietnamese_status }}
+      </div>
+
+      {% if current_job.status in ['running', 'queued'] %}
+      <button id="btn-cancel" onclick="cancelJob('{{ current_job.run_id }}')"
+              class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800 transition">
+        Dừng an toàn
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Progress Bar Container -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-2">
+    <div class="flex items-center justify-between text-xs">
+      <span class="text-slate-400 font-medium">Tiến độ Hoàn thành 8 Giai đoạn Nghiệp vụ</span>
+      <span id="label-progress" class="font-mono font-bold text-cyan-400">{{ current_job.progress_percent }}%</span>
+    </div>
+    <div class="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+      <div id="progress-bar-fill" class="h-full bg-gradient-to-r from-cyan-600 to-emerald-500 rounded-full transition-all duration-500"
+           style="width: {{ current_job.progress_percent }}%;"></div>
+    </div>
+    <div class="text-[11px] text-slate-500 flex items-center justify-between">
+      <span id="label-current-phase">Đang thực hiện: {{ current_job.current_stage_name or current_job.current_phase_name or 'Chờ tác vụ...' }}</span>
+      <span>Quy trình nghiệp vụ điều tra số chuẩn hóa</span>
+    </div>
+  </div>
+
+  <!-- Two Column Layout: 8-Stage Stepper & Live Terminal Logs -->
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+    <!-- 8-Stage Stepper (2 cols) -->
+    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col">
+      <div class="p-4 border-b border-slate-800 bg-slate-900/80">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">8 Giai đoạn Điều tra Chuẩn hóa</h3>
+      </div>
+      <div class="p-4 space-y-2.5 overflow-y-auto max-h-[520px] divide-y divide-slate-800/40 text-xs">
+        {% for stg in stages_8 %}
+          <div class="pt-2.5 flex items-center justify-between" id="stage-row-{{ stg.stage_id }}">
+            <div class="flex items-center space-x-3 min-w-0">
+              <span id="stage-badge-{{ stg.stage_id }}" class="w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-[10px] shrink-0
+                {% if stg.status == 'completed' %}bg-emerald-950 text-emerald-400 border border-emerald-800
+                {% elif stg.status == 'running' %}bg-cyan-950 text-cyan-400 border border-cyan-800 animate-pulse
+                {% elif stg.status == 'failed' %}bg-red-950 text-red-400 border border-red-800
+                {% elif stg.status == 'not_applicable' %}bg-slate-800 text-slate-500 border border-slate-700
+                {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
+                {{ stg.number }}
+              </span>
+              <span class="font-medium text-slate-200 truncate">{{ stg.number }}. {{ stg.name }}</span>
+            </div>
+            <span id="stage-status-{{ stg.stage_id }}" class="text-[11px] font-mono shrink-0 ml-2
+              {% if stg.status == 'completed' %}text-emerald-400 font-semibold
+              {% elif stg.status == 'running' %}text-cyan-400 font-bold animate-pulse
+              {% elif stg.status == 'failed' %}text-red-400 font-bold
+              {% elif stg.status == 'not_applicable' %}text-slate-500
+              {% else %}text-slate-500{% endif %}">
+              {{ stg.vietnamese_status }}
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Live Execution Logs (3 cols) -->
+    <div class="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col">
+      <div class="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Nhật ký Thực thi (Live Audit Logs)</h3>
+        <span id="log-count" class="text-[11px] font-mono text-slate-400">0 dòng</span>
+      </div>
+      <div id="log-console" class="p-4 bg-slate-950 font-mono text-xs text-slate-300 overflow-y-auto h-[480px] space-y-1 select-text">
+        <div class="text-slate-500 italic">Đang tải nhật ký phiên điều tra...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session Artifacts (Shown when completed) -->
+  <div id="artifacts-hub" class="{% if current_job.status not in ['completed', 'completed_with_warnings', 'failed', 'stopped'] %}hidden{% endif %} bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Hiện vật Kiểm toán Phiên Điều tra</h3>
+      <a href="/reports/{{ current_job.run_id }}" class="text-xs text-cyan-400 hover:underline">Chi tiết báo cáo &rarr;</a>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+      <a href="/api/investigations/{{ current_job.run_id }}/artifacts/report.html" target="_blank"
+         class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 transition block">
+        <div class="text-xl">📄</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">Báo cáo HTML</div>
+        <div class="text-[10px] text-slate-400">Xem độc lập</div>
+      </a>
+      <a href="/api/investigations/{{ current_job.run_id }}/artifacts/report.json" target="_blank"
+         class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 transition block">
+        <div class="text-xl">📊</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">report.json</div>
+        <div class="text-[10px] text-slate-400">Dữ liệu cấu trúc</div>
+      </a>
+      <a href="/api/investigations/{{ current_job.run_id }}/artifacts/evidence_manifest.json" target="_blank"
+         class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 transition block">
+        <div class="text-xl">📜</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">manifest.json</div>
+        <div class="text-[10px] text-slate-400">Bảng kê chứng cứ</div>
+      </a>
+      <a href="/api/investigations/{{ current_job.run_id }}/artifacts/custody_receipts.json" target="_blank"
+         class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 transition block">
+        <div class="text-xl">🔗</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">custody.json</div>
+        <div class="text-[10px] text-slate-400">Lưu ký chuỗi</div>
+      </a>
+      <a href="/api/investigations/{{ current_job.run_id }}/artifacts/execution_log.txt" target="_blank"
+         class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 transition block">
+        <div class="text-xl">📝</div>
+        <div class="text-xs font-bold text-slate-200 mt-1">execution_log.txt</div>
+        <div class="text-[10px] text-slate-400">Nhật ký chi tiết</div>
+      </a>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- Empty State -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center space-y-4">
+    <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-xl">
+      🔍
+    </div>
+    <h3 class="text-sm font-bold text-slate-300">Chưa có dữ liệu điều tra</h3>
+    <p class="text-xs text-slate-500 max-w-md mx-auto">
+      Không có phiên điều tra nào được chọn hoặc hệ thống chưa ghi nhận tác vụ. Vui lòng bấm "Khởi chạy điều tra" để bắt đầu.
+    </p>
+    <a href="/launcher" class="inline-flex items-center px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition">
+      Khởi chạy điều tra mới &rarr;
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+let currentRunId = "{{ current_job.run_id if current_job else '' }}";
+let logOffset = 0;
+let pollTimer = null;
+
+const STAGE_MAPPING = {
+  'S1': ['P1'],
+  'S2': ['P2'],
+  'S3': ['P3'],
+  'S4': ['P4'],
+  'S5': ['P5', 'P8'],
+  'S6': ['P6'],
+  'S7': ['P9', 'P10'],
+  'S8': ['P11']
+};
+
+const VIETNAMESE_STATUS_MAP = {
+  'not_started': 'Chưa chạy',
+  'queued': 'Đang chờ',
+  'running': 'Đang xử lý',
+  'completed': 'Hoàn tất',
+  'completed_with_warnings': 'Hoàn tất có cảnh báo',
+  'failed': 'Gặp lỗi',
+  'stopped': 'Đã dừng',
+  'not_applicable': 'Không áp dụng'
+};
+
+async function pollJobStatus() {
+  if (!currentRunId) return;
+
+  try {
+    const res = await fetch(`/api/investigations/${currentRunId}`);
+    if (!res.ok) return;
+    const job = await res.json();
+
+    // Update UI elements
+    const runEl = document.getElementById('label-run-id');
+    if (runEl) runEl.textContent = job.run_id;
+    const progEl = document.getElementById('label-progress');
+    if (progEl) progEl.textContent = `${job.progress_percent}%`;
+    const fillEl = document.getElementById('progress-bar-fill');
+    if (fillEl) fillEl.style.width = `${job.progress_percent}%`;
+    const phaseEl = document.getElementById('label-current-phase');
+    if (phaseEl) {
+      const activeStageName = job.current_stage_name || job.current_phase_name;
+      phaseEl.textContent = `Đang thực hiện: ${activeStageName || (['completed', 'completed_with_warnings'].includes(job.status) ? 'Đã hoàn tất 8 giai đoạn' : 'Đang chờ...')}`;
+    }
+
+    // Status pill
+    const pill = document.getElementById('status-pill');
+    if (pill) pill.textContent = job.vietnamese_status;
+
+    // Update 8 stages
+    const stageStatus = job.stage_status || {};
+    const phaseStatus = job.phase_status || {};
+    for (const [sid, pkeys] of Object.entries(STAGE_MAPPING)) {
+      let st = stageStatus[sid];
+      if (!st || st === 'not_started') {
+        const statuses = pkeys.map(k => phaseStatus[k] || 'not_started');
+        if (statuses.some(s => s === 'failed')) st = 'failed';
+        else if (statuses.some(s => s === 'running')) st = 'running';
+        else if (statuses.every(s => s === 'not_applicable')) st = 'not_applicable';
+        else if (statuses.every(s => s === 'completed')) st = 'completed';
+        else if (statuses.some(s => s === 'completed')) st = 'completed';
+        else if (statuses.some(s => s === 'not_applicable')) st = 'not_applicable';
+        else st = 'not_started';
+      }
+
+      // If job is finished, any unstarted stage is completed, but NEVER overwrite not_applicable!
+      if (['completed', 'completed_with_warnings'].includes(job.status) && st === 'not_started') {
+        st = 'completed';
+      }
+
+      const stLabel = document.getElementById(`stage-status-${sid}`);
+      const stBadge = document.getElementById(`stage-badge-${sid}`);
+      if (stLabel) {
+        stLabel.textContent = VIETNAMESE_STATUS_MAP[st] || st;
+        stLabel.className = 'text-[11px] font-mono shrink-0 ml-2 ' + 
+          (st === 'completed' ? 'text-emerald-400 font-semibold' : 
+          (st === 'completed_with_warnings' ? 'text-amber-400 font-semibold' :
+          (st === 'running' ? 'text-cyan-400 font-bold animate-pulse' : 
+          (st === 'failed' ? 'text-red-400 font-bold' : 
+          (st === 'not_applicable' ? 'text-slate-500' : 'text-slate-500')))));
+      }
+      if (stBadge) {
+        stBadge.className = 'w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-[10px] shrink-0 ' +
+          (st === 'completed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 
+          (st === 'completed_with_warnings' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+          (st === 'running' ? 'bg-cyan-950 text-cyan-400 border border-cyan-800 animate-pulse' : 
+          (st === 'failed' ? 'bg-red-950 text-red-400 border border-red-800' : 
+          (st === 'not_applicable' ? 'bg-slate-800 text-slate-500 border border-slate-700' : 'bg-slate-800 text-slate-400 border border-slate-700')))));
+      }
+    }
+
+    // Fetch incremental logs
+    const logRes = await fetch(`/api/investigations/${currentRunId}/logs?offset=${logOffset}`);
+    if (logRes.ok) {
+      const logData = await logRes.json();
+      if (logData.logs.length > 0) {
+        const consoleEl = document.getElementById('log-console');
+        if (logOffset === 0) consoleEl.innerHTML = '';
+        logData.logs.forEach(line => {
+          const div = document.createElement('div');
+          div.className = line.includes('[ERROR]') ? 'text-red-400' : (line.includes('[WARNING]') ? 'text-amber-400' : 'text-slate-300');
+          div.textContent = line;
+          consoleEl.appendChild(div);
+        });
+        logOffset += logData.logs.length;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+        const countEl = document.getElementById('log-count');
+        if (countEl) countEl.textContent = `${logOffset} dòng`;
+      }
+    }
+
+    // Check if finished
+    if (['completed', 'completed_with_warnings', 'failed', 'stopped'].includes(job.status)) {
+      const artHub = document.getElementById('artifacts-hub');
+      if (artHub) artHub.classList.remove('hidden');
+      const btnCancel = document.getElementById('btn-cancel');
+      if (btnCancel) btnCancel.remove();
+      clearInterval(pollTimer);
+    }
+  } catch (e) {
+    console.error("Polling error:", e);
+  }
+}
+
+async function cancelJob(runId) {
+  if (!confirm(`Xác nhận dừng an toàn phiên điều tra ${runId}?`)) return;
+  try {
+    const res = await fetch(`/api/investigations/${runId}/cancel`, { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    pollJobStatus();
+  } catch (e) {
+    alert("Lỗi khi gửi yêu cầu dừng: " + e.message);
+  }
+}
+
+if (currentRunId) {
+  pollJobStatus();
+  pollTimer = setInterval(pollJobStatus, 2000);
+}
+</script>
+{% endblock %}
